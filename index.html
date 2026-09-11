@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#071315">
+<title>Baustert Kirmes – Ampelparty | FTS.lu</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f7f1e7;background:#071315}
+*{box-sizing:border-box}
+body{margin:0;min-height:100svh;background:radial-gradient(circle at top right,rgba(19,132,137,.28),transparent 38%),linear-gradient(145deg,#071113,#102426)}
+.wrap{width:min(680px,calc(100% - 28px));margin:auto;padding:34px 0 50px}
+.card{background:rgba(12,31,33,.95);border:1px solid rgba(255,255,255,.09);border-radius:26px;padding:24px;box-shadow:0 24px 70px rgba(0,0,0,.34)}
+.brand{font-size:.72rem;letter-spacing:.2em;color:#e0bd70;font-weight:900}
+h1{font-size:clamp(2.2rem,9vw,4.2rem);line-height:.95;margin:10px 0 8px}
+.sub{font-size:1.25rem;color:#d9c79d;margin-bottom:26px}
+.upload{display:grid;place-items:center;min-height:210px;border:2px dashed rgba(224,189,112,.55);border-radius:20px;text-align:center;padding:22px;cursor:pointer;background:rgba(0,0,0,.12)}
+.upload strong{font-size:1.18rem}.upload span{display:block;color:#aebfbc;margin-top:8px;font-size:.92rem}
+.upload input{display:none}
+.preview{width:100%;max-height:520px;object-fit:contain;border-radius:18px;margin-top:18px;display:none;background:#061012}
+.consent{display:flex;gap:10px;align-items:flex-start;margin:18px 0;color:#c8d2d0;font-size:.9rem}
+.consent input{margin-top:3px;transform:scale(1.2)}
+button{width:100%;border:0;border-radius:15px;padding:16px;font:inherit;font-weight:900;background:linear-gradient(135deg,#d7b66a,#f1d79a);color:#102020;cursor:pointer}
+button:disabled{opacity:.55;cursor:wait}
+.msg{border-radius:14px;padding:13px 15px;margin:16px 0 0;display:none}
+.ok{display:block;background:rgba(68,180,117,.16);border:1px solid rgba(68,180,117,.35)}
+.err{display:block;background:rgba(220,80,80,.14);border:1px solid rgba(220,80,80,.35)}
+.foot{text-align:center;color:#7f9692;font-size:.78rem;margin-top:18px}
+</style>
+</head>
+<body>
+<main class="wrap">
+<section class="card">
+<div class="brand">FTS.LU · SELFIE EVENT</div>
+<h1>Baustert Kirmes</h1>
+<div class="sub">Ampelparty</div>
+
+<label class="upload">
+  <div><strong>📸 Selfie aufnehmen</strong><span>oder ein Foto vom Handy auswählen</span></div>
+  <input id="photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="user">
+</label>
+
+<img id="preview" class="preview" alt="Vorschau">
+
+<label class="consent">
+  <input id="consent" type="checkbox">
+  <span>Ich stimme zu, dass dieses Foto für die Veranstaltung an FTS übermittelt und gespeichert wird.</span>
+</label>
+
+<button id="upload">Foto hochladen</button>
+<div id="message" class="msg"></div>
+
+<div class="foot">FTS.lu · Eventfotografie</div>
+</section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./config.js"></script>
+<script>
+const EVENT_FOLDER = 'baustert-ampelparty-2026';
+const BUCKET = 'fts-selfie-uploads';
+
+const photo = document.getElementById('photo');
+const preview = document.getElementById('preview');
+const consent = document.getElementById('consent');
+const uploadBtn = document.getElementById('upload');
+const message = document.getElementById('message');
+
+const client = supabase.createClient(FTS_SUPABASE_URL, FTS_SUPABASE_ANON_KEY);
+
+function showMessage(text, ok=false) {
+  message.textContent = text;
+  message.className = 'msg ' + (ok ? 'ok' : 'err');
+}
+
+photo.addEventListener('change', () => {
+  const f = photo.files?.[0];
+  if (!f) return;
+  preview.src = URL.createObjectURL(f);
+  preview.style.display = 'block';
+});
+
+uploadBtn.addEventListener('click', async () => {
+  const file = photo.files?.[0];
+
+  if (!file) return showMessage('Bitte zuerst ein Foto aufnehmen oder auswählen.');
+  if (!consent.checked) return showMessage('Bitte zuerst der Übermittlung zustimmen.');
+  if (file.size > 15 * 1024 * 1024) return showMessage('Das Foto ist größer als 15 MB.');
+
+  uploadBtn.disabled = true;
+  uploadBtn.textContent = 'Foto wird hochgeladen …';
+  message.className = 'msg';
+
+  try {
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g,'');
+    const id = crypto.randomUUID();
+    const path = `${EVENT_FOLDER}/${Date.now()}_${id}.${ext}`;
+
+    const { error } = await client.storage
+      .from(BUCKET)
+      .upload(path, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type || undefined
+      });
+
+    if (error) throw error;
+
+    showMessage('✓ Foto erfolgreich hochgeladen. Danke!', true);
+    photo.value = '';
+    preview.style.display = 'none';
+    consent.checked = false;
+  } catch (e) {
+    console.error(e);
+    showMessage('Upload nicht möglich: ' + (e?.message || 'Unbekannter Fehler'));
+  } finally {
+    uploadBtn.disabled = false;
+    uploadBtn.textContent = 'Foto hochladen';
+  }
+});
+</script>
+</body>
+</html>
