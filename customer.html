@@ -1,42 +1,333 @@
 <!doctype html>
-<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>FTS Kunden-Galerie</title>
-<style>:root{font-family:Inter,system-ui,sans-serif;background:#071315;color:#f5f1e8;--accent:#d9b56d}*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#071113,#102426);min-height:100vh}.wrap{width:min(1180px,calc(100% - 24px));margin:auto;padding:26px 0 50px}.brand{font-size:.72rem;letter-spacing:.2em;color:var(--accent);font-weight:900}h1{font-size:clamp(2rem,6vw,3.7rem);margin:8px 0 10px}.intro{color:#91a5a1;margin-bottom:22px}.event{background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:16px;margin-bottom:20px}.eventHead{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:end;margin-bottom:13px}.eventTitle{font-size:1.55rem;font-weight:900}.meta{color:#95a8a4;font-size:.84rem}.expires{color:var(--accent);font-size:.78rem;font-weight:800}.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}.card{background:#0b1e20;border:1px solid rgba(255,255,255,.07);border-radius:17px;padding:10px}.pair{display:grid;grid-template-columns:1fr 1fr;gap:7px}.label{font-size:.72rem;color:var(--accent);font-weight:900;margin:3px 2px 6px}img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:10px;background:#061012}.links{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}a.btn{background:var(--accent);color:#102020;text-decoration:none;font-weight:900;padding:7px 9px;border-radius:9px;font-size:.78rem}.empty{color:#819390;padding:14px 4px}</style></head>
-<body><main class="wrap"><div class="brand">FTS.LU · KUNDENGALERIE</div><h1>Aktuelle Events</h1><div class="intro">Die Event-Fotos sind nur für die vereinbarte Zeit sichtbar. Danach archiviert FTS die Dateien separat.</div><div id="events">Galerie wird geladen …</div></main>
+<style>
+:root{font-family:Inter,system-ui,sans-serif;background:#071315;color:#f5f1e8;--accent:#d9b56d}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(145deg,#071113,#102426);min-height:100vh}
+.wrap{width:min(1180px,calc(100% - 24px));margin:auto;padding:26px 0 50px}
+.brand{font-size:.72rem;letter-spacing:.2em;color:var(--accent);font-weight:900}
+h1{font-size:clamp(2rem,6vw,3.7rem);margin:8px 0 10px}
+.intro{color:#91a5a1;margin-bottom:16px}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 24px}
+.btn,.downloadBtn{border:0;background:var(--accent);color:#102020;text-decoration:none;font-weight:900;padding:10px 12px;border-radius:10px;font-size:.82rem;cursor:pointer}
+.btn.secondary,.downloadBtn.secondary{background:#15383a;color:#f5f1e8;border:1px solid rgba(255,255,255,.09)}
+.btn:disabled,.downloadBtn:disabled{opacity:.5;cursor:wait}
+.event{background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:16px;margin-bottom:20px}
+.eventHead{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:end;margin-bottom:13px}
+.eventTitle{font-size:1.55rem;font-weight:900}
+.meta{color:#95a8a4;font-size:.84rem}
+.expires{color:var(--accent);font-size:.78rem;font-weight:800}
+.eventActions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
+.card{background:#0b1e20;border:1px solid rgba(255,255,255,.07);border-radius:17px;padding:10px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.label{font-size:.72rem;color:var(--accent);font-weight:900;margin:3px 2px 6px}
+img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:10px;background:#061012}
+.links{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.empty{color:#819390;padding:14px 4px}
+.status{display:none;margin:0 0 18px;padding:11px 13px;border-radius:11px;background:#0a2426;color:#cbd7d5}
+.status.show{display:block}
+@media(max-width:480px){.pair{grid-template-columns:1fr}.toolbar .btn{width:100%}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="brand">FTS.LU · KUNDENGALERIE</div>
+  <h1>Aktuelle Events</h1>
+  <div class="intro">Die Event-Fotos sind nur für die vereinbarte Zeit sichtbar. Danach archiviert FTS die Dateien separat.</div>
+
+  <div class="toolbar">
+    <button class="btn" id="downloadAll" disabled>Alle sichtbaren Fotos als ZIP herunterladen</button>
+    <button class="btn secondary" id="refreshBtn">Galerie aktualisieren</button>
+  </div>
+
+  <div id="status" class="status"></div>
+  <div id="events">Galerie wird geladen …</div>
+</main>
+
 <script src="./config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script>
-const cfg=window.FTS_CONFIG,client=supabase.createClient(cfg.supabaseUrl,cfg.publishableKey),customerToken=new URLSearchParams(location.search).get('c');
+const cfg=window.FTS_CONFIG;
+const client=supabase.createClient(cfg.supabaseUrl,cfg.publishableKey);
+const customerToken=new URLSearchParams(location.search).get('c');
 const liveBase=`${cfg.supabaseUrl}/storage/v1/object/public/${cfg.liveBucket}/`;
+
+let allDownloadItems=[];
+
+document.getElementById('refreshBtn').onclick=()=>location.reload();
+document.getElementById('downloadAll').onclick=()=>downloadZip(allDownloadItems,'FTS-alle-aktiven-events.zip');
+
+function setStatus(text){
+  const s=document.getElementById('status');
+  s.textContent=text;
+  s.classList.toggle('show',!!text);
+}
+function setDownloadBusy(busy,text){
+  const b=document.getElementById('downloadAll');
+  b.disabled=busy || allDownloadItems.length===0;
+  b.textContent=busy ? (text||'ZIP wird erstellt …') : 'Alle sichtbaren Fotos als ZIP herunterladen';
+}
+
 async function boot(){
- if(!customerToken){document.getElementById('events').innerHTML='<h2>Kundenlink unvollständig.</h2>';return}
- const [{data:events,error:e1},{data:photos,error:e2}]=await Promise.all([client.rpc('fts_get_customer_events',{p_customer_token:customerToken}),client.rpc('fts_get_customer_photos',{p_customer_token:customerToken})]);
- if(e1||e2){document.getElementById('events').textContent='Galerie konnte nicht geladen werden.';return}
- if(!events?.length){document.getElementById('events').innerHTML='<div class="empty">Aktuell sind keine freigegebenen Events sichtbar.</div>';return}
- const map=new Map();for(const p of photos||[]){if(!map.has(p.event_token))map.set(p.event_token,[]);map.get(p.event_token).push(p)}
- const root=document.getElementById('events');root.innerHTML='';
- for(const ev of events){
-  const section=document.createElement('section');section.className='event';
-  section.innerHTML=`<div class="eventHead"><div><div class="eventTitle">${esc(ev.title)}${ev.subtitle?' · '+esc(ev.subtitle):''}</div><div class="meta">${esc(ev.location||'')} · ${fmt(ev.event_date)}</div></div><div class="expires">sichtbar bis ${fmtDT(ev.expires_at)}</div></div><div class="photos"></div>`;
-  root.appendChild(section);const grid=section.querySelector('.photos');let count=0;
-  for(const p of map.get(ev.event_token)||[]){addCard(grid,liveBase+enc(p.original_path),p.designed_path?liveBase+enc(p.designed_path):null);count++}
-  if(ev.legacy_prefix)count+=await addLegacy(ev,grid);
-  if(!count)grid.innerHTML='<div class="empty">Noch keine Fotos in diesem Event.</div>';
- }
+  if(!customerToken){
+    document.getElementById('events').innerHTML='<h2>Kundenlink unvollständig.</h2>';
+    return;
+  }
+
+  const [{data:events,error:e1},{data:photos,error:e2}] = await Promise.all([
+    client.rpc('fts_get_customer_events',{p_customer_token:customerToken}),
+    client.rpc('fts_get_customer_photos',{p_customer_token:customerToken})
+  ]);
+
+  if(e1||e2){
+    document.getElementById('events').textContent='Galerie konnte nicht geladen werden.';
+    return;
+  }
+  if(!events?.length){
+    document.getElementById('events').innerHTML='<div class="empty">Aktuell sind keine freigegebenen Events sichtbar.</div>';
+    return;
+  }
+
+  const map=new Map();
+  for(const p of photos||[]){
+    if(!map.has(p.event_token))map.set(p.event_token,[]);
+    map.get(p.event_token).push(p);
+  }
+
+  allDownloadItems=[];
+  const root=document.getElementById('events');
+  root.innerHTML='';
+
+  for(const ev of events){
+    const eventItems=[];
+    const section=document.createElement('section');
+    section.className='event';
+
+    section.innerHTML=`
+      <div class="eventHead">
+        <div>
+          <div class="eventTitle">${esc(ev.title)}${ev.subtitle?' · '+esc(ev.subtitle):''}</div>
+          <div class="meta">${esc(ev.location||'')} · ${fmt(ev.event_date)}</div>
+        </div>
+        <div class="expires">sichtbar bis ${fmtDT(ev.expires_at)}</div>
+      </div>
+      <div class="eventActions">
+        <button class="downloadBtn eventZip" disabled>Dieses Event als ZIP herunterladen</button>
+      </div>
+      <div class="photos"></div>
+    `;
+    root.appendChild(section);
+
+    const grid=section.querySelector('.photos');
+    const eventZipBtn=section.querySelector('.eventZip');
+    let count=0;
+
+    for(const p of map.get(ev.event_token)||[]){
+      const item=addCard(
+        grid,
+        liveBase+enc(p.original_path),
+        p.designed_path?liveBase+enc(p.designed_path):null,
+        ev,
+        p.original_path,
+        p.designed_path
+      );
+      eventItems.push(...item);
+      count++;
+    }
+
+    if(ev.legacy_prefix){
+      count += await addLegacy(ev,grid,eventItems);
+    }
+
+    if(!count){
+      grid.innerHTML='<div class="empty">Noch keine Fotos in diesem Event.</div>';
+    }else{
+      eventZipBtn.disabled=false;
+      eventZipBtn.onclick=()=>downloadZip(
+        eventItems,
+        `FTS-${slug(ev.title)}-${slug(ev.subtitle||'event')}.zip`,
+        eventZipBtn
+      );
+      allDownloadItems.push(...eventItems);
+    }
+  }
+
+  document.getElementById('downloadAll').disabled=allDownloadItems.length===0;
 }
-async function addLegacy(ev,grid){
- let count=0;
- try{
-  const b=ev.legacy_bucket||cfg.legacyBucket;
-  const [or,de]=await Promise.all([client.storage.from(b).list(`${ev.legacy_prefix}/original`,{limit:1000}),client.storage.from(b).list(`${ev.legacy_prefix}/designed`,{limit:1000})]);
-  const O=(or.data||[]).filter(x=>x.name&&x.name!=='.emptyFolderPlaceholder'),D=(de.data||[]).filter(x=>x.name&&x.name!=='.emptyFolderPlaceholder');
-  const dm=new Map(D.map(x=>[x.name.replace(/\.jpg$/i,''),x.name]));
-  for(const o of O){const stem=o.name.replace(/\.[^.]+$/,'');const dn=dm.get(stem);const ou=await signed(b,`${ev.legacy_prefix}/original/${o.name}`);const du=dn?await signed(b,`${ev.legacy_prefix}/designed/${dn}`):null;addCard(grid,ou,du);count++}
- }catch(e){console.warn(e)}return count;
+
+async function addLegacy(ev,grid,eventItems){
+  let count=0;
+  try{
+    const b=ev.legacy_bucket||cfg.legacyBucket;
+    const [or,de]=await Promise.all([
+      client.storage.from(b).list(`${ev.legacy_prefix}/original`,{limit:1000}),
+      client.storage.from(b).list(`${ev.legacy_prefix}/designed`,{limit:1000})
+    ]);
+
+    const O=(or.data||[]).filter(x=>x.name&&x.name!=='.emptyFolderPlaceholder');
+    const D=(de.data||[]).filter(x=>x.name&&x.name!=='.emptyFolderPlaceholder');
+    const dm=new Map(D.map(x=>[x.name.replace(/\.[^.]+$/i,''),x.name]));
+
+    for(const o of O){
+      const stem=o.name.replace(/\.[^.]+$/,'');
+      const dn=dm.get(stem);
+      const ou=await signed(b,`${ev.legacy_prefix}/original/${o.name}`);
+      const du=dn?await signed(b,`${ev.legacy_prefix}/designed/${dn}`):null;
+
+      const items=addCard(
+        grid,ou,du,ev,
+        `${ev.legacy_prefix}/original/${o.name}`,
+        dn?`${ev.legacy_prefix}/designed/${dn}`:null
+      );
+      eventItems.push(...items);
+      count++;
+    }
+  }catch(e){
+    console.warn('Legacy',e);
+  }
+  return count;
 }
-async function signed(b,p){const {data,error}=await client.storage.from(b).createSignedUrl(p,21600);if(error)throw error;return data.signedUrl}
-function addCard(g,o,d){const el=document.createElement('article');el.className='card';el.innerHTML=`<div class="pair"><div><div class="label">Original</div><img src="${o}" loading="lazy"></div><div><div class="label">Event-Design</div>${d?`<img src="${d}" loading="lazy">`:'<div class="empty">nicht vorhanden</div>'}</div></div><div class="links"><a class="btn" href="${o}" target="_blank">Original öffnen</a>${d?`<a class="btn" href="${d}" target="_blank">Design öffnen</a>`:''}</div>`;g.appendChild(el)}
-function enc(p){return p.split('/').map(encodeURIComponent).join('/')}function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}function fmt(d){return d?new Date(d+'T12:00:00').toLocaleDateString('de-DE'):''}function fmtDT(d){return d?new Date(d).toLocaleDateString('de-DE'):''}
+
+async function signed(b,p){
+  const {data,error}=await client.storage.from(b).createSignedUrl(p,21600);
+  if(error)throw error;
+  return data.signedUrl;
+}
+
+function addCard(grid,originalUrl,designUrl,ev,originalPath,designPath){
+  const baseName = originalPath ? fileStem(originalPath) : `foto-${Date.now()}`;
+  const folder = `${slug(ev.title)}-${slug(ev.subtitle||'event')}`;
+
+  const originalName = `${folder}/Original/${baseName}${fileExt(originalPath)||'.jpg'}`;
+  const designName = designUrl ? `${folder}/Event-Design/${baseName}-design${fileExt(designPath)||'.jpg'}` : null;
+
+  const el=document.createElement('article');
+  el.className='card';
+  el.innerHTML=`
+    <div class="pair">
+      <div>
+        <div class="label">Original</div>
+        <img src="${originalUrl}" loading="lazy">
+      </div>
+      <div>
+        <div class="label">Event-Design</div>
+        ${designUrl?`<img src="${designUrl}" loading="lazy">`:'<div class="empty">nicht vorhanden</div>'}
+      </div>
+    </div>
+    <div class="links">
+      <button class="downloadBtn originalDl">Original herunterladen</button>
+      ${designUrl?`<button class="downloadBtn designDl">Design herunterladen</button>`:''}
+      <a class="btn secondary" href="${originalUrl}" target="_blank" rel="noopener">Original öffnen</a>
+      ${designUrl?`<a class="btn secondary" href="${designUrl}" target="_blank" rel="noopener">Design öffnen</a>`:''}
+    </div>
+  `;
+
+  grid.appendChild(el);
+
+  el.querySelector('.originalDl').onclick=()=>downloadOne(originalUrl,originalName,el.querySelector('.originalDl'));
+  if(designUrl){
+    el.querySelector('.designDl').onclick=()=>downloadOne(designUrl,designName,el.querySelector('.designDl'));
+  }
+
+  const items=[{url:originalUrl,zipPath:originalName}];
+  if(designUrl)items.push({url:designUrl,zipPath:designName});
+  return items;
+}
+
+async function fetchBlob(url){
+  const r=await fetch(url,{mode:'cors'});
+  if(!r.ok)throw new Error(`Download fehlgeschlagen (${r.status})`);
+  return await r.blob();
+}
+
+async function downloadOne(url,filename,button){
+  const old=button.textContent;
+  button.disabled=true;
+  button.textContent='Wird geladen …';
+  setStatus('');
+  try{
+    const blob=await fetchBlob(url);
+    saveBlob(blob,filename.split('/').pop());
+  }catch(e){
+    console.error(e);
+    setStatus('Direkter Download war nicht möglich. Das Bild wird stattdessen geöffnet.');
+    window.open(url,'_blank','noopener');
+  }finally{
+    button.disabled=false;
+    button.textContent=old;
+  }
+}
+
+async function downloadZip(items,filename,specificButton=null){
+  if(!items?.length)return;
+
+  const button=specificButton||document.getElementById('downloadAll');
+  const old=button.textContent;
+  button.disabled=true;
+  setStatus(`ZIP wird vorbereitet: 0 von ${items.length} Dateien …`);
+
+  try{
+    const zip=new JSZip();
+    let done=0;
+
+    for(const item of items){
+      try{
+        const blob=await fetchBlob(item.url);
+        zip.file(item.zipPath,blob);
+      }catch(e){
+        console.warn('Datei übersprungen',item.url,e);
+      }
+      done++;
+      setStatus(`ZIP wird vorbereitet: ${done} von ${items.length} Dateien …`);
+    }
+
+    setStatus('ZIP wird komprimiert …');
+    const content=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:5}});
+    saveBlob(content,filename);
+    setStatus('✓ Download wurde erstellt.');
+  }catch(e){
+    console.error(e);
+    setStatus('ZIP konnte nicht erstellt werden. Bitte die Einzeldownloads verwenden.');
+  }finally{
+    button.disabled=false;
+    button.textContent=old;
+    if(!specificButton)document.getElementById('downloadAll').disabled=allDownloadItems.length===0;
+  }
+}
+
+function saveBlob(blob,filename){
+  const u=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=u;
+  a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),2000);
+}
+
+function enc(p){return p.split('/').map(encodeURIComponent).join('/')}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function fmt(d){return d?new Date(d+'T12:00:00').toLocaleDateString('de-DE'):''}
+function fmtDT(d){return d?new Date(d).toLocaleDateString('de-DE'):''}
+function slug(s){return String(s||'event').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
+function fileExt(p){
+  const m=String(p||'').match(/(\.[a-z0-9]{2,5})$/i);
+  return m?m[1].toLowerCase():'';
+}
+function fileStem(p){
+  const n=String(p||'').split('/').pop()||'foto';
+  return n.replace(/\.[^.]+$/,'');
+}
+
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 boot();
-</script></body></html>
+</script>
+</body>
+</html>
