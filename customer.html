@@ -39,9 +39,10 @@ img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:10px;background:#
   <div class="brand">FTS.LU · KUNDENGALERIE</div>
   <h1>Aktuelle Events</h1>
   <div class="intro">Die Event-Fotos sind nur für die vereinbarte Zeit sichtbar. Danach archiviert FTS die Dateien separat.</div>
+  <div class="intro"><strong>Hinweis:</strong> Originale sind nur zur Ansicht. Heruntergeladen werden können ausschließlich die freigegebenen Event-Designs.</div>
 
   <div class="toolbar">
-    <button class="btn" id="downloadAll" disabled>Alle sichtbaren Fotos als ZIP herunterladen</button>
+    <button class="btn" id="downloadAll" disabled>Alle Event-Designs als ZIP herunterladen</button>
     <button class="btn secondary" id="refreshBtn">Galerie aktualisieren</button>
   </div>
 
@@ -58,7 +59,7 @@ const client=supabase.createClient(cfg.supabaseUrl,cfg.publishableKey);
 const customerToken=new URLSearchParams(location.search).get('c');
 const liveBase=`${cfg.supabaseUrl}/storage/v1/object/public/${cfg.liveBucket}/`;
 
-let allDownloadItems=[];
+let allDownloadItems=[]; // enthält absichtlich nur Event-Design-Dateien
 
 document.getElementById('refreshBtn').onclick=()=>location.reload();
 document.getElementById('downloadAll').onclick=()=>downloadZip(allDownloadItems,'FTS-alle-aktiven-events.zip');
@@ -71,7 +72,7 @@ function setStatus(text){
 function setDownloadBusy(busy,text){
   const b=document.getElementById('downloadAll');
   b.disabled=busy || allDownloadItems.length===0;
-  b.textContent=busy ? (text||'ZIP wird erstellt …') : 'Alle sichtbaren Fotos als ZIP herunterladen';
+  b.textContent=busy ? (text||'ZIP wird erstellt …') : 'Alle Event-Designs als ZIP herunterladen';
 }
 
 async function boot(){
@@ -118,7 +119,7 @@ async function boot(){
         <div class="expires">sichtbar bis ${fmtDT(ev.expires_at)}</div>
       </div>
       <div class="eventActions">
-        <button class="downloadBtn eventZip" disabled>Dieses Event als ZIP herunterladen</button>
+        <button class="downloadBtn eventZip" disabled>Event-Designs als ZIP herunterladen</button>
       </div>
       <div class="photos"></div>
     `;
@@ -129,7 +130,7 @@ async function boot(){
     let count=0;
 
     for(const p of map.get(ev.event_token)||[]){
-      const item=addCard(
+      const items=addCard(
         grid,
         liveBase+enc(p.original_path),
         p.designed_path?liveBase+enc(p.designed_path):null,
@@ -137,7 +138,8 @@ async function boot(){
         p.original_path,
         p.designed_path
       );
-      eventItems.push(...item);
+      // Nur Event-Designs dürfen in ZIP-Downloads.
+      eventItems.push(...items.filter(x=>x.kind==='design'));
       count++;
     }
 
@@ -172,11 +174,25 @@ async function addLegacy(ev,grid,eventItems){
 
     const O=(or.data||[]).filter(x=>x.name&&x.name!=='.emptyFolderPlaceholder');
     const D=(de.data||[]).filter(x=>x.name&&x.name!=='.emptyFolderPlaceholder');
-    const dm=new Map(D.map(x=>[x.name.replace(/\.[^.]+$/i,''),x.name]));
 
-    for(const o of O){
-      const stem=o.name.replace(/\.[^.]+$/,'');
-      const dn=dm.get(stem);
+    const norm=n=>String(n||'')
+      .replace(/\.[^.]+$/,'')
+      .toLowerCase()
+      .replace(/(?:[-_ ]?(?:design|designed|event|eventdesign|event-design))$/,'')
+      .replace(/[^a-z0-9]/g,'');
+
+    const dm=new Map();
+    for(const d of D) dm.set(norm(d.name),d.name);
+
+    for(let i=0;i<O.length;i++){
+      const o=O[i];
+      let dn=dm.get(norm(o.name));
+
+      // Alte Ampelparty-Dateien wurden teilweise anders benannt.
+      // Wenn Original und Design 1:1 vorliegen, paaren wir sie sicher nach Position.
+      if(!dn && O.length===D.length && D[i]) dn=D[i].name;
+      if(!dn && O.length===1 && D.length===1) dn=D[0].name;
+
       const ou=await signed(b,`${ev.legacy_prefix}/original/${o.name}`);
       const du=dn?await signed(b,`${ev.legacy_prefix}/designed/${dn}`):null;
 
@@ -185,7 +201,9 @@ async function addLegacy(ev,grid,eventItems){
         `${ev.legacy_prefix}/original/${o.name}`,
         dn?`${ev.legacy_prefix}/designed/${dn}`:null
       );
-      eventItems.push(...items);
+
+      // In Downloads nur das Event-Design freigeben.
+      eventItems.push(...items.filter(x=>x.kind==='design'));
       count++;
     }
   }catch(e){
@@ -204,39 +222,45 @@ function addCard(grid,originalUrl,designUrl,ev,originalPath,designPath){
   const baseName = originalPath ? fileStem(originalPath) : `foto-${Date.now()}`;
   const folder = `${slug(ev.title)}-${slug(ev.subtitle||'event')}`;
 
-  const originalName = `${folder}/Original/${baseName}${fileExt(originalPath)||'.jpg'}`;
-  const designName = designUrl ? `${folder}/Event-Design/${baseName}-design${fileExt(designPath)||'.jpg'}` : null;
+  const designName = designUrl
+    ? `${folder}/Event-Design/${baseName}-design${fileExt(designPath)||'.jpg'}`
+    : null;
 
   const el=document.createElement('article');
   el.className='card';
   el.innerHTML=`
     <div class="pair">
       <div>
-        <div class="label">Original</div>
-        <img src="${originalUrl}" loading="lazy">
+        <div class="label">Original · nur Ansicht</div>
+        <img src="${originalUrl}" loading="lazy" draggable="false">
       </div>
       <div>
-        <div class="label">Event-Design</div>
+        <div class="label">Event-Design · Download freigegeben</div>
         ${designUrl?`<img src="${designUrl}" loading="lazy">`:'<div class="empty">nicht vorhanden</div>'}
       </div>
     </div>
     <div class="links">
-      <button class="downloadBtn originalDl">Original herunterladen</button>
-      ${designUrl?`<button class="downloadBtn designDl">Design herunterladen</button>`:''}
-      <a class="btn secondary" href="${originalUrl}" target="_blank" rel="noopener">Original öffnen</a>
+      ${designUrl?`<button class="downloadBtn designDl">Event-Design herunterladen</button>`:''}
       ${designUrl?`<a class="btn secondary" href="${designUrl}" target="_blank" rel="noopener">Design öffnen</a>`:''}
     </div>
   `;
 
   grid.appendChild(el);
 
-  el.querySelector('.originalDl').onclick=()=>downloadOne(originalUrl,originalName,el.querySelector('.originalDl'));
+  // Leichte UI-Sperre gegen versehentliches Speichern des Originals.
+  // WICHTIG: Ein im Browser sichtbares Bild kann technisch nie absolut vor Kopieren/Screenshot geschützt werden.
+  const originalImg=el.querySelector('.pair > div:first-child img');
+  if(originalImg){
+    originalImg.addEventListener('contextmenu',e=>e.preventDefault());
+    originalImg.addEventListener('dragstart',e=>e.preventDefault());
+  }
+
   if(designUrl){
     el.querySelector('.designDl').onclick=()=>downloadOne(designUrl,designName,el.querySelector('.designDl'));
   }
 
-  const items=[{url:originalUrl,zipPath:originalName}];
-  if(designUrl)items.push({url:designUrl,zipPath:designName});
+  const items=[];
+  if(designUrl) items.push({kind:'design',url:designUrl,zipPath:designName});
   return items;
 }
 
