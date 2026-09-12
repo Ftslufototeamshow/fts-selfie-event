@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FTS Kunden-Galerie</title>
+<style>:root{font-family:Inter,system-ui,sans-serif;background:#071315;color:#f5f1e8;--accent:#d9b56d}*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#071113,#102426);min-height:100vh}.wrap{width:min(1180px,calc(100% - 24px));margin:auto;padding:26px 0 50px}.brand{font-size:.72rem;letter-spacing:.2em;color:var(--accent);font-weight:900}h1{font-size:clamp(2rem,6vw,3.7rem);margin:8px 0 10px}.intro{color:#91a5a1;margin-bottom:22px}.event{background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:16px;margin-bottom:20px}.eventHead{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:end;margin-bottom:13px}.eventTitle{font-size:1.55rem;font-weight:900}.meta{color:#95a8a4;font-size:.84rem}.expires{color:var(--accent);font-size:.78rem;font-weight:800}.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}.card{background:#0b1e20;border:1px solid rgba(255,255,255,.07);border-radius:17px;padding:10px}.pair{display:grid;grid-template-columns:1fr 1fr;gap:7px}.label{font-size:.72rem;color:var(--accent);font-weight:900;margin:3px 2px 6px}img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:10px;background:#061012}.links{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}a.btn{background:var(--accent);color:#102020;text-decoration:none;font-weight:900;padding:7px 9px;border-radius:9px;font-size:.78rem}.empty{color:#819390;padding:14px 4px}</style></head>
+<body><main class="wrap"><div class="brand">FTS.LU · KUNDENGALERIE</div><h1>Aktuelle Events</h1><div class="intro">Die Event-Fotos sind nur für die vereinbarte Zeit sichtbar. Danach archiviert FTS die Dateien separat.</div><div id="events">Galerie wird geladen …</div></main>
+<script src="./config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const cfg=window.FTS_CONFIG,client=supabase.createClient(cfg.supabaseUrl,cfg.publishableKey),customerToken=new URLSearchParams(location.search).get('c');
+const liveBase=`${cfg.supabaseUrl}/storage/v1/object/public/${cfg.liveBucket}/`;
+async function boot(){
+ if(!customerToken){document.getElementById('events').innerHTML='<h2>Kundenlink unvollständig.</h2>';return}
+ const [{data:events,error:e1},{data:photos,error:e2}]=await Promise.all([client.rpc('fts_get_customer_events',{p_customer_token:customerToken}),client.rpc('fts_get_customer_photos',{p_customer_token:customerToken})]);
+ if(e1||e2){document.getElementById('events').textContent='Galerie konnte nicht geladen werden.';return}
+ if(!events?.length){document.getElementById('events').innerHTML='<div class="empty">Aktuell sind keine freigegebenen Events sichtbar.</div>';return}
+ const map=new Map();for(const p of photos||[]){if(!map.has(p.event_token))map.set(p.event_token,[]);map.get(p.event_token).push(p)}
+ const root=document.getElementById('events');root.innerHTML='';
+ for(const ev of events){
+  const section=document.createElement('section');section.className='event';
+  section.innerHTML=`<div class="eventHead"><div><div class="eventTitle">${esc(ev.title)}${ev.subtitle?' · '+esc(ev.subtitle):''}</div><div class="meta">${esc(ev.location||'')} · ${fmt(ev.event_date)}</div></div><div class="expires">sichtbar bis ${fmtDT(ev.expires_at)}</div></div><div class="photos"></div>`;
+  root.appendChild(section);const grid=section.querySelector('.photos');let count=0;
+  for(const p of map.get(ev.event_token)||[]){addCard(grid,liveBase+enc(p.original_path),p.designed_path?liveBase+enc(p.designed_path):null);count++}
+  if(ev.legacy_prefix)count+=await addLegacy(ev,grid);
+  if(!count)grid.innerHTML='<div class="empty">Noch keine Fotos in diesem Event.</div>';
+ }
+}
+async function addLegacy(ev,grid){
+ let count=0;
+ try{
+  const b=ev.legacy_bucket||cfg.legacyBucket;
+  const [or,de]=await Promise.all([client.storage.from(b).list(`${ev.legacy_prefix}/original`,{limit:1000}),client.storage.from(b).list(`${ev.legacy_prefix}/designed`,{limit:1000})]);
+  const O=(or.data||[]).filter(x=>x.name&&x.name!=='.emptyFolderPlaceholder'),D=(de.data||[]).filter(x=>x.name&&x.name!=='.emptyFolderPlaceholder');
+  const dm=new Map(D.map(x=>[x.name.replace(/\.jpg$/i,''),x.name]));
+  for(const o of O){const stem=o.name.replace(/\.[^.]+$/,'');const dn=dm.get(stem);const ou=await signed(b,`${ev.legacy_prefix}/original/${o.name}`);const du=dn?await signed(b,`${ev.legacy_prefix}/designed/${dn}`):null;addCard(grid,ou,du);count++}
+ }catch(e){console.warn(e)}return count;
+}
+async function signed(b,p){const {data,error}=await client.storage.from(b).createSignedUrl(p,21600);if(error)throw error;return data.signedUrl}
+function addCard(g,o,d){const el=document.createElement('article');el.className='card';el.innerHTML=`<div class="pair"><div><div class="label">Original</div><img src="${o}" loading="lazy"></div><div><div class="label">Event-Design</div>${d?`<img src="${d}" loading="lazy">`:'<div class="empty">nicht vorhanden</div>'}</div></div><div class="links"><a class="btn" href="${o}" target="_blank">Original öffnen</a>${d?`<a class="btn" href="${d}" target="_blank">Design öffnen</a>`:''}</div>`;g.appendChild(el)}
+function enc(p){return p.split('/').map(encodeURIComponent).join('/')}function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}function fmt(d){return d?new Date(d+'T12:00:00').toLocaleDateString('de-DE'):''}function fmtDT(d){return d?new Date(d).toLocaleDateString('de-DE'):''}
+if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+boot();
+</script></body></html>
