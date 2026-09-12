@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FTS Kunden-Galerie</title>
+<style>
+:root{font-family:Inter,system-ui,sans-serif;background:#071315;color:#f5f1e8}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#071113,#102426);min-height:100vh}
+.wrap{width:min(1180px,calc(100% - 28px));margin:auto;padding:28px 0 50px}
+.top{display:flex;justify-content:space-between;gap:18px;align-items:end;flex-wrap:wrap;margin-bottom:20px}
+.brand{font-size:.72rem;letter-spacing:.2em;color:#d9b56d;font-weight:900}
+h1{margin:5px 0 0;font-size:clamp(2rem,5vw,3.6rem)}
+button{border:0;border-radius:12px;padding:11px 15px;font-weight:800;background:#d9b56d;color:#102020;cursor:pointer}
+.status{color:#9cafab;margin:8px 0 18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
+.card{background:#0b1e20;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:12px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pair div{min-width:0}.label{font-size:.76rem;color:#d9b56d;margin:4px 2px 7px;font-weight:800}
+img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:11px;background:#061012}
+.links{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+a{color:#102020;background:#d9b56d;text-decoration:none;padding:8px 10px;border-radius:9px;font-size:.82rem;font-weight:800}
+.lock{max-width:620px;margin:80px auto;padding:24px;background:#0b1e20;border-radius:20px;text-align:center}
+</style>
+</head>
+<body>
+<main class="wrap" id="app"></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./config.js"></script>
+<script>
+const cfg=window.FTS_CONFIG, ev=window.FTS_EVENT;
+const app=document.getElementById('app');
+const supplied=new URLSearchParams(location.search).get('k');
+const supabaseClient=supabase.createClient(cfg.supabaseUrl,cfg.publishableKey);
+
+if(supplied!==ev.customerToken){
+  app.innerHTML='<section class="lock"><h2>Dieser Kundenlink ist nicht gültig.</h2><p>Bitte den vollständigen Link von FTS verwenden.</p></section>';
+}else{
+  app.innerHTML=`
+    <div class="top">
+      <div><div class="brand">FTS.LU · KUNDENGALERIE</div><h1>${ev.title} · ${ev.subtitle}</h1></div>
+      <button id="refresh">Galerie aktualisieren</button>
+    </div>
+    <div class="status" id="status">Fotos werden geladen …</div>
+    <section class="grid" id="grid"></section>`;
+  document.getElementById('refresh').onclick=loadGallery;
+  loadGallery();
+}
+
+async function signed(path){
+  const {data,error}=await supabaseClient.storage.from(cfg.bucket).createSignedUrl(path,21600);
+  if(error) throw error;
+  return data.signedUrl;
+}
+
+async function loadGallery(){
+  const status=document.getElementById('status'), grid=document.getElementById('grid');
+  status.textContent='Fotos werden geladen …'; grid.innerHTML='';
+  try{
+    const {data:originals,error:e1}=await supabaseClient.storage.from(cfg.bucket)
+      .list(`${ev.slug}/original`,{limit:1000,sortBy:{column:'created_at',order:'desc'}});
+    if(e1) throw e1;
+    const {data:designed,error:e2}=await supabaseClient.storage.from(cfg.bucket)
+      .list(`${ev.slug}/designed`,{limit:1000,sortBy:{column:'created_at',order:'desc'}});
+    if(e2) throw e2;
+
+    const dMap=new Map((designed||[]).filter(x=>x.name && x.name!=='.emptyFolderPlaceholder')
+      .map(x=>[x.name.replace(/\.jpg$/i,''),x.name]));
+    const oList=(originals||[]).filter(x=>x.name && x.name!=='.emptyFolderPlaceholder');
+
+    status.textContent=`${oList.length} Foto${oList.length===1?'':'s'} vorhanden`;
+
+    for(const o of oList){
+      const stem=o.name.replace(/\.[^.]+$/,'');
+      const dName=dMap.get(stem);
+      const oPath=`${ev.slug}/original/${o.name}`;
+      const dPath=dName?`${ev.slug}/designed/${dName}`:null;
+      const [oUrl,dUrl]=await Promise.all([signed(oPath),dPath?signed(dPath):Promise.resolve(null)]);
+
+      const el=document.createElement('article');
+      el.className='card';
+      el.innerHTML=`
+        <div class="pair">
+          <div><div class="label">Original</div><img src="${oUrl}" loading="lazy"></div>
+          <div><div class="label">Event-Design</div>${dUrl?`<img src="${dUrl}" loading="lazy">`:'<div style="padding:20px;color:#849592">Noch keine Design-Version</div>'}</div>
+        </div>
+        <div class="links">
+          <a href="${oUrl}" target="_blank">Original öffnen</a>
+          ${dUrl?`<a href="${dUrl}" target="_blank">Design öffnen</a>`:''}
+        </div>`;
+      grid.appendChild(el);
+    }
+  }catch(e){
+    console.error(e);
+    status.textContent='Galerie konnte nicht geladen werden: '+(e?.message||'Fehler');
+  }
+}
+</script>
+</body>
+</html>

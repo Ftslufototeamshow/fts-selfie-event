@@ -4,21 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#071315">
-<title>Baustert Kirmes – Ampelparty | FTS.lu</title>
+<title>FTS Selfie Event</title>
 <style>
-:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f7f1e7;background:#071315}
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f6f1e8;background:#071315}
 *{box-sizing:border-box}
-body{margin:0;min-height:100svh;background:radial-gradient(circle at top right,rgba(19,132,137,.28),transparent 38%),linear-gradient(145deg,#071113,#102426)}
-.wrap{width:min(680px,calc(100% - 28px));margin:auto;padding:34px 0 50px}
-.card{background:rgba(12,31,33,.95);border:1px solid rgba(255,255,255,.09);border-radius:26px;padding:24px;box-shadow:0 24px 70px rgba(0,0,0,.34)}
-.brand{font-size:.72rem;letter-spacing:.2em;color:#e0bd70;font-weight:900}
-h1{font-size:clamp(2.2rem,9vw,4.2rem);line-height:.95;margin:10px 0 8px}
-.sub{font-size:1.25rem;color:#d9c79d;margin-bottom:26px}
-.upload{display:grid;place-items:center;min-height:210px;border:2px dashed rgba(224,189,112,.55);border-radius:20px;text-align:center;padding:22px;cursor:pointer;background:rgba(0,0,0,.12)}
-.upload strong{font-size:1.18rem}.upload span{display:block;color:#aebfbc;margin-top:8px;font-size:.92rem}
+body{margin:0;min-height:100svh;background:radial-gradient(circle at top right,rgba(20,130,135,.22),transparent 38%),linear-gradient(145deg,#071113,#102426)}
+.wrap{width:min(920px,calc(100% - 26px));margin:auto;padding:28px 0 46px}
+.card{background:rgba(7,18,20,.95);border:1px solid rgba(255,255,255,.09);border-radius:26px;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.34)}
+.brand{font-size:.72rem;letter-spacing:.2em;color:#d9b56d;font-weight:900}
+h1{font-size:clamp(2.2rem,8vw,4rem);line-height:.96;margin:9px 0 8px}
+.sub{font-size:1.25rem;color:#c5aa72;margin-bottom:22px}
+.upload{display:grid;place-items:center;min-height:190px;border:2px dashed rgba(217,181,109,.48);border-radius:20px;text-align:center;padding:22px;cursor:pointer;background:rgba(0,0,0,.12)}
+.upload strong{font-size:1.2rem}.upload span{display:block;color:#9cacaa;margin-top:8px}
 .upload input{display:none}
-.preview{width:100%;max-height:520px;object-fit:contain;border-radius:18px;margin-top:18px;display:none;background:#061012}
-.consent{display:flex;gap:10px;align-items:flex-start;margin:18px 0;color:#c8d2d0;font-size:.9rem}
+.compare{display:none;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+.previewBox{background:#061012;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:10px}
+.previewBox b{display:block;margin:2px 4px 8px;color:#d9b56d}
+.previewBox img,.previewBox canvas{width:100%;height:auto;max-height:520px;object-fit:contain;border-radius:12px;display:block}
+.consent{display:flex;gap:10px;align-items:flex-start;margin:18px 0;color:#c5cfcd;font-size:.9rem}
 .consent input{margin-top:3px;transform:scale(1.2)}
 button{width:100%;border:0;border-radius:15px;padding:16px;font:inherit;font-weight:900;background:linear-gradient(135deg,#d7b66a,#f1d79a);color:#102020;cursor:pointer}
 button:disabled{opacity:.55;cursor:wait}
@@ -26,30 +29,39 @@ button:disabled{opacity:.55;cursor:wait}
 .ok{display:block;background:rgba(68,180,117,.16);border:1px solid rgba(68,180,117,.35)}
 .err{display:block;background:rgba(220,80,80,.14);border:1px solid rgba(220,80,80,.35)}
 .foot{text-align:center;color:#7f9692;font-size:.78rem;margin-top:18px}
+@media(max-width:700px){.compare{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <main class="wrap">
 <section class="card">
 <div class="brand">FTS.LU · SELFIE EVENT</div>
-<h1>Baustert Kirmes</h1>
-<div class="sub">Ampelparty</div>
+<h1 id="title">Event</h1>
+<div class="sub" id="subtitle"></div>
 
 <label class="upload">
   <div><strong>📸 Selfie aufnehmen</strong><span>oder ein Foto vom Handy auswählen</span></div>
-  <input id="photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="user">
+  <input id="photo" type="file" accept="image/*" capture="user">
 </label>
 
-<img id="preview" class="preview" alt="Vorschau">
+<section class="compare" id="compare">
+  <div class="previewBox">
+    <b>Original</b>
+    <img id="originalPreview" alt="Original">
+  </div>
+  <div class="previewBox">
+    <b>Mit Event-Design</b>
+    <canvas id="designCanvas"></canvas>
+  </div>
+</section>
 
 <label class="consent">
   <input id="consent" type="checkbox">
   <span>Ich stimme zu, dass dieses Foto für die Veranstaltung an FTS übermittelt und gespeichert wird.</span>
 </label>
 
-<button id="upload">Foto hochladen</button>
+<button id="uploadBtn">Original + Design hochladen</button>
 <div id="message" class="msg"></div>
-
 <div class="foot">FTS.lu · Eventfotografie</div>
 </section>
 </main>
@@ -57,65 +69,143 @@ button:disabled{opacity:.55;cursor:wait}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./config.js"></script>
 <script>
-const EVENT_FOLDER = 'baustert-ampelparty-2026';
-const BUCKET = 'fts-selfie-uploads';
+const cfg = window.FTS_CONFIG, ev = window.FTS_EVENT;
+document.getElementById('title').textContent = ev.title;
+document.getElementById('subtitle').textContent = ev.subtitle;
 
+const client = supabase.createClient(cfg.supabaseUrl, cfg.publishableKey);
 const photo = document.getElementById('photo');
-const preview = document.getElementById('preview');
+const compare = document.getElementById('compare');
+const originalPreview = document.getElementById('originalPreview');
+const canvas = document.getElementById('designCanvas');
+const ctx = canvas.getContext('2d');
 const consent = document.getElementById('consent');
-const uploadBtn = document.getElementById('upload');
+const uploadBtn = document.getElementById('uploadBtn');
 const message = document.getElementById('message');
 
-const client = supabase.createClient(FTS_SUPABASE_URL, FTS_SUPABASE_ANON_KEY);
+let selectedFile = null;
+let designedBlob = null;
 
-function showMessage(text, ok=false) {
+function showMessage(text, ok=false){
   message.textContent = text;
   message.className = 'msg ' + (ok ? 'ok' : 'err');
 }
 
-photo.addEventListener('change', () => {
-  const f = photo.files?.[0];
-  if (!f) return;
-  preview.src = URL.createObjectURL(f);
-  preview.style.display = 'block';
+function loadImageFromFile(file){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.onload = ()=>resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function roundRect(c,x,y,w,h,r){
+  const rr=Math.min(r,w/2,h/2);
+  c.beginPath();
+  c.moveTo(x+rr,y); c.arcTo(x+w,y,x+w,y+h,rr); c.arcTo(x+w,y+h,x,y+h,rr);
+  c.arcTo(x,y+h,x,y,rr); c.arcTo(x,y,x+w,y,rr); c.closePath();
+}
+
+async function makeDesign(file){
+  const img = await loadImageFromFile(file);
+
+  const maxW = 1800;
+  const scale = Math.min(1, maxW / img.naturalWidth);
+  canvas.width = Math.round(img.naturalWidth * scale);
+  canvas.height = Math.round(img.naturalHeight * scale);
+
+  ctx.drawImage(img,0,0,canvas.width,canvas.height);
+
+  const topGrad = ctx.createLinearGradient(0,0,0,canvas.height*.28);
+  topGrad.addColorStop(0,'rgba(0,0,0,.42)');
+  topGrad.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=topGrad; ctx.fillRect(0,0,canvas.width,canvas.height*.32);
+
+  const bottomGrad = ctx.createLinearGradient(0,canvas.height*.60,0,canvas.height);
+  bottomGrad.addColorStop(0,'rgba(3,14,15,0)');
+  bottomGrad.addColorStop(.35,'rgba(3,14,15,.68)');
+  bottomGrad.addColorStop(1,'rgba(3,14,15,.96)');
+  ctx.fillStyle=bottomGrad; ctx.fillRect(0,canvas.height*.55,canvas.width,canvas.height*.45);
+
+  const pad = Math.max(28, canvas.width*.045);
+  const badgeH = Math.max(46, canvas.width*.052);
+  const badgeW = Math.max(230, canvas.width*.27);
+  ctx.fillStyle='rgba(5,18,19,.78)';
+  roundRect(ctx,pad,pad,badgeW,badgeH,badgeH/2);
+  ctx.fill();
+  ctx.fillStyle=ev.accent;
+  ctx.font=`800 ${Math.max(18,canvas.width*.021)}px system-ui`;
+  ctx.textBaseline='middle';
+  ctx.fillText('FTS.LU · SELFIE EVENT',pad+badgeH*.45,pad+badgeH/2);
+
+  const y1 = canvas.height - pad*2.5;
+  ctx.textBaseline='alphabetic';
+  ctx.fillStyle='#fff';
+  ctx.font=`900 ${Math.max(42,canvas.width*.064)}px system-ui`;
+  ctx.fillText(ev.title,pad,y1 - Math.max(48,canvas.width*.058));
+
+  ctx.fillStyle=ev.accent;
+  ctx.font=`800 ${Math.max(28,canvas.width*.038)}px system-ui`;
+  ctx.fillText(ev.subtitle,pad,y1);
+
+  ctx.fillStyle='rgba(255,255,255,.86)';
+  ctx.font=`600 ${Math.max(20,canvas.width*.026)}px system-ui`;
+  ctx.fillText(ev.overlayText,pad,y1 + Math.max(34,canvas.width*.038));
+
+  designedBlob = await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.9));
+}
+
+photo.addEventListener('change', async ()=>{
+  const file = photo.files?.[0];
+  if(!file) return;
+  selectedFile = file;
+  originalPreview.src = URL.createObjectURL(file);
+  try{
+    await makeDesign(file);
+    compare.style.display='grid';
+    message.className='msg';
+  }catch(e){
+    console.error(e);
+    compare.style.display='grid';
+    showMessage('Das Original kann hochgeladen werden, aber die Design-Vorschau konnte auf diesem Gerät nicht erzeugt werden.');
+  }
 });
 
-uploadBtn.addEventListener('click', async () => {
-  const file = photo.files?.[0];
+uploadBtn.addEventListener('click', async ()=>{
+  if(!selectedFile) return showMessage('Bitte zuerst ein Foto aufnehmen oder auswählen.');
+  if(!consent.checked) return showMessage('Bitte zuerst der Übermittlung zustimmen.');
+  if(selectedFile.size > 15*1024*1024) return showMessage('Das Original ist größer als 15 MB.');
 
-  if (!file) return showMessage('Bitte zuerst ein Foto aufnehmen oder auswählen.');
-  if (!consent.checked) return showMessage('Bitte zuerst der Übermittlung zustimmen.');
-  if (file.size > 15 * 1024 * 1024) return showMessage('Das Foto ist größer als 15 MB.');
+  uploadBtn.disabled=true;
+  uploadBtn.textContent='Fotos werden hochgeladen …';
 
-  uploadBtn.disabled = true;
-  uploadBtn.textContent = 'Foto wird hochgeladen …';
-  message.className = 'msg';
+  try{
+    const id = `${Date.now()}_${crypto.randomUUID()}`;
+    const ext = (selectedFile.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g,'') || 'jpg';
 
-  try {
-    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g,'');
-    const id = crypto.randomUUID();
-    const path = `${EVENT_FOLDER}/${Date.now()}_${id}.${ext}`;
+    const originalPath = `${ev.slug}/original/${id}.${ext}`;
+    const {error:e1} = await client.storage.from(cfg.bucket).upload(originalPath, selectedFile, {
+      cacheControl:'3600', upsert:false, contentType:selectedFile.type || undefined
+    });
+    if(e1) throw e1;
 
-    const { error } = await client.storage
-      .from(BUCKET)
-      .upload(path, file, {
-        cacheControl: '3600',
-        upsert: false,
-        contentType: file.type || undefined
+    if(designedBlob){
+      const designedPath = `${ev.slug}/designed/${id}.jpg`;
+      const {error:e2} = await client.storage.from(cfg.bucket).upload(designedPath, designedBlob, {
+        cacheControl:'3600', upsert:false, contentType:'image/jpeg'
       });
+      if(e2) throw e2;
+    }
 
-    if (error) throw error;
-
-    showMessage('✓ Foto erfolgreich hochgeladen. Danke!', true);
-    photo.value = '';
-    preview.style.display = 'none';
-    consent.checked = false;
-  } catch (e) {
+    showMessage('✓ Original und Event-Version erfolgreich hochgeladen. Danke!',true);
+    selectedFile=null; designedBlob=null; photo.value=''; consent.checked=false;
+  }catch(e){
     console.error(e);
     showMessage('Upload nicht möglich: ' + (e?.message || 'Unbekannter Fehler'));
-  } finally {
-    uploadBtn.disabled = false;
-    uploadBtn.textContent = 'Foto hochladen';
+  }finally{
+    uploadBtn.disabled=false;
+    uploadBtn.textContent='Original + Design hochladen';
   }
 });
 </script>

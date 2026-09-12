@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FTS QR Event Poster</title>
+<style>
+:root{font-family:Inter,system-ui,sans-serif;background:#071315;color:white}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#071315}
+.wrap{min-height:100vh;display:grid;place-items:center;padding:20px}
+.poster{width:min(760px,96vw);aspect-ratio:4/5;border-radius:34px;overflow:hidden;position:relative;background:
+radial-gradient(circle at 80% 15%,rgba(33,130,133,.42),transparent 35%),
+linear-gradient(145deg,#071113,#10383a);box-shadow:0 30px 90px rgba(0,0,0,.45)}
+.poster:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.48));pointer-events:none}
+.content{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:7%}
+.brand{letter-spacing:.2em;font-size:clamp(.7rem,1.8vw,1.05rem);font-weight:900;color:#d9b56d}
+h1{font-size:clamp(2.4rem,8vw,5.3rem);margin:13px 0 5px;text-align:center;line-height:.94}
+.sub{font-size:clamp(1.2rem,3vw,2rem);color:#d9b56d;font-weight:800;margin-bottom:5%}
+.qrbox{background:rgba(5,18,19,.82);backdrop-filter:blur(9px);padding:5%;border-radius:28px;border:1px solid rgba(255,255,255,.12);text-align:center;width:min(78%,520px)}
+#qr{width:100%;height:auto;background:white;border-radius:18px;padding:12px}
+.cta{font-size:clamp(1rem,2.4vw,1.45rem);font-weight:800;margin-top:14px}
+.fts{margin-top:4%;font-size:clamp(.78rem,1.8vw,1rem);color:#b9c8c5}
+.controls{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:10;display:flex;gap:8px}
+button{border:0;border-radius:11px;padding:10px 14px;font-weight:800;background:#d9b56d;color:#102020}
+@media(display-mode:fullscreen){.controls{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="poster" id="poster">
+    <div class="content">
+      <div class="brand">FTS.LU · SELFIE EVENT</div>
+      <h1 id="title">Event</h1>
+      <div class="sub" id="subtitle"></div>
+      <div class="qrbox">
+        <canvas id="qr"></canvas>
+        <div class="cta">Scannen & Selfie hochladen</div>
+      </div>
+      <div class="fts">FTS.lu · Eventfotografie</div>
+    </div>
+  </section>
+</div>
+<div class="controls">
+  <button onclick="document.documentElement.requestFullscreen?.()">Vollbild</button>
+  <button id="download">Poster als PNG</button>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="./config.js"></script>
+<script>
+const cfg=window.FTS_CONFIG,ev=window.FTS_EVENT;
+document.getElementById('title').textContent=ev.title;
+document.getElementById('subtitle').textContent=ev.subtitle;
+QRCode.toCanvas(document.getElementById('qr'),cfg.baseUrl,{width:700,margin:2,errorCorrectionLevel:'H'});
+
+document.getElementById('download').onclick=async()=>{
+  const el=document.getElementById('poster');
+  const c=await html2canvas(el,{scale:2,backgroundColor:null});
+  const a=document.createElement('a');
+  a.download=`${ev.slug}-qr-poster.png`;
+  a.href=c.toDataURL('image/png');
+  a.click();
+};
+</script>
+</body>
+</html>
