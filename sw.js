@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE=cfg.cacheVersion||'fts-selfie-v4-offline';
+const CACHE=(cfg.cacheVersion||'fts-selfie-v4-offline')+'-push2';
 const CORE=['./','./index.html','./config.js','./manifest.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
@@ -96,4 +96,58 @@ self.addEventListener('sync',event=>{
 });
 self.addEventListener('message',event=>{
   if(event.data?.type==='FTS_FLUSH_QUEUE')event.waitUntil(flush());
+});
+
+
+// ---------- FTS Admin Push ----------
+self.addEventListener('push', event => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : '' };
+  }
+
+  const title = data.title || 'FTS Selfie';
+  const options = {
+    body: data.body || 'Ein neues Eventfoto ist da.',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
+    tag: data.tag || ('fts-photo-' + Date.now()),
+    renotify: true,
+    data: {
+      url: data.url || './dashboard.html'
+    }
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+
+  event.waitUntil((async () => {
+    const target = new URL(
+      event.notification?.data?.url || './dashboard.html',
+      self.registration.scope
+    ).href;
+
+    const windows = await self.clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true
+    });
+
+    for (const client of windows) {
+      if ('focus' in client) {
+        try {
+          if ('navigate' in client) await client.navigate(target);
+        } catch {}
+        return client.focus();
+      }
+    }
+
+    if (self.clients.openWindow) {
+      return self.clients.openWindow(target);
+    }
+  })());
 });

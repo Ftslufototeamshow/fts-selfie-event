@@ -89,7 +89,8 @@ select{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);ba
     <div class="topActions">
       <a class="button secondary" href="./admin.html">+ Neues Event</a>
       <button class="secondary" id="installBtn">Als App installieren</button>
-      <button class="secondary" id="notifyBtn">Benachrichtigungen aktivieren</button>
+      <button class="secondary" id="notifyBtn">Push aktivieren</button>
+      <button class="secondary" id="testPushBtn" style="display:none">Push testen</button>
       <button class="secondary" id="logoutBtn" style="display:none">Abmelden</button>
     </div>
   </div>
@@ -144,6 +145,7 @@ select{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);ba
 <script src="./config.js"></script>
 <script>
 const cfg=window.FTS_CONFIG;
+const VAPID_PUBLIC_KEY='BA4ooYZBIcpChVCyvDWS-ovJF6I6VFJ5UVOrDdv0EoDHJ7hCUOQXxShbV9VJ-KPKAKVXdiYDaZ4bLOwidSUSgtA';
 const CODE_KEY='fts_cockpit_admin_code';
 const COUNTS_KEY='fts_cockpit_counts_v1';
 const POLL_MS=8000;
@@ -206,28 +208,96 @@ function showToast(text){
   setTimeout(()=>t.classList.remove('show'),5000);
 }
 
-function sendNotification(title,body){
-  if(!('Notification' in window) || Notification.permission!=='granted')return;
-  try{
-    new Notification(title,{
-      body,
-      icon:'./icon-192.png',
-      badge:'./icon-192.png',
-      tag:'fts-selfie-photo-'+Date.now()
-    });
-  }catch(e){console.warn(e)}
+function urlBase64ToUint8Array(base64String){
+  const padding='='.repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(base64);
+  return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+}
+
+async function currentPushSubscription(){
+  if(!('serviceWorker' in navigator) || !('PushManager' in window))return null;
+  const reg=await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+
+async function refreshPushButton(){
+  if(!('Notification' in window) || !('PushManager' in window)){
+    $('#notifyBtn').textContent='Push nicht unterstützt';
+    $('#notifyBtn').disabled=true;
+    return;
+  }
+
+  const sub=await currentPushSubscription().catch(()=>null);
+  if(Notification.permission==='granted' && sub){
+    $('#notifyBtn').textContent='Push ist an';
+  }else{
+    $('#notifyBtn').textContent='Push aktivieren';
+  }
 }
 
 async function enableNotifications(){
-  if(!('Notification' in window)){
-    alert('Dieser Browser unterstützt diese Benachrichtigungen nicht.');
+  if(!adminCode()){
+    alert('Bitte zuerst das Cockpit mit deinem Admin-Code öffnen.');
     return;
   }
-  const p=await Notification.requestPermission();
-  $('#notifyBtn').textContent=p==='granted'?'Benachrichtigungen sind an':'Benachrichtigungen aktivieren';
-  if(p==='granted'){
-    showToast('Live-Hinweise sind aktiviert.');
-    sendNotification('FTS Selfie Cockpit','Benachrichtigungen sind aktiviert.');
+
+  if(!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)){
+    alert('Dieser Browser unterstützt Web-Push auf diesem Gerät nicht.');
+    return;
+  }
+
+  const permission=await Notification.requestPermission();
+  if(permission!=='granted'){
+    alert('Benachrichtigungen wurden nicht erlaubt.');
+    await refreshPushButton();
+    return;
+  }
+
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+
+    if(!sub){
+      sub=await reg.pushManager.subscribe({
+        userVisibleOnly:true,
+        applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+
+    const j=sub.toJSON();
+
+    await rpc('fts_admin_save_push_subscription',{
+      p_admin_code:adminCode(),
+      p_endpoint:j.endpoint,
+      p_p256dh:j.keys?.p256dh||'',
+      p_auth:j.keys?.auth||'',
+      p_user_agent:navigator.userAgent
+    });
+
+    $('#notifyBtn').textContent='Push ist an';
+    $('#testPushBtn').style.display='inline-block';
+    showToast('Push ist jetzt für dieses Handy aktiviert.');
+  }catch(e){
+    console.error(e);
+    alert('Push konnte nicht aktiviert werden: '+e.message);
+  }
+}
+
+async function testPush(){
+  if(!adminCode()){
+    alert('Bitte zuerst das Cockpit öffnen.');
+    return;
+  }
+
+  try{
+    $('#testPushBtn').disabled=true;
+    await rpc('fts_admin_test_push',{p_admin_code:adminCode()});
+    showToast('Test-Push wurde ausgelöst. Er sollte gleich auf dem Handy erscheinen.');
+  }catch(e){
+    alert('Test-Push konnte nicht ausgelöst werden: '+e.message);
+  }finally{
+    setTimeout(()=>$('#testPushBtn').disabled=false,1500);
   }
 }
 
@@ -255,10 +325,6 @@ async function loadEvents(manual=false){
           const delta=now-old;
           newSinceOpen+=delta;
           showToast(`${delta} neues Foto bei ${e.title}${e.subtitle?' · '+e.subtitle:''}`);
-          sendNotification(
-            'Neues FTS Eventfoto',
-            `${e.title}${e.subtitle?' · '+e.subtitle:''}: ${delta} neues Foto${delta===1?'':'s'}`
-          );
         }
       }
     }
@@ -266,6 +332,10 @@ async function loadEvents(manual=false){
     $('#cockpit').style.display='block';
     $('#loginPanel').style.display='none';
     $('#logoutBtn').style.display='inline-block';
+    refreshPushButton().then(async()=>{
+      const sub=await currentPushSubscription().catch(()=>null);
+      $('#testPushBtn').style.display=(Notification.permission==='granted' && sub)?'inline-block':'none';
+    });
     render();
     $('#statusLine').textContent='zuletzt '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
@@ -362,6 +432,7 @@ $('#loadBtn').onclick=()=>loadEvents(true);
 $('#refreshBtn').onclick=()=>loadEvents(true);
 $('#filter').onchange=render;
 $('#notifyBtn').onclick=enableNotifications;
+$('#testPushBtn').onclick=testPush;
 $('#changeCodeBtn').onclick=changeAdminCode;
 function logoutCockpit(){
   localStorage.removeItem(CODE_KEY);
@@ -371,6 +442,7 @@ function logoutCockpit(){
   $('#cockpit').style.display='none';
   $('#loginPanel').style.display='block';
   $('#logoutBtn').style.display='none';
+  $('#testPushBtn').style.display='none';
   events=[];
   firstLoad=true;
   newSinceOpen=0;
@@ -385,9 +457,7 @@ if(saved){
   loadEvents(false);
 }
 
-if('Notification' in window && Notification.permission==='granted'){
-  $('#notifyBtn').textContent='Benachrichtigungen sind an';
-}
+refreshPushButton();
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('./sw.js').catch(()=>{});
