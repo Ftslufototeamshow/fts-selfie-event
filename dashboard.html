@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#071315">
+<title>FTS Selfie Cockpit</title>
+<style>
+:root{
+  font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:#071315;color:#f5f1e8;--accent:#d9b56d
+}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:
+  radial-gradient(circle at 85% 5%,rgba(25,112,116,.25),transparent 34%),
+  linear-gradient(145deg,#061012,#10383a)}
+.wrap{width:min(1220px,calc(100% - 24px));margin:auto;padding:24px 0 60px}
+.top{display:flex;gap:18px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap}
+.brand{font-size:.72rem;letter-spacing:.2em;color:var(--accent);font-weight:900}
+h1{font-size:clamp(2.1rem,6vw,4rem);margin:6px 0 0;line-height:1}
+.topActions{display:flex;gap:8px;flex-wrap:wrap}
+button,a.button{
+  border:0;border-radius:11px;padding:11px 14px;background:var(--accent);
+  color:#102020;font-weight:900;cursor:pointer;text-decoration:none;font:inherit
+}
+button.secondary,a.secondary{background:#15383a;color:#f4f1e9;border:1px solid rgba(255,255,255,.09)}
+button:disabled{opacity:.5;cursor:wait}
+.login{margin:24px 0;background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:18px}
+.loginGrid{display:grid;grid-template-columns:1fr auto auto;gap:9px}
+input{width:100%;padding:12px;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:#0a2426;color:white;font:inherit}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin:20px 0}
+.stat{background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:15px}
+.stat .n{font-size:2rem;font-weight:900;color:var(--accent)}
+.stat .l{color:#8fa29f;font-size:.8rem}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0}
+select{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0a2426;color:#fff}
+.statusline{color:#90a29f;font-size:.82rem;margin-left:auto}
+.events{display:grid;gap:14px}
+.event{
+  background:#071719;border:1px solid rgba(255,255,255,.08);
+  border-radius:20px;padding:16px
+}
+.event.newPhoto{box-shadow:0 0 0 2px rgba(217,181,109,.42)}
+.head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.name{font-size:1.35rem;font-weight:900}
+.customer{color:var(--accent);font-weight:800;font-size:.85rem;margin-top:4px}
+.meta{color:#91a5a1;font-size:.82rem;margin-top:5px}
+.right{text-align:right}
+.count{font-size:2rem;font-weight:900;color:var(--accent)}
+.countLabel{font-size:.75rem;color:#91a5a1}
+.badges{display:flex;gap:7px;flex-wrap:wrap;margin:11px 0}
+.badge{padding:6px 9px;border-radius:999px;font-size:.74rem;font-weight:900;background:#15383a;color:#bcd0cc}
+.badge.live{background:rgba(60,166,108,.14);color:#83dda8;border:1px solid rgba(60,166,108,.28)}
+.badge.expired{background:rgba(210,88,88,.14);color:#ef9a9a;border:1px solid rgba(210,88,88,.28)}
+.badge.new{background:rgba(217,181,109,.17);color:#f0ce82;border:1px solid rgba(217,181,109,.3)}
+.links{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.links a{color:#102020;background:var(--accent);text-decoration:none;font-weight:900;padding:8px 10px;border-radius:9px;font-size:.78rem}
+.links a.dark{background:#15383a;color:#e7eeec}
+.toast{
+  position:fixed;right:16px;bottom:16px;z-index:10;max-width:360px;
+  background:#102d2f;border:1px solid rgba(217,181,109,.35);border-radius:15px;
+  padding:13px 15px;box-shadow:0 15px 50px #0008;display:none
+}
+.toast.show{display:block}
+.settings{margin-top:24px;background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:16px}
+.settings summary{cursor:pointer;font-weight:900;color:var(--accent)}
+.changeGrid{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:12px}
+.note{color:#8da09c;font-size:.78rem;line-height:1.45}
+.empty{padding:30px;text-align:center;color:#8da09c;background:#071719;border-radius:18px}
+@media(max-width:760px){
+  .stats{grid-template-columns:1fr 1fr}
+  .loginGrid{grid-template-columns:1fr}
+  .changeGrid{grid-template-columns:1fr}
+  .right{text-align:left}
+}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="top">
+    <div>
+      <div class="brand">FTS.LU · ADMIN COCKPIT</div>
+      <h1>Selfie Events</h1>
+    </div>
+    <div class="topActions">
+      <a class="button secondary" href="./admin.html">+ Neues Event</a>
+      <button class="secondary" id="notifyBtn">Benachrichtigungen aktivieren</button>
+    </div>
+  </div>
+
+  <section class="login">
+    <div class="loginGrid">
+      <input id="adminCode" type="password" placeholder="FTS Admin-Code">
+      <button id="loadBtn">Cockpit öffnen</button>
+      <button class="secondary" id="forgetBtn">Code vergessen</button>
+    </div>
+    <div class="note" style="margin-top:9px">
+      Der Admin-Code wird auf Wunsch nur auf diesem Gerät gespeichert. Das Cockpit aktualisiert die Fotozahlen automatisch.
+    </div>
+  </section>
+
+  <section id="cockpit" style="display:none">
+    <div class="stats">
+      <div class="stat"><div class="n" id="activeN">0</div><div class="l">aktive Events</div></div>
+      <div class="stat"><div class="n" id="photoN">0</div><div class="l">Fotos gesamt</div></div>
+      <div class="stat"><div class="n" id="todayN">0</div><div class="l">Events heute</div></div>
+      <div class="stat"><div class="n" id="newN">0</div><div class="l">neue Fotos seit Öffnen</div></div>
+    </div>
+
+    <div class="toolbar">
+      <select id="filter">
+        <option value="active">Aktive Events</option>
+        <option value="all">Alle Events</option>
+        <option value="expired">Abgelaufene Events</option>
+      </select>
+      <button class="secondary" id="refreshBtn">Jetzt aktualisieren</button>
+      <span class="statusline" id="statusLine"></span>
+    </div>
+
+    <section class="events" id="events"></section>
+
+    <details class="settings">
+      <summary>Admin-Einstellungen</summary>
+      <div class="changeGrid">
+        <input id="oldCode" type="password" placeholder="Alter Admin-Code">
+        <input id="newCode" type="text" placeholder="Neuer Admin-Code (mind. 8 Zeichen)">
+        <button id="changeCodeBtn">Admin-Code ändern</button>
+      </div>
+      <p class="note">
+        Den neuen Code anschließend sicher notieren. Er gilt danach für Event-Manager und Cockpit.
+      </p>
+    </details>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="./config.js"></script>
+<script>
+const cfg=window.FTS_CONFIG;
+const CODE_KEY='fts_cockpit_admin_code';
+const COUNTS_KEY='fts_cockpit_counts_v1';
+const POLL_MS=8000;
+
+let events=[];
+let timer=null;
+let sessionStartCounts=new Map();
+let newSinceOpen=0;
+let firstLoad=true;
+
+const $=s=>document.querySelector(s);
+
+function headers(){
+  return {
+    'apikey':cfg.publishableKey,
+    'Authorization':'Bearer '+cfg.publishableKey,
+    'Content-Type':'application/json'
+  };
+}
+
+async function rpc(name,body){
+  const r=await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/${name}`,{
+    method:'POST',headers:headers(),body:JSON.stringify(body)
+  });
+  if(!r.ok)throw new Error((await r.text())||`HTTP ${r.status}`);
+  const t=await r.text();
+  return t?JSON.parse(t):null;
+}
+
+function adminCode(){return $('#adminCode').value.trim()}
+
+function rememberCode(){
+  if(adminCode())localStorage.setItem(CODE_KEY,adminCode());
+}
+
+function fmtDate(d){
+  if(!d)return '—';
+  return new Date(d+'T12:00:00').toLocaleDateString('de-DE');
+}
+function fmtDateTime(d){
+  if(!d || String(d).includes('-infinity'))return 'noch kein Foto';
+  return new Date(d).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'});
+}
+function esc(s){
+  return String(s??'').replace(/[&<>"']/g,m=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+  }[m]));
+}
+function isExpired(e){return new Date(e.expires_at)<=new Date() || !e.active}
+function isToday(e){
+  const a=new Date(e.event_date+'T12:00:00');
+  const n=new Date();
+  return a.getFullYear()===n.getFullYear() && a.getMonth()===n.getMonth() && a.getDate()===n.getDate();
+}
+
+function showToast(text){
+  const t=$('#toast');
+  t.textContent=text;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),5000);
+}
+
+function sendNotification(title,body){
+  if(!('Notification' in window) || Notification.permission!=='granted')return;
+  try{
+    new Notification(title,{
+      body,
+      icon:'./icon-192.png',
+      badge:'./icon-192.png',
+      tag:'fts-selfie-photo-'+Date.now()
+    });
+  }catch(e){console.warn(e)}
+}
+
+async function enableNotifications(){
+  if(!('Notification' in window)){
+    alert('Dieser Browser unterstützt diese Benachrichtigungen nicht.');
+    return;
+  }
+  const p=await Notification.requestPermission();
+  $('#notifyBtn').textContent=p==='granted'?'Benachrichtigungen sind an':'Benachrichtigungen aktivieren';
+  if(p==='granted'){
+    showToast('Live-Hinweise sind aktiviert.');
+    sendNotification('FTS Selfie Cockpit','Benachrichtigungen sind aktiviert.');
+  }
+}
+
+async function loadEvents(manual=false){
+  if(!adminCode())return alert('Bitte Admin-Code eingeben.');
+
+  $('#loadBtn').disabled=true;
+  $('#statusLine').textContent='Aktualisiere …';
+
+  try{
+    const data=await rpc('fts_admin_dashboard_events',{p_admin_code:adminCode()});
+    rememberCode();
+
+    const oldCounts=new Map(events.map(e=>[e.event_token,Number(e.photo_count||0)]));
+    events=data||[];
+
+    if(firstLoad){
+      sessionStartCounts=new Map(events.map(e=>[e.event_token,Number(e.photo_count||0)]));
+      firstLoad=false;
+    }else{
+      for(const e of events){
+        const old=oldCounts.get(e.event_token);
+        const now=Number(e.photo_count||0);
+        if(old!==undefined && now>old){
+          const delta=now-old;
+          newSinceOpen+=delta;
+          showToast(`${delta} neues Foto bei ${e.title}${e.subtitle?' · '+e.subtitle:''}`);
+          sendNotification(
+            'Neues FTS Eventfoto',
+            `${e.title}${e.subtitle?' · '+e.subtitle:''}: ${delta} neues Foto${delta===1?'':'s'}`
+          );
+        }
+      }
+    }
+
+    $('#cockpit').style.display='block';
+    render();
+    $('#statusLine').textContent='zuletzt '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+    if(!timer)timer=setInterval(()=>loadEvents(false),POLL_MS);
+  }catch(e){
+    console.error(e);
+    if(manual)alert('Cockpit konnte nicht geladen werden: '+e.message);
+    $('#statusLine').textContent='Fehler beim Aktualisieren';
+  }finally{
+    $('#loadBtn').disabled=false;
+  }
+}
+
+function render(){
+  const active=events.filter(e=>!isExpired(e));
+  $('#activeN').textContent=active.length;
+  $('#photoN').textContent=events.reduce((s,e)=>s+Number(e.photo_count||0),0);
+  $('#todayN').textContent=events.filter(isToday).length;
+  $('#newN').textContent=newSinceOpen;
+
+  const filter=$('#filter').value;
+  let list=events;
+  if(filter==='active')list=events.filter(e=>!isExpired(e));
+  if(filter==='expired')list=events.filter(isExpired);
+
+  const root=$('#events');
+  if(!list.length){
+    root.innerHTML='<div class="empty">Keine Events in dieser Ansicht.</div>';
+    return;
+  }
+
+  root.innerHTML=list.map(e=>{
+    const expired=isExpired(e);
+    const count=Number(e.photo_count||0);
+    const start=sessionStartCounts.get(e.event_token)??count;
+    const added=Math.max(0,count-start);
+
+    const guest=cfg.baseUrl+'?e='+encodeURIComponent(e.event_token);
+    const poster=cfg.baseUrl+'poster.html?e='+encodeURIComponent(e.event_token);
+    const customer=cfg.baseUrl+'customer.html?c='+encodeURIComponent(e.customer_token);
+
+    return `
+      <article class="event ${added>0?'newPhoto':''}">
+        <div class="head">
+          <div>
+            <div class="name">${esc(e.title)}${e.subtitle?' · '+esc(e.subtitle):''}</div>
+            <div class="customer">${esc(e.customer_name)}</div>
+            <div class="meta">${esc(e.location||'')} · ${fmtDate(e.event_date)} · letztes Foto: ${fmtDateTime(e.last_photo_at)}</div>
+          </div>
+          <div class="right">
+            <div class="count">${count}</div>
+            <div class="countLabel">Fotos</div>
+          </div>
+        </div>
+
+        <div class="badges">
+          <span class="badge ${expired?'expired':'live'}">${expired?'abgelaufen':'aktiv bis '+fmtDateTime(e.expires_at)}</span>
+          ${added>0?`<span class="badge new">+${added} neu seit Öffnen</span>`:''}
+          ${e.legacy_prefix?'<span class="badge">älteres Event übernommen</span>':''}
+        </div>
+
+        <div class="links">
+          <a href="${guest}" target="_blank">Gastseite</a>
+          <a href="${poster}" target="_blank">QR-Poster</a>
+          <a href="${customer}" target="_blank">Kundenportal</a>
+          <a class="dark" href="./admin.html" target="_blank">Event-Manager</a>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+async function changeAdminCode(){
+  const old=$('#oldCode').value.trim() || adminCode();
+  const neu=$('#newCode').value.trim();
+  if(!old||!neu)return alert('Alter und neuer Admin-Code werden benötigt.');
+
+  try{
+    await rpc('fts_admin_change_code',{p_old_code:old,p_new_code:neu});
+    localStorage.setItem(CODE_KEY,neu);
+    $('#adminCode').value=neu;
+    $('#oldCode').value='';
+    $('#newCode').value='';
+    alert('Admin-Code wurde geändert.');
+  }catch(e){
+    alert('Admin-Code konnte nicht geändert werden: '+e.message);
+  }
+}
+
+$('#loadBtn').onclick=()=>loadEvents(true);
+$('#refreshBtn').onclick=()=>loadEvents(true);
+$('#filter').onchange=render;
+$('#notifyBtn').onclick=enableNotifications;
+$('#changeCodeBtn').onclick=changeAdminCode;
+$('#forgetBtn').onclick=()=>{
+  localStorage.removeItem(CODE_KEY);
+  $('#adminCode').value='';
+  if(timer){clearInterval(timer);timer=null}
+  $('#cockpit').style.display='none';
+};
+
+const saved=localStorage.getItem(CODE_KEY);
+if(saved){
+  $('#adminCode').value=saved;
+  loadEvents(false);
+}
+
+if('Notification' in window && Notification.permission==='granted'){
+  $('#notifyBtn').textContent='Benachrichtigungen sind an';
+}
+
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
