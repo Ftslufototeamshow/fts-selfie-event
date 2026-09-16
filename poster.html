@@ -1,27 +1,65 @@
 <!doctype html>
-<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#061012">
 <title>FTS QR Event</title>
-<style>:root{font-family:Inter,system-ui,sans-serif;background:#061012;color:#fff;--accent:#d9b56d;--bg1:#071315;--bg2:#10383a}*{box-sizing:border-box}body{margin:0;min-height:100svh;background:#061012;display:grid;place-items:center;padding:16px}.poster{width:min(760px,96vw);aspect-ratio:4/5;border-radius:34px;background:linear-gradient(145deg,var(--bg1),var(--bg2));display:flex;flex-direction:column;align-items:center;justify-content:center;padding:7%;box-shadow:0 30px 90px #0008}.brand{color:var(--accent);letter-spacing:.2em;font-weight:900;font-size:clamp(.7rem,1.8vw,1.05rem)}h1{font-size:clamp(2.35rem,8vw,5.1rem);margin:16px 0 4px;line-height:.95;text-align:center}.sub{color:var(--accent);font-size:clamp(1.2rem,3vw,2rem);font-weight:800;margin-bottom:4%}.qrbox{background:#fff;border-radius:26px;padding:5%;width:min(75%,520px)}#qr{display:grid;place-items:center}#qr img,#qr canvas{width:100%!important;height:auto!important;display:block}.cta{font-size:clamp(1.05rem,2.7vw,1.55rem);font-weight:900;margin-top:4%;text-align:center}.foot{margin-top:4%;color:#9fb0ad}.controls{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:9px;z-index:5}button{border:0;border-radius:12px;padding:11px 15px;background:var(--accent);color:#102020;font-weight:900}.loading{padding:40px;text-align:center}</style></head>
-<body><div id="root" class="loading">QR-Event wird geladen …</div>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#061012;color:#fff;--accent:#d9b56d;--bg1:#071315;--bg2:#10383a}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#061012}body{min-height:100svh;display:grid;place-items:center;padding:16px;overflow:auto}.wrap{display:grid;place-items:center;width:100%}.poster{position:relative;width:min(760px,96vw);aspect-ratio:4/5;border-radius:34px;background:linear-gradient(145deg,var(--bg1),var(--bg2));display:flex;flex-direction:column;align-items:center;justify-content:center;padding:7%;box-shadow:0 30px 90px #0008;overflow:hidden}.poster>*{position:relative;z-index:2}.brand{color:var(--accent);letter-spacing:.2em;font-weight:900;font-size:clamp(.7rem,1.8vw,1.05rem)}h1{font-size:clamp(2.35rem,8vw,5.1rem);margin:16px 0 4px;line-height:.95;text-align:center}.sub{color:var(--accent);font-size:clamp(1.2rem,3vw,2rem);font-weight:800;margin-bottom:4%;text-align:center}.qrbox{background:#fff;border-radius:26px;padding:5%;width:min(72%,520px);box-shadow:0 15px 35px #0005}#qr{display:grid;place-items:center}#qr img,#qr canvas{width:100%!important;height:auto!important;display:block}.cta{font-size:clamp(1.05rem,2.7vw,1.55rem);font-weight:900;margin-top:4%;text-align:center}.foot{margin-top:4%;color:#b2bfbd}.code{margin-top:2%;font-size:clamp(.7rem,1.6vw,.95rem);letter-spacing:.12em;color:color-mix(in srgb,var(--accent) 80%,white)}
+.deco{position:absolute!important;z-index:1!important;font-size:clamp(4rem,12vw,8.5rem);opacity:.92;filter:drop-shadow(0 12px 18px #0005);user-select:none;pointer-events:none}.deco.a{left:-3%;top:2%;transform:rotate(-15deg)}.deco.b{right:-3%;bottom:2%;transform:rotate(14deg)}.deco.c{right:7%;top:8%;font-size:clamp(2.5rem,6vw,4rem);opacity:.45}.deco.d{left:7%;bottom:10%;font-size:clamp(2rem,5vw,3.5rem);opacity:.42}.glow{position:absolute!important;z-index:0!important;border-radius:50%;filter:blur(12px);opacity:.25;pointer-events:none}.glow.one{width:44%;aspect-ratio:1;background:var(--accent);right:-15%;top:-12%}.glow.two{width:34%;aspect-ratio:1;background:var(--accent);left:-14%;bottom:-10%;opacity:.14}
+.controls{position:fixed;left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:9px;z-index:20;flex-wrap:wrap;justify-content:center}.controls button{border:0;border-radius:12px;padding:11px 15px;background:var(--accent);color:#102020;font-weight:900;cursor:pointer}.controls button.secondary{background:#17383a;color:#fff;border:1px solid rgba(255,255,255,.12)}.loading{padding:40px;text-align:center}.displayMode .controls{display:none}.displayMode body{padding:0}.displayMode .poster{width:min(100vw,800px);max-height:100svh;border-radius:0;box-shadow:none}:fullscreen .controls{display:none}:fullscreen body{padding:0}:fullscreen .poster{height:100svh;width:auto;max-width:100vw;border-radius:0;box-shadow:none}
+@media print{@page{size:A4 portrait;margin:0}body{padding:0;background:#fff}.controls{display:none!important}.poster{width:210mm;height:297mm;aspect-ratio:auto;border-radius:0;box-shadow:none}.qrbox{width:58%}}
+@media(max-width:540px){body{padding:8px}.poster{border-radius:24px}.controls{width:calc(100% - 16px)}.controls button{font-size:.78rem;padding:10px 11px}}
+</style>
+</head>
+<body>
+<div class="wrap" id="root"><div class="loading">QR-Event wird geladen …</div></div>
 <script src="./config.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
-const cfg=window.FTS_CONFIG,t=new URLSearchParams(location.search).get('e')||cfg.defaultEventToken;
+const cfg=window.FTS_CONFIG;
+const params=new URLSearchParams(location.search);
+const ref=params.get('e')||cfg.defaultEventToken;
+const display=params.get('display')==='1';
 const headers={'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':'application/json'};
-async function rpc(name,body){const r=await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/${name}`,{method:'POST',headers,body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return JSON.parse(await r.text())}
+async function rpc(name,body){const r=await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/${name}`,{method:'POST',headers,body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());const t=await r.text();return t?JSON.parse(t):null}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function motifFor(ev){if(ev.motif)return ev.motif;return({autumn:'🎃',streetfood:'🍔',neon:'✦',winter:'❄',wedding:'♥',standard:'✦'})[ev.theme||'standard']||'✦'}
+function accentDeco(ev){return ev.theme==='autumn'?'🍂':ev.theme==='streetfood'?'✦':ev.theme==='winter'?'❄':ev.theme==='wedding'?'♥':'✦'}
 async function boot(){
  try{
-  const data=await rpc('fts_get_event',{p_event_token:t});if(!data?.length)throw new Error('Event nicht aktiv');
-  const ev=data[0];document.documentElement.style.setProperty('--accent',ev.accent);document.documentElement.style.setProperty('--bg1',ev.bg1);document.documentElement.style.setProperty('--bg2',ev.bg2);
-  document.getElementById('root').className='';document.getElementById('root').innerHTML=`<section class="poster" id="poster"><div class="brand">FTS.LU · SELFIE EVENT</div><h1>${esc(ev.title)}</h1><div class="sub">${esc(ev.subtitle||'')}</div><div class="qrbox"><div id="qr"></div></div><div class="cta">Scannen & Selfie hochladen</div><div class="foot">FTS.lu · Eventfotografie</div></section><div class="controls"><button id="full">Vollbild</button><button id="png">Poster als PNG</button></div>`;
-  const guest=cfg.baseUrl+'?e='+encodeURIComponent(ev.event_token);
-  new QRCode(document.getElementById('qr'),{text:guest,width:700,height:700,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.H});
-  document.getElementById('full').onclick=()=>document.documentElement.requestFullscreen?.();
-  document.getElementById('png').onclick=async()=>{const c=await html2canvas(document.getElementById('poster'),{scale:2,backgroundColor:null});const a=document.createElement('a');a.download='fts-event-qr.png';a.href=c.toDataURL('image/png');a.click()};
- }catch(e){document.getElementById('root').innerHTML='<h2>Event konnte nicht geladen werden.</h2>'}
+  const data=await rpc('fts_get_event',{p_event_token:ref});if(!data?.length)throw new Error('Event nicht aktiv');
+  const ev=data[0],motif=motifFor(ev),deco2=accentDeco(ev);
+  document.documentElement.style.setProperty('--accent',ev.accent||'#d9b56d');document.documentElement.style.setProperty('--bg1',ev.bg1||'#071315');document.documentElement.style.setProperty('--bg2',ev.bg2||'#10383a');
+  const root=document.getElementById('root');root.innerHTML=`<section class="poster" id="poster"><div class="glow one"></div><div class="glow two"></div><div class="deco a">${esc(motif)}</div><div class="deco b">${esc(motif)}</div><div class="deco c">${esc(deco2)}</div><div class="deco d">${esc(deco2)}</div><div class="brand">FTS.LU · SELFIE EVENT</div><h1>${esc(ev.title)}</h1><div class="sub">${esc(ev.subtitle||'')}</div><div class="qrbox"><div id="qr"></div></div><div class="cta">Scannen & Selfie hochladen</div><div class="foot">FTS.lu · Eventfotografie</div>${ev.short_code?`<div class="code">${esc(ev.short_code)}</div>`:''}</section><div class="controls" id="controls"><button id="full">Vollbild / Anzeige</button><button id="png">PNG herunterladen</button><button id="print" class="secondary">Drucken</button></div>`;
+  const guest=cfg.baseUrl+'?e='+encodeURIComponent(ev.short_code||ref);
+  new QRCode(document.getElementById('qr'),{text:guest,width:700,height:700,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});
+  document.getElementById('full').onclick=enterDisplay;
+  document.getElementById('png').onclick=downloadPng;
+  document.getElementById('print').onclick=()=>window.print();
+  if(display){document.documentElement.classList.add('displayMode');setTimeout(()=>document.documentElement.requestFullscreen?.().catch(()=>{}),250)}
+ }catch(e){console.error(e);document.getElementById('root').innerHTML='<div class="loading"><h2>Event konnte nicht geladen werden.</h2><p>Bitte prüfe den Event-Link.</p></div>'}
 }
-function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+async function enterDisplay(){
+ document.documentElement.classList.add('displayMode');
+ try{if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen()}catch{}
+}
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement && params.get('display')!=='1')document.documentElement.classList.remove('displayMode')});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!document.fullscreenElement)document.documentElement.classList.remove('displayMode')});
+async function downloadPng(){
+ const poster=document.getElementById('poster');
+ if(!poster)return;
+ const controls=document.getElementById('controls');if(controls)controls.style.display='none';
+ try{
+  const c=await html2canvas(poster,{scale:2.5,backgroundColor:null,useCORS:true});
+  const a=document.createElement('a');a.download='FTS-'+String(ref).replace(/[^a-z0-9_-]/gi,'-')+'-QR-Poster.png';a.href=c.toDataURL('image/png');document.body.appendChild(a);a.click();a.remove();
+ }finally{if(controls&&!document.documentElement.classList.contains('displayMode'))controls.style.display='flex'}
+}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 boot();
-</script></body></html>
+</script>
+</body>
+</html>

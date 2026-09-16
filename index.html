@@ -15,7 +15,7 @@ body{margin:0;min-height:100svh;background:radial-gradient(circle at top right,v
 .brand{font-size:.72rem;letter-spacing:.2em;color:var(--accent);font-weight:900}
 h1{font-size:clamp(2.15rem,8vw,4rem);line-height:.96;margin:9px 0 8px}
 .sub{font-size:1.25rem;color:var(--accent);margin-bottom:12px;font-weight:800}
-.meta{color:#91a5a1;font-size:.86rem;margin-bottom:18px}
+.meta{color:#91a5a1;font-size:.86rem;margin-bottom:10px}.themeChip{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;margin:0 0 15px;border-radius:999px;background:color-mix(in srgb,var(--accent) 12%,transparent);border:1px solid color-mix(in srgb,var(--accent) 28%,transparent);color:var(--accent);font-size:.78rem;font-weight:900}
 .net{display:flex;align-items:center;gap:8px;border-radius:12px;padding:9px 11px;margin:0 0 14px;font-size:.84rem}
 .online{background:rgba(65,170,113,.12);border:1px solid rgba(65,170,113,.28)}
 .offline{background:rgba(225,166,54,.12);border:1px solid rgba(225,166,54,.35)}
@@ -156,6 +156,7 @@ function render(){
     <div class="brand">FTS.LU · SELFIE EVENT</div>
     <h1>${esc(ev.title)}</h1><div class="sub">${esc(ev.subtitle||'')}</div>
     <div class="meta">${esc(ev.location||'')} ${ev.event_date?'· '+new Date(ev.event_date+'T12:00:00').toLocaleDateString('de-DE'):''}</div>
+    <div class="themeChip">${esc(eventMotif())} ${esc(themeLabel())}</div>
     <div id="net" class="net"></div>
     <label class="upload"><div><strong>📸 Selfie aufnehmen</strong><span>oder ein Foto vom Handy auswählen</span></div><input id="photo" type="file" accept="image/*" capture="user"></label>
     <section class="compare" id="compare">
@@ -186,19 +187,30 @@ async function onPhoto(){
   selectedFile=file;document.getElementById('originalPreview').src=URL.createObjectURL(file);
   await makeDesign(file);document.getElementById('compare').style.display='grid';document.getElementById('message').className='msg';
 }
+function themeLabel(){return ({standard:'FTS Standard',autumn:'Kürbis / Herbst',streetfood:'Streetfood',neon:'Party / Neon',winter:'Winter',wedding:'Hochzeit'})[ev?.theme||'standard']||'FTS Event'}
+function eventMotif(){return ev?.motif||({standard:'✦',autumn:'🎃',streetfood:'🍔',neon:'✦',winter:'❄',wedding:'♥'})[ev?.theme||'standard']||'✦'}
+function drawPumpkin(ctx,x,y,s){ctx.save();ctx.translate(x,y);ctx.fillStyle=ev.accent||'#f29a2e';for(const dx of [-.28,0,.28]){ctx.beginPath();ctx.ellipse(dx*s,0,s*.34,s*.43,0,0,Math.PI*2);ctx.fill()}ctx.fillStyle='#31552b';ctx.fillRect(-s*.05,-s*.58,s*.1,s*.22);ctx.restore()}
+function drawSnowflake(ctx,x,y,s){ctx.save();ctx.translate(x,y);ctx.strokeStyle=ev.accent||'#bfe9ff';ctx.lineWidth=Math.max(2,s*.05);ctx.globalAlpha=.9;for(let i=0;i<6;i++){ctx.rotate(Math.PI/3);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-s);ctx.moveTo(0,-s*.55);ctx.lineTo(-s*.18,-s*.72);ctx.moveTo(0,-s*.55);ctx.lineTo(s*.18,-s*.72);ctx.stroke()}ctx.restore()}
+function drawHeart(ctx,x,y,s){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.beginPath();ctx.moveTo(0,.35);ctx.bezierCurveTo(-.75,-.1,-.58,-.75,0,-.45);ctx.bezierCurveTo(.58,-.75,.75,-.1,0,.35);ctx.fillStyle=ev.accent||'#f2cfbf';ctx.fill();ctx.restore()}
+function drawFood(ctx,x,y,s){ctx.save();ctx.translate(x,y);ctx.strokeStyle=ev.accent||'#ffcf4a';ctx.lineWidth=Math.max(3,s*.05);ctx.beginPath();ctx.arc(0,0,s*.52,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(0,0,s*.36,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(-s*.78,-s*.55);ctx.lineTo(-s*.78,s*.6);ctx.moveTo(-s*.9,-s*.55);ctx.lineTo(-s*.9,-s*.15);ctx.moveTo(-s*.66,-s*.55);ctx.lineTo(-s*.66,-s*.15);ctx.moveTo(s*.78,-s*.55);ctx.lineTo(s*.78,s*.6);ctx.stroke();ctx.restore()}
+function drawNeon(ctx,x,y,s){ctx.save();ctx.translate(x,y);ctx.strokeStyle=ev.accent||'#ff4fd8';ctx.shadowColor=ev.accent||'#ff4fd8';ctx.shadowBlur=s*.18;ctx.lineWidth=Math.max(3,s*.04);ctx.globalAlpha=.9;ctx.beginPath();ctx.arc(0,0,s*.55,0,Math.PI*2);ctx.stroke();ctx.rotate(.55);ctx.beginPath();ctx.moveTo(-s*.8,0);ctx.lineTo(s*.8,0);ctx.stroke();ctx.restore()}
+function drawThemeDecor(ctx,w,h){const theme=ev.theme||'standard',s=Math.max(55,w*.075);ctx.save();ctx.globalAlpha=.88;if(theme==='autumn'){drawPumpkin(ctx,w-s*.8,s*.85,s);drawPumpkin(ctx,w-s*.45,h-s*.4,s*.7)}else if(theme==='streetfood'){drawFood(ctx,w-s*.85,s*.9,s*.8);drawFood(ctx,w-s*.5,h-s*.42,s*.55)}else if(theme==='neon'){drawNeon(ctx,w-s*.8,s*.85,s);drawNeon(ctx,w-s*.55,h-s*.5,s*.65)}else if(theme==='winter'){drawSnowflake(ctx,w-s*.8,s*.85,s*.62);drawSnowflake(ctx,w-s*.45,h-s*.45,s*.45)}else if(theme==='wedding'){drawHeart(ctx,w-s*.8,s*.82,s*.75);drawHeart(ctx,w-s*.45,h-s*.38,s*.5)}else{drawNeon(ctx,w-s*.8,s*.85,s*.65)}ctx.restore();
+  const motif=String(eventMotif()||'').trim();if(motif && motif.length<=8){ctx.save();ctx.globalAlpha=.92;ctx.textAlign='right';ctx.textBaseline='top';ctx.font=`700 ${Math.max(44,w*.065)}px system-ui`;ctx.fillText(motif,w-Math.max(22,w*.035),Math.max(18,w*.03));ctx.restore()}}
+function fitText(ctx,text,maxWidth,startSize,minSize,weight=900){let size=startSize;for(;size>minSize;size-=2){ctx.font=`${weight} ${size}px system-ui`;if(ctx.measureText(text).width<=maxWidth)break}return size}
 async function makeDesign(file){
   const img=await loadImage(file),canvas=document.getElementById('designCanvas'),ctx=canvas.getContext('2d');
   const scale=Math.min(1,1800/img.naturalWidth);canvas.width=Math.round(img.naturalWidth*scale);canvas.height=Math.round(img.naturalHeight*scale);
   ctx.drawImage(img,0,0,canvas.width,canvas.height);
-  const top=ctx.createLinearGradient(0,0,0,canvas.height*.28);top.addColorStop(0,'rgba(0,0,0,.40)');top.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=top;ctx.fillRect(0,0,canvas.width,canvas.height*.32);
-  const bottom=ctx.createLinearGradient(0,canvas.height*.52,0,canvas.height);bottom.addColorStop(0,'rgba(3,14,15,0)');bottom.addColorStop(.34,'rgba(3,14,15,.62)');bottom.addColorStop(1,'rgba(3,14,15,.96)');ctx.fillStyle=bottom;ctx.fillRect(0,canvas.height*.52,canvas.width,canvas.height*.48);
-  const pad=Math.max(24,canvas.width*.045),badgeH=Math.max(42,canvas.width*.05),badgeW=Math.max(220,canvas.width*.29);
-  ctx.fillStyle='rgba(5,18,19,.82)';roundRect(ctx,pad,pad,badgeW,badgeH,badgeH/2);ctx.fill();
-  ctx.fillStyle=ev.accent;ctx.font=`800 ${Math.max(17,canvas.width*.019)}px system-ui`;ctx.textBaseline='middle';ctx.fillText('FTS.LU · SELFIE EVENT',pad+badgeH*.38,pad+badgeH/2);
-  const y=canvas.height-pad*2.3;ctx.textBaseline='alphabetic';ctx.fillStyle='#fff';ctx.font=`900 ${Math.max(38,canvas.width*.06)}px system-ui`;ctx.fillText(ev.title,pad,y-Math.max(45,canvas.width*.055));
-  ctx.fillStyle=ev.accent;ctx.font=`800 ${Math.max(25,canvas.width*.035)}px system-ui`;ctx.fillText(ev.subtitle||'',pad,y);
-  ctx.fillStyle='rgba(255,255,255,.88)';ctx.font=`600 ${Math.max(18,canvas.width*.024)}px system-ui`;ctx.fillText(ev.overlay_text||ev.title,pad,y+Math.max(30,canvas.width*.035));
-  designedBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',.9));
+  const top=ctx.createLinearGradient(0,0,0,canvas.height*.30);top.addColorStop(0,'rgba(0,0,0,.50)');top.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=top;ctx.fillRect(0,0,canvas.width,canvas.height*.34);
+  const bottom=ctx.createLinearGradient(0,canvas.height*.48,0,canvas.height);bottom.addColorStop(0,'rgba(3,14,15,0)');bottom.addColorStop(.32,'rgba(3,14,15,.62)');bottom.addColorStop(1,'rgba(3,14,15,.96)');ctx.fillStyle=bottom;ctx.fillRect(0,canvas.height*.48,canvas.width,canvas.height*.52);
+  drawThemeDecor(ctx,canvas.width,canvas.height);
+  const pad=Math.max(24,canvas.width*.045),badgeH=Math.max(42,canvas.width*.05),badgeW=Math.max(220,canvas.width*.31);
+  ctx.fillStyle='rgba(5,18,19,.84)';roundRect(ctx,pad,pad,badgeW,badgeH,badgeH/2);ctx.fill();
+  ctx.fillStyle=ev.accent;ctx.font=`800 ${Math.max(17,canvas.width*.019)}px system-ui`;ctx.textBaseline='middle';ctx.fillText('FTS.LU · SELFIE EVENT',pad+badgeH*.34,pad+badgeH/2);
+  const maxW=canvas.width-pad*2,y=canvas.height-pad*2.35,title=String(ev.title||'');ctx.textBaseline='alphabetic';ctx.fillStyle='#fff';const titleSize=fitText(ctx,title,maxW,Math.max(38,canvas.width*.06),Math.max(25,canvas.width*.037),900);ctx.font=`900 ${titleSize}px system-ui`;ctx.fillText(title,pad,y-Math.max(48,canvas.width*.058));
+  ctx.fillStyle=ev.accent;const sub=String(ev.subtitle||'');const subSize=fitText(ctx,sub,maxW,Math.max(25,canvas.width*.035),Math.max(18,canvas.width*.024),800);ctx.font=`800 ${subSize}px system-ui`;ctx.fillText(sub,pad,y);
+  ctx.fillStyle='rgba(255,255,255,.88)';const over=String(ev.overlay_text||ev.title||'');const overSize=fitText(ctx,over,maxW,Math.max(18,canvas.width*.024),Math.max(14,canvas.width*.018),600);ctx.font=`600 ${overSize}px system-ui`;ctx.fillText(over,pad,y+Math.max(30,canvas.width*.035));
+  designedBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',.91));
 }
 async function submitPhoto(){
   if(!selectedFile)return showMessage('Bitte zuerst ein Foto aufnehmen oder auswählen.');
