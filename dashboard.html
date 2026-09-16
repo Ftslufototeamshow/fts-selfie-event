@@ -85,10 +85,11 @@ select{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);ba
     <div class="topActions">
       <a class="button secondary" href="./admin.html">+ Neues Event</a>
       <button class="secondary" id="notifyBtn">Benachrichtigungen aktivieren</button>
+      <button class="secondary" id="logoutBtn" style="display:none">Abmelden</button>
     </div>
   </div>
 
-  <section class="login">
+  <section class="login" id="loginPanel">
     <div class="loginGrid">
       <input id="adminCode" type="password" placeholder="FTS Admin-Code">
       <button id="loadBtn">Cockpit öffnen</button>
@@ -258,6 +259,8 @@ async function loadEvents(manual=false){
     }
 
     $('#cockpit').style.display='block';
+    $('#loginPanel').style.display='none';
+    $('#logoutBtn').style.display='inline-block';
     render();
     $('#statusLine').textContent='zuletzt '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
@@ -285,7 +288,10 @@ function render(){
 
   const root=$('#events');
   if(!list.length){
-    root.innerHTML='<div class="empty">Keine Events in dieser Ansicht.</div>';
+    const msg = filter==='active' && events.length
+      ? 'Zurzeit gibt es keine aktiven Events. Wähle oben „Alle Events“, um ältere Events und Fotos zu sehen.'
+      : 'Keine Events in dieser Ansicht.';
+    root.innerHTML='<div class="empty">'+msg+'</div>';
     return;
   }
 
@@ -352,12 +358,21 @@ $('#refreshBtn').onclick=()=>loadEvents(true);
 $('#filter').onchange=render;
 $('#notifyBtn').onclick=enableNotifications;
 $('#changeCodeBtn').onclick=changeAdminCode;
-$('#forgetBtn').onclick=()=>{
+function logoutCockpit(){
   localStorage.removeItem(CODE_KEY);
   $('#adminCode').value='';
+  $('#oldCode').value='';
   if(timer){clearInterval(timer);timer=null}
   $('#cockpit').style.display='none';
-};
+  $('#loginPanel').style.display='block';
+  $('#logoutBtn').style.display='none';
+  events=[];
+  firstLoad=true;
+  newSinceOpen=0;
+}
+
+$('#forgetBtn').onclick=logoutCockpit;
+$('#logoutBtn').onclick=logoutCockpit;
 
 const saved=localStorage.getItem(CODE_KEY);
 if(saved){
