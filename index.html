@@ -8,36 +8,16 @@
 <title>FTS Selfie Event</title>
 <style>
 :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f6f1e8;background:#071315;--accent:#d9b56d;--bg1:#071315;--bg2:#10383a}
-*{box-sizing:border-box}
-body{margin:0;min-height:100svh;background:radial-gradient(circle at top right,var(--bg2),transparent 45%),linear-gradient(145deg,var(--bg1),var(--bg2))}
-.wrap{width:min(920px,calc(100% - 22px));margin:auto;padding:20px 0 44px}
-.card{background:rgba(3,13,15,.95);border:1px solid rgba(255,255,255,.08);border-radius:26px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.34)}
-.brand{font-size:.72rem;letter-spacing:.2em;color:var(--accent);font-weight:900}
-h1{font-size:clamp(2.15rem,8vw,4rem);line-height:.96;margin:9px 0 8px}
-.sub{font-size:1.25rem;color:var(--accent);margin-bottom:12px;font-weight:800}
-.meta{color:#91a5a1;font-size:.86rem;margin-bottom:10px}.themeChip{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;margin:0 0 15px;border-radius:999px;background:color-mix(in srgb,var(--accent) 12%,transparent);border:1px solid color-mix(in srgb,var(--accent) 28%,transparent);color:var(--accent);font-size:.78rem;font-weight:900}
-.net{display:flex;align-items:center;gap:8px;border-radius:12px;padding:9px 11px;margin:0 0 14px;font-size:.84rem}
-.online{background:rgba(65,170,113,.12);border:1px solid rgba(65,170,113,.28)}
-.offline{background:rgba(225,166,54,.12);border:1px solid rgba(225,166,54,.35)}
-.queue{background:rgba(72,134,200,.12);border:1px solid rgba(72,134,200,.32)}
-.upload{display:grid;place-items:center;min-height:165px;border:2px dashed color-mix(in srgb,var(--accent) 50%,transparent);border-radius:20px;text-align:center;padding:22px;cursor:pointer;background:rgba(0,0,0,.12)}
-.upload strong{font-size:1.2rem}.upload span{display:block;color:#9cacaa;margin-top:8px}
-.upload input{display:none}
-.compare{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
-.previewBox{min-width:0;background:#061012;border:1px solid rgba(255,255,255,.08);border-radius:17px;padding:7px}
-.previewBox b{display:block;margin:2px 4px 7px;color:var(--accent);font-size:.78rem}
-.previewBox img,.previewBox canvas{width:100%;height:auto;max-height:520px;object-fit:contain;border-radius:10px;display:block}
-.privacyInfo{margin:17px 0 10px;padding:13px 14px;border-radius:14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);color:#aebbb9;font-size:.82rem;line-height:1.45}.privacyInfo strong{display:block;color:#f3eee5;margin-bottom:5px}.consent{display:flex;gap:10px;align-items:flex-start;margin:12px 0 17px;color:#c5cfcd;font-size:.9rem}
-.consent input{margin-top:3px;transform:scale(1.2)}
-button{width:100%;border:0;border-radius:15px;padding:16px;font:inherit;font-weight:900;background:var(--accent);color:#102020;cursor:pointer}
-button:disabled{opacity:.55;cursor:wait}
-.msg{border-radius:14px;padding:13px 15px;margin:15px 0 0;display:none}
-.ok{display:block;background:rgba(68,180,117,.16);border:1px solid rgba(68,180,117,.35)}
-.warn{display:block;background:rgba(225,166,54,.13);border:1px solid rgba(225,166,54,.35)}
-.err{display:block;background:rgba(220,80,80,.14);border:1px solid rgba(220,80,80,.35)}
-.foot{text-align:center;color:#7f9692;font-size:.78rem;margin-top:18px}
-.loading{padding:60px 20px;text-align:center;color:#a8b6b4}
-@media(max-width:430px){.card{padding:14px}.compare{gap:5px}.previewBox{padding:4px}.previewBox b{font-size:.68rem}}
+*{box-sizing:border-box}body{margin:0;min-height:100svh;background:radial-gradient(circle at top right,var(--bg2),transparent 45%),linear-gradient(145deg,var(--bg1),var(--bg2))}
+.wrap{width:min(980px,calc(100% - 22px));margin:auto;padding:20px 0 44px}.card{background:rgba(3,13,15,.95);border:1px solid rgba(255,255,255,.08);border-radius:26px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.34)}.brand{font-size:.72rem;letter-spacing:.2em;color:var(--accent);font-weight:900}h1{font-size:clamp(2.15rem,8vw,4rem);line-height:.96;margin:9px 0 8px}.sub{font-size:1.25rem;color:var(--accent);margin-bottom:12px;font-weight:800}.meta{color:#91a5a1;font-size:.86rem;margin-bottom:10px}.themeChip{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;margin:0 0 15px;border-radius:999px;background:color-mix(in srgb,var(--accent) 12%,transparent);border:1px solid color-mix(in srgb,var(--accent) 28%,transparent);color:var(--accent);font-size:.78rem;font-weight:900}
+.net{display:flex;align-items:center;gap:8px;border-radius:12px;padding:9px 11px;margin:0 0 14px;font-size:.84rem}.online{background:rgba(65,170,113,.12);border:1px solid rgba(65,170,113,.28)}.offline{background:rgba(225,166,54,.12);border:1px solid rgba(225,166,54,.35)}
+.moduleTitle{font-weight:900;margin:18px 0 8px}.choiceRow{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}.choice{border:1px solid rgba(255,255,255,.09);background:#0a2426;color:#e9efed;border-radius:13px;padding:9px 7px;cursor:pointer;text-align:center;font-weight:800;font-size:.75rem}.choice.active{outline:2px solid var(--accent);background:#123b3e}.choice small{display:block;color:#859b97;font-weight:600;margin-top:3px;font-size:.65rem}.frameMini{height:48px;margin:0 auto 7px;border:2px solid color-mix(in srgb,var(--accent) 70%,#fff);border-radius:7px;display:grid;place-items:center;color:var(--accent);font-size:.7rem}.frameMini.portrait{width:34px}.frameMini.duo{width:38px}.frameMini.wide{width:63px;height:39px}.frameMini.story{width:29px;height:52px}.frameMini.free{width:50px;height:44px;border-style:dashed}
+.logoEvent{max-height:58px;max-width:160px;object-fit:contain;margin:2px 0 10px;display:none}.logoEvent.show{display:block}
+.upload{display:grid;place-items:center;min-height:165px;border:2px dashed color-mix(in srgb,var(--accent) 50%,transparent);border-radius:20px;text-align:center;padding:22px;cursor:pointer;background:rgba(0,0,0,.12);margin-top:14px}.upload strong{font-size:1.2rem}.upload span{display:block;color:#9cacaa;margin-top:8px}.upload input{display:none}
+.compare{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}.previewBox{min-width:0;background:#061012;border:1px solid rgba(255,255,255,.08);border-radius:17px;padding:7px}.previewBox b{display:block;margin:2px 4px 7px;color:var(--accent);font-size:.78rem}.previewBox img,.previewBox canvas{width:100%;height:auto;max-height:560px;object-fit:contain;border-radius:10px;display:block}
+.privacyInfo{margin:17px 0 10px;padding:13px 14px;border-radius:14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);color:#aebbb9;font-size:.82rem;line-height:1.45}.privacyInfo strong{display:block;color:#f3eee5;margin-bottom:5px}.consent{display:flex;gap:10px;align-items:flex-start;margin:12px 0 17px;color:#c5cfcd;font-size:.9rem}.consent input{margin-top:3px;transform:scale(1.2)}
+button.main{width:100%;border:0;border-radius:15px;padding:16px;font:inherit;font-weight:900;background:var(--accent);color:#102020;cursor:pointer}button:disabled{opacity:.55;cursor:wait}.msg{border-radius:14px;padding:13px 15px;margin:15px 0 0;display:none}.ok{display:block;background:rgba(68,180,117,.16);border:1px solid rgba(68,180,117,.35)}.warn{display:block;background:rgba(225,166,54,.13);border:1px solid rgba(225,166,54,.35)}.err{display:block;background:rgba(220,80,80,.14);border:1px solid rgba(220,80,80,.35)}.foot{text-align:center;color:#7f9692;font-size:.78rem;margin-top:18px}.loading{padding:60px 20px;text-align:center;color:#a8b6b4}
+@media(max-width:680px){.choiceRow{grid-template-columns:repeat(2,1fr)}.card{padding:14px}.compare{gap:5px}.previewBox{padding:4px}.previewBox b{font-size:.68rem}}
 </style>
 </head>
 <body>
@@ -49,215 +29,162 @@ const params=new URLSearchParams(location.search);
 const eventToken=params.get('e') || cfg.defaultEventToken;
 const EVENT_CACHE_KEY='fts_event_cache_'+eventToken;
 const DB_NAME='fts_selfie_offline_v1', STORE='queue';
-let ev=null,selectedFile=null,designedBlob=null;
+let ev=null,selectedFile=null,designedBlob=null,selectedLayout='solo',selectedFilter='natural',redrawTimer=null;
+const DEFAULT_LAYOUTS=['solo','duo','groupwide','grouptall','free'];
+const DEFAULT_FILTERS=['natural','warm','vivid','mono','cool'];
 
-function apiHeaders(json=true){
-  const h={'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey};
-  if(json)h['Content-Type']='application/json';
-  return h;
-}
-async function rpc(name,body){
-  const r=await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/${name}`,{method:'POST',headers:apiHeaders(true),body:JSON.stringify(body)});
-  if(!r.ok)throw new Error((await r.text())||`RPC ${r.status}`);
-  const t=await r.text(); return t?JSON.parse(t):null;
-}
-function openDB(){
-  return new Promise((resolve,reject)=>{
-    const req=indexedDB.open(DB_NAME,1);
-    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:'id'})};
-    req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
-  });
-}
-async function queuePut(item){
-  const db=await openDB();
-  return new Promise((resolve,reject)=>{
-    const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(item);
-    tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
-  });
-}
-async function queueDelete(id){
-  const db=await openDB();
-  return new Promise((resolve,reject)=>{
-    const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(id);
-    tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
-  });
-}
-async function queueAll(){
-  const db=await openDB();
-  return new Promise((resolve,reject)=>{
-    const tx=db.transaction(STORE,'readonly'),req=tx.objectStore(STORE).getAll();
-    req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error);
-  });
-}
-async function updateQueueCount(){
-  try{
-    const n=(await queueAll()).length;
-    const el=document.getElementById('net');
-    if(!el)return;
-    if(n>0)el.innerHTML=`⏳ ${n} Foto${n===1?'':'s'} warten auf Upload · ${navigator.onLine?'Internet vorhanden – Upload läuft automatisch.':'Kein Internet – sicher auf diesem Handy gespeichert.'}`;
-  }catch{}
-}
+const layoutInfo={
+ solo:{label:'1 Person · Hoch',mini:'portrait',desc:'Portrait'},
+ duo:{label:'2 Personen · Hoch',mini:'duo',desc:'Duo'},
+ groupwide:{label:'Gruppe · Breit',mini:'wide',desc:'3–5 Personen'},
+ grouptall:{label:'Gruppe · Hoch',mini:'story',desc:'3–5 Personen'},
+ free:{label:'Originalformat',mini:'free',desc:'frei'}
+};
+const filterInfo={
+ natural:{label:'Natürlich',desc:'neutral'},
+ warm:{label:'Warm',desc:'weicher'},
+ vivid:{label:'Kräftig',desc:'mehr Farbe'},
+ mono:{label:'Schwarzweiß',desc:'klassisch'},
+ cool:{label:'Cool',desc:'moderner Look'}
+};
+
+function apiHeaders(json=true){const h={'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey};if(json)h['Content-Type']='application/json';return h}
+async function rpc(name,body){const r=await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/${name}`,{method:'POST',headers:apiHeaders(true),body:JSON.stringify(body)});if(!r.ok)throw new Error((await r.text())||`RPC ${r.status}`);const t=await r.text();return t?JSON.parse(t):null}
+function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open(DB_NAME,1);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:'id'})};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
+async function queuePut(item){const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(item);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)})}
+async function queueDelete(id){const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(id);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)})}
+async function queueAll(){const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readonly'),req=tx.objectStore(STORE).getAll();req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error)})}
+async function updateQueueCount(){try{const n=(await queueAll()).length;const el=document.getElementById('net');if(!el)return;if(n>0)el.innerHTML=`⏳ ${n} Foto${n===1?'':'s'} warten auf Upload · ${navigator.onLine?'Internet vorhanden – Upload läuft automatisch.':'Kein Internet – sicher auf diesem Handy gespeichert.'}`}catch{}}
 function encodePath(path){return path.split('/').map(encodeURIComponent).join('/')}
-async function uploadObject(path,blob,type){
-  const u=`${cfg.supabaseUrl}/storage/v1/object/${encodeURIComponent(cfg.liveBucket)}/${encodePath(path)}`;
-  const r=await fetch(u,{method:'POST',headers:{'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':type||'application/octet-stream','x-upsert':'false'},body:blob});
-  if(!r.ok){
-    const txt=await r.text();
-    if(r.status===409 || /already exists/i.test(txt))return; // already uploaded by retry/background sync
-    throw new Error(txt||`Storage ${r.status}`);
-  }
-}
-async function registerPhoto(item){
-  await rpc('fts_register_photo',{p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath});
-}
-async function uploadItem(item){
-  await uploadObject(item.originalPath,item.originalBlob,item.originalType);
-  await uploadObject(item.designedPath,item.designedBlob,'image/jpeg');
-  await registerPhoto(item);
-}
-async function processQueue(){
-  if(!navigator.onLine)return updateNet();
-  const items=await queueAll();
-  for(const item of items){
-    try{await uploadItem(item);await queueDelete(item.id)}
-    catch(e){console.warn('Queue upload',e);break}
-  }
-  updateNet();updateQueueCount();
-}
-function updateNet(){
-  const el=document.getElementById('net'); if(!el)return;
-  el.className='net '+(navigator.onLine?'online':'offline');
-  el.textContent=navigator.onLine?'● Internet vorhanden':'● Offline – Fotos werden auf diesem Handy zwischengespeichert';
-}
+async function uploadObject(path,blob,type){const u=`${cfg.supabaseUrl}/storage/v1/object/${encodeURIComponent(cfg.liveBucket)}/${encodePath(path)}`;const r=await fetch(u,{method:'POST',headers:{'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':type||'application/octet-stream','x-upsert':'false'},body:blob});if(!r.ok){const txt=await r.text();if(r.status===409||/already exists/i.test(txt))return;throw new Error(txt||`Storage ${r.status}`)}}
+async function registerPhoto(item){await rpc('fts_register_photo',{p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath})}
+async function uploadItem(item){await uploadObject(item.originalPath,item.originalBlob,item.originalType);await uploadObject(item.designedPath,item.designedBlob,'image/jpeg');await registerPhoto(item)}
+async function processQueue(){if(!navigator.onLine)return updateNet();const items=await queueAll();for(const item of items){try{await uploadItem(item);await queueDelete(item.id)}catch(e){console.warn('Queue upload',e);break}}updateNet();updateQueueCount()}
+function updateNet(){const el=document.getElementById('net');if(!el)return;el.className='net '+(navigator.onLine?'online':'offline');el.textContent=navigator.onLine?'● Internet vorhanden':'● Offline – Fotos werden auf diesem Handy zwischengespeichert'}
+function assetUrl(path){if(!path)return'';return `${cfg.supabaseUrl}/storage/v1/object/public/${encodeURIComponent(cfg.liveBucket)}/${encodePath(path)}`}
+function asArray(v,fallback){if(Array.isArray(v)&&v.length)return v;try{const p=JSON.parse(v);if(Array.isArray(p)&&p.length)return p}catch{}return fallback}
 async function boot(){
-  let data=null;
-  try{
-    if(navigator.onLine){
-      data=await rpc('fts_get_event',{p_event_token:eventToken});
-      if(data?.length)localStorage.setItem(EVENT_CACHE_KEY,JSON.stringify(data[0]));
-    }
-  }catch(e){console.warn('Event online load',e)}
-  if(data?.length)ev=data[0];
-  else{
-    try{ev=JSON.parse(localStorage.getItem(EVENT_CACHE_KEY)||'null')}catch{}
-  }
-  if(!ev){
-    document.getElementById('card').innerHTML='<div class="loading"><h2>Dieses Event wurde auf diesem Handy noch nicht geladen.</h2><p>Für den ersten Aufruf ist einmal Internet erforderlich. Danach funktioniert die Selfie-Seite auch bei Netzausfall.</p></div>';
-    return;
-  }
-  render();
-  processQueue();
+ let data=null;
+ try{if(navigator.onLine){data=await rpc('fts_get_event',{p_event_token:eventToken});if(data?.length)localStorage.setItem(EVENT_CACHE_KEY,JSON.stringify(data[0]))}}catch(e){console.warn('Event online load',e)}
+ if(data?.length)ev=data[0];else{try{ev=JSON.parse(localStorage.getItem(EVENT_CACHE_KEY)||'null')}catch{}}
+ if(!ev){document.getElementById('card').innerHTML='<div class="loading"><h2>Dieses Event wurde auf diesem Handy noch nicht geladen.</h2><p>Für den ersten Aufruf ist einmal Internet erforderlich. Danach funktioniert die Selfie-Seite auch bei Netzausfall.</p></div>';return}
+ render();processQueue();
 }
 function render(){
-  document.documentElement.style.setProperty('--accent',ev.accent||'#d9b56d');
-  document.documentElement.style.setProperty('--bg1',ev.bg1||'#071315');
-  document.documentElement.style.setProperty('--bg2',ev.bg2||'#10383a');
-  document.getElementById('card').innerHTML=`
-    <div class="brand">FTS.LU · SELFIE EVENT</div>
-    <h1>${esc(ev.title)}</h1><div class="sub">${esc(ev.subtitle||'')}</div>
-    <div class="meta">${esc(ev.location||'')} ${ev.event_date?'· '+new Date(ev.event_date+'T12:00:00').toLocaleDateString('de-DE'):''}</div>
-    <div class="themeChip">${esc(eventMotif())} ${esc(themeLabel())}</div>
-    <div id="net" class="net"></div>
-    <label class="upload"><div><strong>📸 Selfie aufnehmen</strong><span>oder ein Foto vom Handy auswählen</span></div><input id="photo" type="file" accept="image/*" capture="user"></label>
-    <section class="compare" id="compare">
-      <div class="previewBox"><b>Original</b><img id="originalPreview"></div>
-      <div class="previewBox"><b>Event-Design</b><canvas id="designCanvas"></canvas></div>
-    </section>
-    <div class="privacyInfo">
-  <strong>Datenschutz & Einwilligung</strong>
-  Das von mir hochgeladene Foto wird von FTS.lu ausschließlich für diese Veranstaltung verarbeitet, gespeichert und dem Veranstalter im Kundenportal bereitgestellt. Es wird kein Name abgefragt oder zusammen mit dem Foto gespeichert. Die Bereitstellung im Eventportal ist zeitlich begrenzt. Eine Einwilligung kann für die Zukunft widerrufen werden.
-</div>
-<label class="consent">
-  <input id="consent" type="checkbox">
-  <span>Ich habe die Datenschutzhinweise gelesen und bin mit der beschriebenen Verarbeitung meines Fotos einverstanden.</span>
-</label>
-    <button id="uploadBtn">Original + Design senden</button>
-    <div id="message" class="msg"></div>
-    <div class="foot">FTS.lu · Eventfotografie</div>`;
-  updateNet();updateQueueCount();
-  document.getElementById('photo').addEventListener('change',onPhoto);
-  document.getElementById('uploadBtn').addEventListener('click',submitPhoto);
+ document.documentElement.style.setProperty('--accent',ev.accent||'#d9b56d');document.documentElement.style.setProperty('--bg1',ev.bg1||'#071315');document.documentElement.style.setProperty('--bg2',ev.bg2||'#10383a');
+ const layouts=asArray(ev.available_layouts,DEFAULT_LAYOUTS).filter(x=>layoutInfo[x]);const filters=asArray(ev.available_filters,DEFAULT_FILTERS).filter(x=>filterInfo[x]);
+ selectedLayout=layouts[0]||'solo';selectedFilter=filters[0]||'natural';
+ document.getElementById('card').innerHTML=`
+   <div class="brand">FTS.LU · SELFIE EVENT</div>
+   ${ev.logo_path?`<img class="logoEvent show" src="${assetUrl(ev.logo_path)}" crossorigin="anonymous" alt="Event-Logo">`:''}
+   <h1>${esc(ev.title)}</h1><div class="sub">${esc(ev.subtitle||'')}</div>
+   <div class="meta">${esc(ev.location||'')} ${ev.event_date?'· '+new Date(ev.event_date+'T12:00:00').toLocaleDateString('de-DE'):''}</div>
+   <div class="themeChip">${esc(eventMotif())} ${esc(themeLabel())}</div>
+   <div id="net" class="net"></div>
+
+   <div class="moduleTitle">1. Foto-Layout wählen</div>
+   <div class="choiceRow" id="layoutChoices">${layouts.map(layoutButton).join('')}</div>
+
+   <div class="moduleTitle">2. Look / Filter wählen</div>
+   <div class="choiceRow" id="filterChoices">${filters.map(filterButton).join('')}</div>
+
+   <label class="upload"><div><strong>📸 3. Selfie aufnehmen</strong><span>oder ein Foto vom Handy auswählen · Layout und Filter kannst du danach noch ändern</span></div><input id="photo" type="file" accept="image/*" capture="user"></label>
+
+   <section class="compare" id="compare">
+     <div class="previewBox"><b>Original</b><img id="originalPreview"></div>
+     <div class="previewBox"><b>Dein Event-Design</b><canvas id="designCanvas"></canvas></div>
+   </section>
+
+   <div class="privacyInfo"><strong>Datenschutz & Einwilligung</strong>Das von mir hochgeladene Foto wird von FTS.lu ausschließlich für diese Veranstaltung verarbeitet, gespeichert und dem Veranstalter im Kundenportal bereitgestellt. Es wird kein Name abgefragt oder zusammen mit dem Foto gespeichert. Die Bereitstellung im Eventportal ist zeitlich begrenzt. Eine Einwilligung kann für die Zukunft widerrufen werden.</div>
+   <label class="consent"><input id="consent" type="checkbox"><span>Ich habe die Datenschutzhinweise gelesen und bin mit der beschriebenen Verarbeitung meines Fotos einverstanden.</span></label>
+   <button class="main" id="uploadBtn">Original + Design senden</button>
+   <div id="message" class="msg"></div><div class="foot">FTS.lu · Eventfotografie</div>`;
+ updateNet();updateQueueCount();bindChoices();
+ document.getElementById('photo').addEventListener('change',onPhoto);document.getElementById('uploadBtn').addEventListener('click',submitPhoto);
 }
+function layoutButton(key){const x=layoutInfo[key];return `<button type="button" class="choice ${key===selectedLayout?'active':''}" data-layout="${key}"><div class="frameMini ${x.mini}">${key==='solo'?'1':key==='duo'?'2':key.includes('group')?'3–5':'↔'}</div>${esc(x.label)}<small>${esc(x.desc)}</small></button>`}
+function filterButton(key){const x=filterInfo[key];return `<button type="button" class="choice ${key===selectedFilter?'active':''}" data-filter="${key}">${esc(x.label)}<small>${esc(x.desc)}</small></button>`}
+function bindChoices(){
+ document.querySelectorAll('[data-layout]').forEach(b=>b.onclick=()=>{selectedLayout=b.dataset.layout;document.querySelectorAll('[data-layout]').forEach(x=>x.classList.toggle('active',x===b));scheduleRedraw()});
+ document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{selectedFilter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));scheduleRedraw()});
+}
+function scheduleRedraw(){if(!selectedFile)return;clearTimeout(redrawTimer);redrawTimer=setTimeout(()=>makeDesign(selectedFile),60)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function showMessage(text,kind='err'){const x=document.getElementById('message');x.textContent=text;x.className='msg '+kind}
-function loadImage(file){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=URL.createObjectURL(file)})}
+function loadImageFile(file){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=URL.createObjectURL(file)})}
+function loadRemoteImage(url){return new Promise((resolve,reject)=>{if(!url)return resolve(null);const img=new Image();img.crossOrigin='anonymous';img.onload=()=>resolve(img);img.onerror=()=>resolve(null);img.src=url})}
 function roundRect(c,x,y,w,h,r){const rr=Math.min(r,w/2,h/2);c.beginPath();c.moveTo(x+rr,y);c.arcTo(x+w,y,x+w,y+h,rr);c.arcTo(x+w,y+h,x,y+h,rr);c.arcTo(x,y+h,x,y,rr);c.arcTo(x,y,x+w,y,rr);c.closePath()}
-async function onPhoto(){
-  const file=document.getElementById('photo').files?.[0]; if(!file)return;
-  selectedFile=file;document.getElementById('originalPreview').src=URL.createObjectURL(file);
-  await makeDesign(file);document.getElementById('compare').style.display='grid';document.getElementById('message').className='msg';
+async function onPhoto(){const file=document.getElementById('photo').files?.[0];if(!file)return;selectedFile=file;document.getElementById('originalPreview').src=URL.createObjectURL(file);await makeDesign(file);document.getElementById('compare').style.display='grid';document.getElementById('message').className='msg'}
+function themeLabel(){return ({standard:'FTS Standard',autumn:'Kürbis / Herbst',halloween:'Halloween',streetfood:'Streetfood',cars:'Auto / Motorsport',neon:'Party / Neon',winter:'Winter / Weihnachten',spring:'Frühling',summer:'Sommer',wedding:'Hochzeit',sports:'Sport',business:'Firmen / Business',festival:'Festival',carnival:'Karneval'})[ev?.theme||'standard']||'FTS Event'}
+function eventMotif(){return ev?.motif||({standard:'✦',autumn:'🎃',halloween:'👻',streetfood:'🍔',cars:'🏎️',neon:'✦',winter:'❄',spring:'🌸',summer:'☀️',wedding:'♥',sports:'⚽',business:'◆',festival:'🎪',carnival:'🎭'})[ev?.theme||'standard']||'✦'}
+function filterCss(key){return ({natural:'none',warm:'saturate(1.08) sepia(.14) contrast(1.03)',vivid:'saturate(1.38) contrast(1.10)',mono:'grayscale(1) contrast(1.09)',cool:'saturate(.96) hue-rotate(10deg) brightness(1.03)'})[key]||'none'}
+function layoutCanvas(img,key){
+ const maxW=1600;
+ if(key==='solo')return {w:1200,h:1500,mode:'cover',zoom:1.08};
+ if(key==='duo')return {w:1200,h:1500,mode:'contain'};
+ if(key==='groupwide')return {w:1600,h:1000,mode:'contain'};
+ if(key==='grouptall')return {w:1080,h:1920,mode:'contain'};
+ const scale=Math.min(1,maxW/img.naturalWidth);return {w:Math.round(img.naturalWidth*scale),h:Math.round(img.naturalHeight*scale),mode:'cover',zoom:1};
 }
-function themeLabel(){return ({standard:'FTS Standard',autumn:'Kürbis / Herbst',streetfood:'Streetfood',neon:'Party / Neon',winter:'Winter',wedding:'Hochzeit'})[ev?.theme||'standard']||'FTS Event'}
-function eventMotif(){return ev?.motif||({standard:'✦',autumn:'🎃',streetfood:'🍔',neon:'✦',winter:'❄',wedding:'♥'})[ev?.theme||'standard']||'✦'}
-function drawPumpkin(ctx,x,y,s){ctx.save();ctx.translate(x,y);ctx.fillStyle=ev.accent||'#f29a2e';for(const dx of [-.28,0,.28]){ctx.beginPath();ctx.ellipse(dx*s,0,s*.34,s*.43,0,0,Math.PI*2);ctx.fill()}ctx.fillStyle='#31552b';ctx.fillRect(-s*.05,-s*.58,s*.1,s*.22);ctx.restore()}
-function drawSnowflake(ctx,x,y,s){ctx.save();ctx.translate(x,y);ctx.strokeStyle=ev.accent||'#bfe9ff';ctx.lineWidth=Math.max(2,s*.05);ctx.globalAlpha=.9;for(let i=0;i<6;i++){ctx.rotate(Math.PI/3);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-s);ctx.moveTo(0,-s*.55);ctx.lineTo(-s*.18,-s*.72);ctx.moveTo(0,-s*.55);ctx.lineTo(s*.18,-s*.72);ctx.stroke()}ctx.restore()}
-function drawHeart(ctx,x,y,s){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.beginPath();ctx.moveTo(0,.35);ctx.bezierCurveTo(-.75,-.1,-.58,-.75,0,-.45);ctx.bezierCurveTo(.58,-.75,.75,-.1,0,.35);ctx.fillStyle=ev.accent||'#f2cfbf';ctx.fill();ctx.restore()}
-function drawFood(ctx,x,y,s){ctx.save();ctx.translate(x,y);ctx.strokeStyle=ev.accent||'#ffcf4a';ctx.lineWidth=Math.max(3,s*.05);ctx.beginPath();ctx.arc(0,0,s*.52,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(0,0,s*.36,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(-s*.78,-s*.55);ctx.lineTo(-s*.78,s*.6);ctx.moveTo(-s*.9,-s*.55);ctx.lineTo(-s*.9,-s*.15);ctx.moveTo(-s*.66,-s*.55);ctx.lineTo(-s*.66,-s*.15);ctx.moveTo(s*.78,-s*.55);ctx.lineTo(s*.78,s*.6);ctx.stroke();ctx.restore()}
-function drawNeon(ctx,x,y,s){ctx.save();ctx.translate(x,y);ctx.strokeStyle=ev.accent||'#ff4fd8';ctx.shadowColor=ev.accent||'#ff4fd8';ctx.shadowBlur=s*.18;ctx.lineWidth=Math.max(3,s*.04);ctx.globalAlpha=.9;ctx.beginPath();ctx.arc(0,0,s*.55,0,Math.PI*2);ctx.stroke();ctx.rotate(.55);ctx.beginPath();ctx.moveTo(-s*.8,0);ctx.lineTo(s*.8,0);ctx.stroke();ctx.restore()}
-function drawThemeDecor(ctx,w,h){const theme=ev.theme||'standard',s=Math.max(55,w*.075);ctx.save();ctx.globalAlpha=.88;if(theme==='autumn'){drawPumpkin(ctx,w-s*.8,s*.85,s);drawPumpkin(ctx,w-s*.45,h-s*.4,s*.7)}else if(theme==='streetfood'){drawFood(ctx,w-s*.85,s*.9,s*.8);drawFood(ctx,w-s*.5,h-s*.42,s*.55)}else if(theme==='neon'){drawNeon(ctx,w-s*.8,s*.85,s);drawNeon(ctx,w-s*.55,h-s*.5,s*.65)}else if(theme==='winter'){drawSnowflake(ctx,w-s*.8,s*.85,s*.62);drawSnowflake(ctx,w-s*.45,h-s*.45,s*.45)}else if(theme==='wedding'){drawHeart(ctx,w-s*.8,s*.82,s*.75);drawHeart(ctx,w-s*.45,h-s*.38,s*.5)}else{drawNeon(ctx,w-s*.8,s*.85,s*.65)}ctx.restore();
-  const motif=String(eventMotif()||'').trim();if(motif && motif.length<=8){ctx.save();ctx.globalAlpha=.92;ctx.textAlign='right';ctx.textBaseline='top';ctx.font=`700 ${Math.max(44,w*.065)}px system-ui`;ctx.fillText(motif,w-Math.max(22,w*.035),Math.max(18,w*.03));ctx.restore()}}
+function drawCover(ctx,img,w,h,zoom=1){
+ const s=Math.max(w/img.naturalWidth,h/img.naturalHeight)*zoom,dw=img.naturalWidth*s,dh=img.naturalHeight*s;
+ ctx.drawImage(img,(w-dw)/2,(h-dh)/2,dw,dh);
+}
+function drawContainWithBlur(ctx,img,w,h){
+ ctx.save();const baseFilter=filterCss(selectedFilter);ctx.filter=(baseFilter==='none'?'blur(26px)':baseFilter+' blur(26px)');ctx.globalAlpha=.72;drawCover(ctx,img,w,h,1.04);ctx.restore();
+ ctx.fillStyle='rgba(0,0,0,.12)';ctx.fillRect(0,0,w,h);
+ const s=Math.min(w/img.naturalWidth,h/img.naturalHeight)*.96,dw=img.naturalWidth*s,dh=img.naturalHeight*s;
+ ctx.save();ctx.filter=filterCss(selectedFilter);ctx.drawImage(img,(w-dw)/2,(h-dh)/2,dw,dh);ctx.restore();
+}
+function drawThemeDecor(ctx,w,h){
+ const motif=String(eventMotif()||'').trim(),size=Math.max(48,w*.06);
+ ctx.save();ctx.globalAlpha=.92;ctx.textAlign='right';ctx.textBaseline='top';ctx.font=`700 ${size}px system-ui`;ctx.fillText(motif,w-Math.max(22,w*.03),Math.max(18,w*.025));ctx.restore();
+}
 function fitText(ctx,text,maxWidth,startSize,minSize,weight=900){let size=startSize;for(;size>minSize;size-=2){ctx.font=`${weight} ${size}px system-ui`;if(ctx.measureText(text).width<=maxWidth)break}return size}
 async function makeDesign(file){
-  const img=await loadImage(file),canvas=document.getElementById('designCanvas'),ctx=canvas.getContext('2d');
-  const scale=Math.min(1,1800/img.naturalWidth);canvas.width=Math.round(img.naturalWidth*scale);canvas.height=Math.round(img.naturalHeight*scale);
-  ctx.drawImage(img,0,0,canvas.width,canvas.height);
-  const top=ctx.createLinearGradient(0,0,0,canvas.height*.30);top.addColorStop(0,'rgba(0,0,0,.50)');top.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=top;ctx.fillRect(0,0,canvas.width,canvas.height*.34);
-  const bottom=ctx.createLinearGradient(0,canvas.height*.48,0,canvas.height);bottom.addColorStop(0,'rgba(3,14,15,0)');bottom.addColorStop(.32,'rgba(3,14,15,.62)');bottom.addColorStop(1,'rgba(3,14,15,.96)');ctx.fillStyle=bottom;ctx.fillRect(0,canvas.height*.48,canvas.width,canvas.height*.52);
-  drawThemeDecor(ctx,canvas.width,canvas.height);
-  const pad=Math.max(24,canvas.width*.045),badgeH=Math.max(42,canvas.width*.05),badgeW=Math.max(220,canvas.width*.31);
-  ctx.fillStyle='rgba(5,18,19,.84)';roundRect(ctx,pad,pad,badgeW,badgeH,badgeH/2);ctx.fill();
-  ctx.fillStyle=ev.accent;ctx.font=`800 ${Math.max(17,canvas.width*.019)}px system-ui`;ctx.textBaseline='middle';ctx.fillText('FTS.LU · SELFIE EVENT',pad+badgeH*.34,pad+badgeH/2);
-  const maxW=canvas.width-pad*2,y=canvas.height-pad*2.35,title=String(ev.title||'');ctx.textBaseline='alphabetic';ctx.fillStyle='#fff';const titleSize=fitText(ctx,title,maxW,Math.max(38,canvas.width*.06),Math.max(25,canvas.width*.037),900);ctx.font=`900 ${titleSize}px system-ui`;ctx.fillText(title,pad,y-Math.max(48,canvas.width*.058));
-  ctx.fillStyle=ev.accent;const sub=String(ev.subtitle||'');const subSize=fitText(ctx,sub,maxW,Math.max(25,canvas.width*.035),Math.max(18,canvas.width*.024),800);ctx.font=`800 ${subSize}px system-ui`;ctx.fillText(sub,pad,y);
-  ctx.fillStyle='rgba(255,255,255,.88)';const over=String(ev.overlay_text||ev.title||'');const overSize=fitText(ctx,over,maxW,Math.max(18,canvas.width*.024),Math.max(14,canvas.width*.018),600);ctx.font=`600 ${overSize}px system-ui`;ctx.fillText(over,pad,y+Math.max(30,canvas.width*.035));
-  designedBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',.91));
+ const img=await loadImageFile(file),canvas=document.getElementById('designCanvas'),ctx=canvas.getContext('2d'),spec=layoutCanvas(img,selectedLayout);
+ canvas.width=spec.w;canvas.height=spec.h;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle=ev.bg1||'#071315';ctx.fillRect(0,0,canvas.width,canvas.height);
+ if(spec.mode==='contain')drawContainWithBlur(ctx,img,canvas.width,canvas.height);else{ctx.save();ctx.filter=filterCss(selectedFilter);drawCover(ctx,img,canvas.width,canvas.height,spec.zoom||1);ctx.restore()}
+ const top=ctx.createLinearGradient(0,0,0,canvas.height*.28);top.addColorStop(0,'rgba(0,0,0,.48)');top.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=top;ctx.fillRect(0,0,canvas.width,canvas.height*.32);
+ const bottom=ctx.createLinearGradient(0,canvas.height*.48,0,canvas.height);bottom.addColorStop(0,'rgba(3,14,15,0)');bottom.addColorStop(.3,'rgba(3,14,15,.64)');bottom.addColorStop(1,'rgba(3,14,15,.96)');ctx.fillStyle=bottom;ctx.fillRect(0,canvas.height*.48,canvas.width,canvas.height*.52);
+ drawThemeDecor(ctx,canvas.width,canvas.height);
+
+ const pad=Math.max(24,canvas.width*.045),badgeH=Math.max(42,canvas.width*.05),badgeW=Math.max(220,canvas.width*.31);
+ ctx.fillStyle='rgba(5,18,19,.84)';roundRect(ctx,pad,pad,badgeW,badgeH,badgeH/2);ctx.fill();ctx.fillStyle=ev.accent;ctx.font=`800 ${Math.max(17,canvas.width*.019)}px system-ui`;ctx.textBaseline='middle';ctx.fillText('FTS.LU · SELFIE EVENT',pad+badgeH*.34,pad+badgeH/2);
+
+ if(ev.logo_path){
+   const logo=await loadRemoteImage(assetUrl(ev.logo_path));
+   if(logo){
+     const maxLW=canvas.width*.23,maxLH=canvas.height*.10,scale=Math.min(maxLW/logo.naturalWidth,maxLH/logo.naturalHeight,1);
+     const lw=logo.naturalWidth*scale,lh=logo.naturalHeight*scale;
+     ctx.save();ctx.globalAlpha=.98;ctx.drawImage(logo,canvas.width-pad-lw,pad,lw,lh);ctx.restore();
+   }
+ }
+
+ const maxW=canvas.width-pad*2,y=canvas.height-pad*2.35,title=String(ev.title||'');ctx.textBaseline='alphabetic';ctx.fillStyle='#fff';
+ const titleSize=fitText(ctx,title,maxW,Math.max(38,canvas.width*.06),Math.max(25,canvas.width*.037),900);ctx.font=`900 ${titleSize}px system-ui`;ctx.fillText(title,pad,y-Math.max(48,canvas.width*.058));
+ ctx.fillStyle=ev.accent;const sub=String(ev.subtitle||'');const subSize=fitText(ctx,sub,maxW,Math.max(25,canvas.width*.035),Math.max(18,canvas.width*.024),800);ctx.font=`800 ${subSize}px system-ui`;ctx.fillText(sub,pad,y);
+ ctx.fillStyle='rgba(255,255,255,.88)';const over=String(ev.overlay_text||ev.title||'');const overSize=fitText(ctx,over,maxW,Math.max(18,canvas.width*.024),Math.max(14,canvas.width*.018),600);ctx.font=`600 ${overSize}px system-ui`;ctx.fillText(over,pad,y+Math.max(30,canvas.width*.035));
+ designedBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',.91));
 }
 async function submitPhoto(){
-  if(!selectedFile)return showMessage('Bitte zuerst ein Foto aufnehmen oder auswählen.');
-  if(!document.getElementById('consent').checked)return showMessage('Bitte zuerst der Übermittlung zustimmen.');
-  if(selectedFile.size>15*1024*1024)return showMessage('Das Original ist größer als 15 MB.');
+ if(!selectedFile)return showMessage('Bitte zuerst ein Foto aufnehmen oder auswählen.');
+ if(!document.getElementById('consent').checked)return showMessage('Bitte zuerst der Übermittlung zustimmen.');
+ if(selectedFile.size>15*1024*1024)return showMessage('Das Original ist größer als 15 MB.');
+ if(!designedBlob)await makeDesign(selectedFile);
 
-  const btn=document.getElementById('uploadBtn');btn.disabled=true;
-  const id=`${Date.now()}_${crypto.randomUUID()}`;
-  const ext=(selectedFile.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
-  const item={id,createdAt:Date.now(),eventToken:ev.event_token,originalPath:`${ev.event_token}/original/${id}.${ext}`,designedPath:`${ev.event_token}/designed/${id}.jpg`,originalBlob:selectedFile,designedBlob,originalType:selectedFile.type||'image/jpeg'};
-
-  try{
-    if(navigator.onLine){
-      btn.textContent='Foto wird hochgeladen …';
-      try{
-        await uploadItem(item);
-        showMessage('✓ Original und Event-Version erfolgreich hochgeladen. Danke!','ok');
-      }catch(e){
-        await queuePut(item);
-        showMessage('✓ Foto sicher gespeichert. Der Upload wird automatisch fortgesetzt, sobald die Verbindung wieder funktioniert.','warn');
-        registerBackgroundSync();
-      }
-    }else{
-      btn.textContent='Foto wird offline gespeichert …';
-      await queuePut(item);
-      showMessage('✓ Foto sicher auf diesem Handy gespeichert. Sobald Internet wieder da ist, wird es automatisch hochgeladen.','warn');
-      registerBackgroundSync();
-    }
-    selectedFile=null;designedBlob=null;document.getElementById('photo').value='';document.getElementById('consent').checked=false;
-    await updateQueueCount();
-  }catch(e){
-    console.error(e);showMessage('Das Foto konnte nicht sicher gespeichert werden: '+(e?.message||'Fehler'),'err');
-  }finally{
-    btn.disabled=false;btn.textContent='Original + Design senden';
-  }
+ const btn=document.getElementById('uploadBtn');btn.disabled=true;const id=`${Date.now()}_${crypto.randomUUID()}`;const ext=(selectedFile.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+ const item={id,createdAt:Date.now(),eventToken:ev.event_token,originalPath:`${ev.event_token}/original/${id}.${ext}`,designedPath:`${ev.event_token}/designed/${id}.jpg`,originalBlob:selectedFile,designedBlob,originalType:selectedFile.type||'image/jpeg'};
+ try{
+  if(navigator.onLine){btn.textContent='Foto wird hochgeladen …';try{await uploadItem(item);showMessage('✓ Original und deine Event-Version erfolgreich hochgeladen. Danke!','ok')}catch(e){await queuePut(item);showMessage('✓ Foto sicher gespeichert. Upload läuft automatisch weiter, sobald die Verbindung stabil ist.','warn');registerBackgroundSync()}}
+  else{btn.textContent='Foto wird offline gespeichert …';await queuePut(item);showMessage('✓ Foto sicher auf diesem Handy gespeichert. Sobald Internet wieder da ist, wird es automatisch hochgeladen.','warn');registerBackgroundSync()}
+  selectedFile=null;designedBlob=null;document.getElementById('photo').value='';document.getElementById('consent').checked=false;await updateQueueCount();
+ }catch(e){console.error(e);showMessage('Das Foto konnte nicht sicher gespeichert werden: '+(e?.message||'Fehler'),'err')}
+ finally{btn.disabled=false;btn.textContent='Original + Design senden'}
 }
-async function registerBackgroundSync(){
-  try{
-    const reg=await navigator.serviceWorker.ready;
-    if('sync' in reg)await reg.sync.register('fts-upload-queue');
-  }catch(e){console.warn('Background Sync nicht verfügbar',e)}
-}
-window.addEventListener('online',()=>{updateNet();processQueue()});
-window.addEventListener('offline',updateNet);
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)processQueue()});
-if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);
-boot();
+async function registerBackgroundSync(){try{const reg=await navigator.serviceWorker.ready;if('sync'in reg)await reg.sync.register('fts-upload-queue')}catch(e){console.warn('Background Sync nicht verfügbar',e)}}
+window.addEventListener('online',()=>{updateNet();processQueue()});window.addEventListener('offline',updateNet);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)processQueue()});
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);boot();
 </script>
 </body>
 </html>
