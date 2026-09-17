@@ -22,6 +22,13 @@
 :fullscreen .controls{display:none}:fullscreen body{padding:0}:fullscreen .poster{height:100svh;width:auto;max-width:100vw;border-radius:0;box-shadow:none}
 @media print{@page{size:A4 portrait;margin:0}body{padding:0;background:#fff}.controls{display:none!important}.poster{width:210mm;height:297mm;aspect-ratio:auto;border-radius:0;box-shadow:none}.qrbox{width:58%}}
 @media(max-width:540px){body{padding:8px}.poster{border-radius:24px}.controls{width:calc(100% - 16px)}.controls button{font-size:.78rem;padding:10px 11px}}
+
+.decoStack{position:absolute!important;z-index:5!important;display:flex;gap:8px;align-items:center;max-width:72%;flex-wrap:wrap}.decoStack span{filter:drop-shadow(0 7px 12px #0008);line-height:1}.decoStack .small{font-size:2.8rem}.decoStack .medium{font-size:4rem}.decoStack .large{font-size:5.7rem}
+.decoStack.pos-top-left{left:5%;top:5%}.decoStack.pos-top-center{left:50%;top:5%;transform:translateX(-50%);justify-content:center}.decoStack.pos-top-right{right:5%;top:5%;justify-content:flex-end}
+.decoStack.pos-middle-left{left:5%;top:50%;transform:translateY(-50%)}.decoStack.pos-middle-center{left:50%;top:50%;transform:translate(-50%,-50%);justify-content:center}.decoStack.pos-middle-right{right:5%;top:50%;transform:translateY(-50%);justify-content:flex-end}
+.decoStack.pos-bottom-left{left:5%;bottom:5%}.decoStack.pos-bottom-center{left:50%;bottom:5%;transform:translateX(-50%);justify-content:center}.decoStack.pos-bottom-right{right:5%;bottom:5%;justify-content:flex-end}
+.ctaEn{font-size:clamp(.8rem,2.2vw,1.1rem);font-weight:800;margin-top:5px;color:#e6ecea;text-align:center;text-shadow:0 2px 8px #000}
+
 </style>
 </head>
 <body>
@@ -50,20 +57,32 @@ function logoStacksHtml(ev){
     `<div class="logoStack pos-${pos}">${items.map(x=>`<img class="${esc(x.size||'medium')}" crossorigin="anonymous" src="${assetUrl(x.path)}" alt="">`).join('')}</div>`
   ).join('');
 }
-function motifFor(ev){if(ev.motif)return ev.motif;return ({standard:'✦',autumn:'🎃',halloween:'👻',streetfood:'🍔',cars:'🏎️',neon:'✦',winter:'❄',spring:'🌸',summer:'☀️',wedding:'♥',sports:'⚽',business:'◆',festival:'🎪',carnival:'🎭'})[ev.theme||'standard']||'✦'}
+function decorationItemsFor(ev){
+  let items=[];
+  if(Array.isArray(ev.decoration_items))items=ev.decoration_items;
+  else{try{items=JSON.parse(ev.decoration_items||'[]')}catch{}}
+  return items.filter(x=>x?.symbol && x.show_poster!==false);
+}
+function decoStacksHtml(ev){
+  const groups={};
+  decorationItemsFor(ev).forEach(x=>(groups[x.position||'bottom-right']??=[]).push(x));
+  return Object.entries(groups).map(([pos,items])=>
+    `<div class="decoStack pos-${pos}">${items.map(x=>`<span class="${esc(x.size||'medium')}">${esc(x.symbol)}</span>`).join('')}</div>`
+  ).join('');
+}
 async function boot(){
  try{
   const data=await rpc('fts_get_event',{p_event_token:ref});if(!data?.length)throw new Error('Event nicht aktiv');
-  const ev=data[0],motif=motifFor(ev);
+  const ev=data[0];
   document.documentElement.style.setProperty('--accent',ev.accent||'#d9b56d');document.documentElement.style.setProperty('--bg1',ev.bg1||'#071315');document.documentElement.style.setProperty('--bg2',ev.bg2||'#10383a');
   const root=document.getElementById('root');
   root.innerHTML=`<section class="poster" id="poster">
     ${ev.poster_bg_path?`<img class="flyer" crossorigin="anonymous" src="${assetUrl(ev.poster_bg_path)}">`:''}
     <div class="shade"></div><div class="glow one"></div><div class="glow two"></div>
     ${logoStacksHtml(ev)}
-    <div class="deco a">${esc(motif)}</div><div class="deco b">${esc(motif)}</div>
+    ${decoStacksHtml(ev)}
     <div class="brand">FTS.LU · SELFIE EVENT</div><h1>${esc(ev.title)}</h1><div class="sub">${esc(ev.subtitle||'')}</div>
-    <div class="qrbox"><div id="qr"></div></div><div class="cta">Scannen & Selfie hochladen</div><div class="foot">FTS.lu · Eventfotografie</div>
+    <div class="qrbox"><div id="qr"></div></div><div class="cta">Scannen & Selfie hochladen</div>${ev.poster_bilingual!==false?`<div class="ctaEn">Scan & upload your selfie</div>`:''}<div class="foot">FTS.lu · Eventfotografie</div>
     ${ev.short_code?`<div class="code">${esc(ev.short_code)}</div>`:''}
   </section>
   <div class="controls" id="controls"><button id="full">Vollbild / Anzeige</button><button id="png">PNG herunterladen</button><button id="print" class="secondary">Drucken</button></div>`;

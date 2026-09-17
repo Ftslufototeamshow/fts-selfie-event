@@ -18,6 +18,10 @@
 .privacyInfo{margin:17px 0 10px;padding:13px 14px;border-radius:14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);color:#aebbb9;font-size:.82rem;line-height:1.45}.privacyInfo strong{display:block;color:#f3eee5;margin-bottom:5px}.consent{display:flex;gap:10px;align-items:flex-start;margin:12px 0 17px;color:#c5cfcd;font-size:.9rem}.consent input{margin-top:3px;transform:scale(1.2)}
 button.main{width:100%;border:0;border-radius:15px;padding:16px;font:inherit;font-weight:900;background:var(--accent);color:#102020;cursor:pointer}button:disabled{opacity:.55;cursor:wait}.msg{border-radius:14px;padding:13px 15px;margin:15px 0 0;display:none}.ok{display:block;background:rgba(68,180,117,.16);border:1px solid rgba(68,180,117,.35)}.warn{display:block;background:rgba(225,166,54,.13);border:1px solid rgba(225,166,54,.35)}.err{display:block;background:rgba(220,80,80,.14);border:1px solid rgba(220,80,80,.35)}.foot{text-align:center;color:#7f9692;font-size:.78rem;margin-top:18px}.loading{padding:60px 20px;text-align:center;color:#a8b6b4}
 @media(max-width:680px){.choiceRow{grid-template-columns:repeat(2,1fr)}.card{padding:14px}.compare{gap:5px}.previewBox{padding:4px}.previewBox b{font-size:.68rem}}
+
+.langBar{display:flex;gap:6px;justify-content:flex-end;margin:-2px 0 12px}.langBar button{border:1px solid rgba(255,255,255,.1);background:#0a2426;color:#dce5e3;border-radius:999px;padding:7px 10px;font-weight:900;cursor:pointer}.langBar button.active{background:var(--accent);color:#102020}
+.eventStatus{padding:11px 13px;border-radius:13px;margin:0 0 14px;font-size:.84rem;line-height:1.4}.eventStatus.test{background:rgba(225,166,54,.13);border:1px solid rgba(225,166,54,.35)}.eventStatus.closed{background:rgba(210,88,88,.13);border:1px solid rgba(210,88,88,.3)}.eventStatus.day{background:rgba(65,170,113,.12);border:1px solid rgba(65,170,113,.28)}
+
 </style>
 </head>
 <body>
@@ -30,23 +34,97 @@ const eventToken=params.get('e') || cfg.defaultEventToken;
 const EVENT_CACHE_KEY='fts_event_cache_'+eventToken;
 const DB_NAME='fts_selfie_offline_v1', STORE='queue';
 let ev=null,selectedFile=null,designedBlob=null,selectedLayout='solo',selectedFilter='natural',redrawTimer=null;
+let lang='de',routeMode='closed',routeDay=null;
 const DEFAULT_LAYOUTS=['solo','duo','groupwide','grouptall','free'];
 const DEFAULT_FILTERS=['natural','warm','vivid','mono','cool'];
 
 const layoutInfo={
- solo:{label:'1 Person · Hoch',mini:'portrait',desc:'Portrait'},
- duo:{label:'2 Personen · Hoch',mini:'duo',desc:'Duo'},
- groupwide:{label:'Gruppe · Breit',mini:'wide',desc:'3–5 Personen'},
- grouptall:{label:'Gruppe · Hoch',mini:'story',desc:'3–5 Personen'},
- free:{label:'Originalformat',mini:'free',desc:'frei'}
+ solo:{mini:'portrait',label:'solo',desc:'soloDesc'},
+ duo:{mini:'duo',label:'duo',desc:'duoDesc'},
+ groupwide:{mini:'wide',label:'groupwide',desc:'groupwideDesc'},
+ grouptall:{mini:'story',label:'grouptall',desc:'grouptallDesc'},
+ free:{mini:'free',label:'free',desc:'freeDesc'}
 };
 const filterInfo={
- natural:{label:'Natürlich',desc:'neutral'},
- warm:{label:'Warm',desc:'weicher'},
- vivid:{label:'Kräftig',desc:'mehr Farbe'},
- mono:{label:'Schwarzweiß',desc:'klassisch'},
- cool:{label:'Cool',desc:'moderner Look'}
+ natural:{label:'natural',desc:'naturalDesc'},
+ warm:{label:'warm',desc:'warmDesc'},
+ vivid:{label:'vivid',desc:'vividDesc'},
+ mono:{label:'mono',desc:'monoDesc'},
+ cool:{label:'cool',desc:'coolDesc'}
 };
+
+const I18N={
+ de:{
+  layoutTitle:'1. Foto-Layout wählen',filterTitle:'2. Look / Filter wählen',photoTitle:'📸 3. Selfie aufnehmen',
+  photoSub:'oder ein Foto vom Handy auswählen · Layout und Filter kannst du danach noch ändern',
+  original:'Original',design:'Dein Event-Design',privacyTitle:'Datenschutz & Einwilligung',
+  privacy:'Das von mir hochgeladene Foto wird von FTS.lu ausschließlich für diese Veranstaltung verarbeitet, gespeichert und dem Veranstalter im Kundenportal bereitgestellt. Es wird kein Name abgefragt oder zusammen mit dem Foto gespeichert. Die Bereitstellung im Eventportal ist zeitlich begrenzt. Eine Einwilligung kann für die Zukunft widerrufen werden.',
+  consent:'Ich habe die Datenschutzhinweise gelesen und bin mit der beschriebenen Verarbeitung meines Fotos einverstanden.',
+  send:'Original + Design senden',online:'● Internet vorhanden',offline:'● Offline – Fotos werden auf diesem Handy zwischengespeichert',
+  noPhoto:'Bitte zuerst ein Foto aufnehmen oder auswählen.',noConsent:'Bitte zuerst der Übermittlung zustimmen.',
+  tooBig:'Das Original ist größer als 15 MB.',uploading:'Foto wird hochgeladen …',offlineSaving:'Foto wird offline gespeichert …',
+  success:'✓ Original und deine Event-Version erfolgreich hochgeladen. Danke!',
+  queued:'✓ Foto sicher gespeichert. Upload läuft automatisch weiter, sobald die Verbindung stabil ist.',
+  queuedOffline:'✓ Foto sicher auf diesem Handy gespeichert. Sobald Internet wieder da ist, wird es automatisch hochgeladen.',
+  saveError:'Das Foto konnte nicht sicher gespeichert werden',
+  test:'TESTMODUS · Dieses Foto wird getrennt gespeichert und erscheint nicht im Kundenalbum.',
+  eventDay:'Aktiver Event-Tag',tooEarly:'Dieses Event ist noch nicht für Selfie-Uploads freigeschaltet.',ended:'Die Event-Tage sind beendet. Das Kundenportal kann weiterhin sichtbar sein.',
+  queueOne:'Foto wartet auf Upload',queueMany:'Fotos warten auf Upload',
+  solo:'1 Person · Hoch',soloDesc:'Portrait',duo:'2 Personen · Hoch',duoDesc:'Duo',
+  groupwide:'Gruppe · Breit',groupwideDesc:'3–5 Personen',grouptall:'Gruppe · Hoch',grouptallDesc:'3–5 Personen',free:'Originalformat',freeDesc:'frei',
+  natural:'Natürlich',naturalDesc:'neutral',warm:'Warm',warmDesc:'weicher',vivid:'Kräftig',vividDesc:'mehr Farbe',mono:'Schwarzweiß',monoDesc:'klassisch',cool:'Cool',coolDesc:'moderner Look'
+ },
+ en:{
+  layoutTitle:'1. Choose photo layout',filterTitle:'2. Choose look / filter',photoTitle:'📸 3. Take a selfie',
+  photoSub:'or choose a photo from your phone · you can change layout and filter afterwards',
+  original:'Original',design:'Your event design',privacyTitle:'Privacy & consent',
+  privacy:'The photo I upload will be processed and stored by FTS.lu only for this event and made available to the organizer in the customer portal. No name is requested or stored together with the photo. Availability in the event portal is time-limited. Consent can be withdrawn for the future.',
+  consent:'I have read the privacy information and agree to the described processing of my photo.',
+  send:'Send original + design',online:'● Internet available',offline:'● Offline – photos are stored temporarily on this phone',
+  noPhoto:'Please take or choose a photo first.',noConsent:'Please agree to the photo transfer first.',
+  tooBig:'The original photo is larger than 15 MB.',uploading:'Uploading photo …',offlineSaving:'Saving photo offline …',
+  success:'✓ Original and event version uploaded successfully. Thank you!',
+  queued:'✓ Photo saved safely. Upload will continue automatically when the connection is stable.',
+  queuedOffline:'✓ Photo saved safely on this phone. It will upload automatically when internet is available.',
+  saveError:'The photo could not be saved safely',
+  test:'TEST MODE · This photo is stored separately and will not appear in the customer album.',
+  eventDay:'Active event day',tooEarly:'This event is not yet open for selfie uploads.',ended:'The event days have ended. The customer portal may still remain available.',
+  queueOne:'photo waiting for upload',queueMany:'photos waiting for upload',
+  solo:'1 person · portrait',soloDesc:'portrait',duo:'2 people · portrait',duoDesc:'duo',
+  groupwide:'Group · landscape',groupwideDesc:'3–5 people',grouptall:'Group · portrait',grouptallDesc:'3–5 people',free:'Original format',freeDesc:'free',
+  natural:'Natural',naturalDesc:'neutral',warm:'Warm',warmDesc:'softer',vivid:'Vivid',vividDesc:'more color',mono:'Black & white',monoDesc:'classic',cool:'Cool',coolDesc:'modern look'
+ },
+ fr:{
+  layoutTitle:'1. Choisir la mise en page',filterTitle:'2. Choisir le style / filtre',photoTitle:'📸 3. Prendre un selfie',
+  photoSub:'ou choisir une photo du téléphone · la mise en page et le filtre restent modifiables ensuite',
+  original:'Original',design:'Votre design événement',privacyTitle:'Confidentialité & consentement',
+  privacy:'La photo que je téléverse est traitée et stockée par FTS.lu uniquement pour cet événement et mise à disposition de l’organisateur dans le portail client. Aucun nom n’est demandé ni enregistré avec la photo. La disponibilité dans le portail est limitée dans le temps. Le consentement peut être retiré pour l’avenir.',
+  consent:'J’ai lu les informations de confidentialité et j’accepte le traitement décrit de ma photo.',
+  send:'Envoyer original + design',online:'● Internet disponible',offline:'● Hors ligne – les photos sont enregistrées temporairement sur ce téléphone',
+  noPhoto:'Veuillez d’abord prendre ou choisir une photo.',noConsent:'Veuillez d’abord accepter le transfert de la photo.',
+  tooBig:'La photo originale dépasse 15 Mo.',uploading:'Téléversement de la photo …',offlineSaving:'Enregistrement hors ligne …',
+  success:'✓ Original et version événement téléversés avec succès. Merci !',
+  queued:'✓ Photo enregistrée en sécurité. Le téléversement reprendra automatiquement quand la connexion sera stable.',
+  queuedOffline:'✓ Photo enregistrée en sécurité sur ce téléphone. Elle sera téléversée automatiquement dès que la connexion reviendra.',
+  saveError:'La photo n’a pas pu être enregistrée en sécurité',
+  test:'MODE TEST · Cette photo est enregistrée séparément et n’apparaît pas dans l’album client.',
+  eventDay:'Jour d’événement actif',tooEarly:'Cet événement n’est pas encore ouvert aux selfies.',ended:'Les jours de l’événement sont terminés. Le portail client peut rester disponible.',
+  queueOne:'photo en attente',queueMany:'photos en attente',
+  solo:'1 personne · portrait',soloDesc:'portrait',duo:'2 personnes · portrait',duoDesc:'duo',
+  groupwide:'Groupe · paysage',groupwideDesc:'3–5 personnes',grouptall:'Groupe · portrait',grouptallDesc:'3–5 personnes',free:'Format original',freeDesc:'libre',
+  natural:'Naturel',naturalDesc:'neutre',warm:'Chaud',warmDesc:'plus doux',vivid:'Vif',vividDesc:'plus de couleur',mono:'Noir & blanc',monoDesc:'classique',cool:'Froid',coolDesc:'style moderne'
+ }
+};
+function tr(k){return I18N[lang]?.[k]||I18N.de[k]||k}
+function detectLang(){
+  const saved=localStorage.getItem('fts_guest_lang');
+  if(['de','en','fr'].includes(saved))return saved;
+  const langs=navigator.languages||[navigator.language||'de'];
+  if(langs.some(x=>String(x).toLowerCase().startsWith('fr')))return'fr';
+  if(langs.some(x=>String(x).toLowerCase().startsWith('en')))return'en';
+  return'de';
+}
+
 
 function apiHeaders(json=true){const h={'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey};if(json)h['Content-Type']='application/json';return h}
 async function rpc(name,body){const r=await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/${name}`,{method:'POST',headers:apiHeaders(true),body:JSON.stringify(body)});if(!r.ok)throw new Error((await r.text())||`RPC ${r.status}`);const t=await r.text();return t?JSON.parse(t):null}
@@ -54,13 +132,13 @@ function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open
 async function queuePut(item){const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(item);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)})}
 async function queueDelete(id){const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(id);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)})}
 async function queueAll(){const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readonly'),req=tx.objectStore(STORE).getAll();req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error)})}
-async function updateQueueCount(){try{const n=(await queueAll()).length;const el=document.getElementById('net');if(!el)return;if(n>0)el.innerHTML=`⏳ ${n} Foto${n===1?'':'s'} warten auf Upload · ${navigator.onLine?'Internet vorhanden – Upload läuft automatisch.':'Kein Internet – sicher auf diesem Handy gespeichert.'}`}catch{}}
+async function updateQueueCount(){try{const n=(await queueAll()).length;const el=document.getElementById('net');if(!el)return;if(n>0)el.innerHTML=`⏳ ${n} ${n===1?tr('queueOne'):tr('queueMany')}`}catch{}}
 function encodePath(path){return path.split('/').map(encodeURIComponent).join('/')}
 async function uploadObject(path,blob,type){const u=`${cfg.supabaseUrl}/storage/v1/object/${encodeURIComponent(cfg.liveBucket)}/${encodePath(path)}`;const r=await fetch(u,{method:'POST',headers:{'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':type||'application/octet-stream','x-upsert':'false'},body:blob});if(!r.ok){const txt=await r.text();if(r.status===409||/already exists/i.test(txt))return;throw new Error(txt||`Storage ${r.status}`)}}
 async function registerPhoto(item){await rpc('fts_register_photo',{p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath})}
 async function uploadItem(item){await uploadObject(item.originalPath,item.originalBlob,item.originalType);await uploadObject(item.designedPath,item.designedBlob,'image/jpeg');await registerPhoto(item)}
 async function processQueue(){if(!navigator.onLine)return updateNet();const items=await queueAll();for(const item of items){try{await uploadItem(item);await queueDelete(item.id)}catch(e){console.warn('Queue upload',e);break}}updateNet();updateQueueCount()}
-function updateNet(){const el=document.getElementById('net');if(!el)return;el.className='net '+(navigator.onLine?'online':'offline');el.textContent=navigator.onLine?'● Internet vorhanden':'● Offline – Fotos werden auf diesem Handy zwischengespeichert'}
+function updateNet(){const el=document.getElementById('net');if(!el)return;el.className='net '+(navigator.onLine?'online':'offline');el.textContent=navigator.onLine?tr('online'):tr('offline')}
 function assetUrl(path){if(!path)return'';return `${cfg.supabaseUrl}/storage/v1/object/public/${encodeURIComponent(cfg.liveBucket)}/${encodePath(path)}`}
 function logoItemsFor(target){
   let items=[];
@@ -69,8 +147,41 @@ function logoItemsFor(target){
   if(!items.length&&ev?.logo_path)items=[{path:ev.logo_path,name:'Logo',position:'top-right',size:'medium',show_poster:true,show_photo:true}];
   return items.filter(x=>x?.path && (target==='photo'?x.show_photo!==false:x.show_poster!==false));
 }
+
+function decorationItemsFor(target){
+  let items=[];
+  if(Array.isArray(ev?.decoration_items))items=ev.decoration_items;
+  else{try{items=JSON.parse(ev?.decoration_items||'[]')}catch{}}
+  return items.filter(x=>x?.symbol && (target==='photo'?x.show_photo!==false:x.show_poster!==false));
+}
+function eventDays(){
+  let d=ev?.event_days;
+  if(!Array.isArray(d)){try{d=JSON.parse(d||'[]')}catch{d=[]}}
+  if(!d.length && ev?.event_date)d=[ev.event_date];
+  return [...new Set(d.filter(Boolean))].sort();
+}
+function luxDate(){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Luxembourg',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  const get=t=>parts.find(x=>x.type===t)?.value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+function addDays(dateStr,delta){
+  const d=new Date(dateStr+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+delta);
+  return d.toISOString().slice(0,10);
+}
+function resolveRoute(){
+  const days=eventDays(),today=luxDate();
+  if(days.includes(today)){routeMode='day';routeDay=today;return}
+  const first=days[0],last=days[days.length-1],testDays=Number(ev?.test_days_before||0);
+  if(first && today<first && today>=addDays(first,-testDays)){routeMode='test';routeDay=null;return}
+  if(first && today<addDays(first,-testDays)){routeMode='too-early';routeDay=null;return}
+  if(last && today>last){routeMode='ended';routeDay=null;return}
+  routeMode='closed';routeDay=null;
+}
+
 function asArray(v,fallback){if(Array.isArray(v)&&v.length)return v;try{const p=JSON.parse(v);if(Array.isArray(p)&&p.length)return p}catch{}return fallback}
 async function boot(){
+ lang=detectLang();
  let data=null;
  try{if(navigator.onLine){data=await rpc('fts_get_event',{p_event_token:eventToken});if(data?.length)localStorage.setItem(EVENT_CACHE_KEY,JSON.stringify(data[0]))}}catch(e){console.warn('Event online load',e)}
  if(data?.length)ev=data[0];else{try{ev=JSON.parse(localStorage.getItem(EVENT_CACHE_KEY)||'null')}catch{}}
@@ -78,39 +189,81 @@ async function boot(){
  render();processQueue();
 }
 function render(){
- document.documentElement.style.setProperty('--accent',ev.accent||'#d9b56d');document.documentElement.style.setProperty('--bg1',ev.bg1||'#071315');document.documentElement.style.setProperty('--bg2',ev.bg2||'#10383a');
- const layouts=asArray(ev.available_layouts,DEFAULT_LAYOUTS).filter(x=>layoutInfo[x]);const filters=asArray(ev.available_filters,DEFAULT_FILTERS).filter(x=>filterInfo[x]);
- selectedLayout=layouts[0]||'solo';selectedFilter=filters[0]||'natural';
+ document.documentElement.style.setProperty('--accent',ev.accent||'#d9b56d');
+ document.documentElement.style.setProperty('--bg1',ev.bg1||'#071315');
+ document.documentElement.style.setProperty('--bg2',ev.bg2||'#10383a');
+
+ const layouts=asArray(ev.available_layouts,DEFAULT_LAYOUTS).filter(x=>layoutInfo[x]);
+ const filters=asArray(ev.available_filters,DEFAULT_FILTERS).filter(x=>filterInfo[x]);
+ selectedLayout=layouts[0]||'solo';
+ selectedFilter=filters[0]||'natural';
+ resolveRoute();
+
+ const statusClass=routeMode==='test'?'test':routeMode==='day'?'day':'closed';
+ const statusText=routeMode==='test'
+   ? tr('test')
+   : routeMode==='day'
+     ? `${tr('eventDay')}: ${new Date(routeDay+'T12:00:00').toLocaleDateString(lang==='de'?'de-DE':lang==='fr'?'fr-FR':'en-GB')}`
+     : routeMode==='too-early'
+       ? tr('tooEarly')
+       : tr('ended');
+
  document.getElementById('card').innerHTML=`
+   <div class="langBar">
+     <button data-lang="de">DE</button>
+     <button data-lang="en">EN</button>
+     <button data-lang="fr">FR</button>
+   </div>
    <div class="brand">FTS.LU · SELFIE EVENT</div>
    ${logoItemsFor('photo')[0]?.path?`<img class="logoEvent show" src="${assetUrl(logoItemsFor('photo')[0].path)}" crossorigin="anonymous" alt="Event-Logo">`:''}
-   <h1>${esc(ev.title)}</h1><div class="sub">${esc(ev.subtitle||'')}</div>
-   <div class="meta">${esc(ev.location||'')} ${ev.event_date?'· '+new Date(ev.event_date+'T12:00:00').toLocaleDateString('de-DE'):''}</div>
-   <div class="themeChip">${esc(eventMotif())} ${esc(themeLabel())}</div>
+   <h1>${esc(ev.title)}</h1>
+   <div class="sub">${esc(ev.subtitle||'')}</div>
+   <div class="meta">${esc(ev.location||'')} · ${eventDays().map(d=>new Date(d+'T12:00:00').toLocaleDateString(lang==='de'?'de-DE':lang==='fr'?'fr-FR':'en-GB')).join(' · ')}</div>
+   <div class="eventStatus ${statusClass}" id="eventStatus">${statusText}</div>
    <div id="net" class="net"></div>
 
-   <div class="moduleTitle">1. Foto-Layout wählen</div>
+   <div class="moduleTitle" id="layoutTitle">${tr('layoutTitle')}</div>
    <div class="choiceRow" id="layoutChoices">${layouts.map(layoutButton).join('')}</div>
 
-   <div class="moduleTitle">2. Look / Filter wählen</div>
+   <div class="moduleTitle" id="filterTitle">${tr('filterTitle')}</div>
    <div class="choiceRow" id="filterChoices">${filters.map(filterButton).join('')}</div>
 
-   <label class="upload"><div><strong>📸 3. Selfie aufnehmen</strong><span>oder ein Foto vom Handy auswählen · Layout und Filter kannst du danach noch ändern</span></div><input id="photo" type="file" accept="image/*" capture="user"></label>
+   <label class="upload" id="uploadLabel">
+     <div><strong id="photoTitle">${tr('photoTitle')}</strong><span id="photoSub">${tr('photoSub')}</span></div>
+     <input id="photo" type="file" accept="image/*" capture="user" ${['day','test'].includes(routeMode)?'':'disabled'}>
+   </label>
 
    <section class="compare" id="compare">
-     <div class="previewBox"><b>Original</b><img id="originalPreview"></div>
-     <div class="previewBox"><b>Dein Event-Design</b><canvas id="designCanvas"></canvas></div>
+     <div class="previewBox"><b id="originalLabel">${tr('original')}</b><img id="originalPreview"></div>
+     <div class="previewBox"><b id="designLabel">${tr('design')}</b><canvas id="designCanvas"></canvas></div>
    </section>
 
-   <div class="privacyInfo"><strong>Datenschutz & Einwilligung</strong>Das von mir hochgeladene Foto wird von FTS.lu ausschließlich für diese Veranstaltung verarbeitet, gespeichert und dem Veranstalter im Kundenportal bereitgestellt. Es wird kein Name abgefragt oder zusammen mit dem Foto gespeichert. Die Bereitstellung im Eventportal ist zeitlich begrenzt. Eine Einwilligung kann für die Zukunft widerrufen werden.</div>
-   <label class="consent"><input id="consent" type="checkbox"><span>Ich habe die Datenschutzhinweise gelesen und bin mit der beschriebenen Verarbeitung meines Fotos einverstanden.</span></label>
-   <button class="main" id="uploadBtn">Original + Design senden</button>
+   <div class="privacyInfo"><strong id="privacyTitle">${tr('privacyTitle')}</strong><span id="privacyText">${tr('privacy')}</span></div>
+   <label class="consent"><input id="consent" type="checkbox" ${['day','test'].includes(routeMode)?'':'disabled'}><span id="consentText">${tr('consent')}</span></label>
+   <button class="main" id="uploadBtn" ${['day','test'].includes(routeMode)?'':'disabled'}>${tr('send')}</button>
    <div id="message" class="msg"></div><div class="foot">FTS.lu · Eventfotografie</div>`;
- updateNet();updateQueueCount();bindChoices();
- document.getElementById('photo').addEventListener('change',onPhoto);document.getElementById('uploadBtn').addEventListener('click',submitPhoto);
+
+ updateNet();updateQueueCount();bindChoices();bindLanguages();
+
+ document.getElementById('photo').addEventListener('change',onPhoto);
+ document.getElementById('uploadBtn').addEventListener('click',submitPhoto);
 }
-function layoutButton(key){const x=layoutInfo[key];return `<button type="button" class="choice ${key===selectedLayout?'active':''}" data-layout="${key}"><div class="frameMini ${x.mini}">${key==='solo'?'1':key==='duo'?'2':key.includes('group')?'3–5':'↔'}</div>${esc(x.label)}<small>${esc(x.desc)}</small></button>`}
-function filterButton(key){const x=filterInfo[key];return `<button type="button" class="choice ${key===selectedFilter?'active':''}" data-filter="${key}">${esc(x.label)}<small>${esc(x.desc)}</small></button>`}
+function layoutButton(key){const x=layoutInfo[key];return `<button type="button" class="choice ${key===selectedLayout?'active':''}" data-layout="${key}"><div class="frameMini ${x.mini}">${key==='solo'?'1':key==='duo'?'2':key.includes('group')?'3–5':'↔'}</div>${esc(tr(x.label))}<small>${esc(tr(x.desc))}</small></button>`}
+function filterButton(key){const x=filterInfo[key];return `<button type="button" class="choice ${key===selectedFilter?'active':''}" data-filter="${key}">${esc(tr(x.label))}<small>${esc(tr(x.desc))}</small></button>`}
+function bindLanguages(){
+ document.querySelectorAll('[data-lang]').forEach(b=>{
+   b.classList.toggle('active',b.dataset.lang===lang);
+   b.onclick=()=>{
+     lang=b.dataset.lang;
+     localStorage.setItem('fts_guest_lang',lang);
+     render();
+     if(selectedFile){
+       document.getElementById('originalPreview').src=URL.createObjectURL(selectedFile);
+       makeDesign(selectedFile).then(()=>document.getElementById('compare').style.display='grid');
+     }
+   };
+ });
+}
 function bindChoices(){
  document.querySelectorAll('[data-layout]').forEach(b=>b.onclick=()=>{selectedLayout=b.dataset.layout;document.querySelectorAll('[data-layout]').forEach(x=>x.classList.toggle('active',x===b));scheduleRedraw()});
  document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{selectedFilter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));scheduleRedraw()});
@@ -196,13 +349,51 @@ async function drawEventLogos(ctx,w,h,target='photo'){
   }
 }
 
+function decoSizePx(size,w){
+  return size==='small'?Math.max(34,w*.038):size==='large'?Math.max(70,w*.078):Math.max(50,w*.055);
+}
+function positionXY(position,w,h,pad,rowW,rowH){
+  let x=pad,y=pad;
+  if(position.includes('center'))x=(w-rowW)/2;
+  else if(position.includes('right'))x=w-pad-rowW;
+  if(position.startsWith('middle'))y=(h-rowH)/2;
+  else if(position.startsWith('bottom'))y=h-pad-rowH;
+  return {x,y};
+}
+function drawEventDecorations(ctx,w,h,target='photo'){
+  const items=decorationItemsFor(target);
+  const groups={};
+  items.forEach(x=>(groups[x.position||'bottom-right']??=[]).push(x));
+  const pad=Math.max(24,w*.035),gap=Math.max(8,w*.01);
+
+  for(const [position,arr] of Object.entries(groups)){
+    const dims=arr.map(item=>{
+      const px=decoSizePx(item.size||'medium',w);
+      return {item,px,w:px*1.25,h:px*1.25};
+    });
+    const totalW=dims.reduce((s,d)=>s+d.w,0)+gap*Math.max(0,dims.length-1);
+    const rowH=Math.max(...dims.map(d=>d.h),0);
+    let {x,y}=positionXY(position,w,h,pad,totalW,rowH);
+
+    for(const d of dims){
+      ctx.save();
+      ctx.font=`700 ${d.px}px system-ui`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=Math.max(6,w*.008);
+      ctx.fillText(String(d.item.symbol||''),x+d.w/2,y+rowH/2);
+      ctx.restore();
+      x+=d.w+gap;
+    }
+  }
+}
+
 async function makeDesign(file){
  const img=await loadImageFile(file),canvas=document.getElementById('designCanvas'),ctx=canvas.getContext('2d'),spec=layoutCanvas(img,selectedLayout);
  canvas.width=spec.w;canvas.height=spec.h;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle=ev.bg1||'#071315';ctx.fillRect(0,0,canvas.width,canvas.height);
  if(spec.mode==='contain')drawContainWithBlur(ctx,img,canvas.width,canvas.height);else{ctx.save();ctx.filter=filterCss(selectedFilter);drawCover(ctx,img,canvas.width,canvas.height,spec.zoom||1);ctx.restore()}
  const top=ctx.createLinearGradient(0,0,0,canvas.height*.28);top.addColorStop(0,'rgba(0,0,0,.48)');top.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=top;ctx.fillRect(0,0,canvas.width,canvas.height*.32);
  const bottom=ctx.createLinearGradient(0,canvas.height*.48,0,canvas.height);bottom.addColorStop(0,'rgba(3,14,15,0)');bottom.addColorStop(.3,'rgba(3,14,15,.64)');bottom.addColorStop(1,'rgba(3,14,15,.96)');ctx.fillStyle=bottom;ctx.fillRect(0,canvas.height*.48,canvas.width,canvas.height*.52);
- drawThemeDecor(ctx,canvas.width,canvas.height);
+
 
  const pad=Math.max(24,canvas.width*.045),badgeH=Math.max(42,canvas.width*.05),badgeW=Math.max(220,canvas.width*.31);
  ctx.fillStyle='rgba(5,18,19,.84)';roundRect(ctx,pad,pad,badgeW,badgeH,badgeH/2);ctx.fill();ctx.fillStyle=ev.accent;ctx.font=`800 ${Math.max(17,canvas.width*.019)}px system-ui`;ctx.textBaseline='middle';ctx.fillText('FTS.LU · SELFIE EVENT',pad+badgeH*.34,pad+badgeH/2);
@@ -212,22 +403,32 @@ async function makeDesign(file){
  ctx.fillStyle=ev.accent;const sub=String(ev.subtitle||'');const subSize=fitText(ctx,sub,maxW,Math.max(25,canvas.width*.035),Math.max(18,canvas.width*.024),800);ctx.font=`800 ${subSize}px system-ui`;ctx.fillText(sub,pad,y);
  ctx.fillStyle='rgba(255,255,255,.88)';const over=String(ev.overlay_text||ev.title||'');const overSize=fitText(ctx,over,maxW,Math.max(18,canvas.width*.024),Math.max(14,canvas.width*.018),600);ctx.font=`600 ${overSize}px system-ui`;ctx.fillText(over,pad,y+Math.max(30,canvas.width*.035));
  await drawEventLogos(ctx,canvas.width,canvas.height,'photo');
+ await Promise.resolve(drawEventDecorations(ctx,canvas.width,canvas.height,'photo'));
  designedBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',.91));
 }
 async function submitPhoto(){
- if(!selectedFile)return showMessage('Bitte zuerst ein Foto aufnehmen oder auswählen.');
- if(!document.getElementById('consent').checked)return showMessage('Bitte zuerst der Übermittlung zustimmen.');
- if(selectedFile.size>15*1024*1024)return showMessage('Das Original ist größer als 15 MB.');
+ if(!['day','test'].includes(routeMode))return showMessage(routeMode==='too-early'?tr('tooEarly'):tr('ended'));
+ if(!selectedFile)return showMessage(tr('noPhoto'));
+ if(!document.getElementById('consent').checked)return showMessage(tr('noConsent'));
+ if(selectedFile.size>15*1024*1024)return showMessage(tr('tooBig'));
  if(!designedBlob)await makeDesign(selectedFile);
 
  const btn=document.getElementById('uploadBtn');btn.disabled=true;const id=`${Date.now()}_${crypto.randomUUID()}`;const ext=(selectedFile.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
- const item={id,createdAt:Date.now(),eventToken:ev.event_token,originalPath:`${ev.event_token}/original/${id}.${ext}`,designedPath:`${ev.event_token}/designed/${id}.jpg`,originalBlob:selectedFile,designedBlob,originalType:selectedFile.type||'image/jpeg'};
+ const routeBase=routeMode==='test'
+   ? `${ev.event_token}/test`
+   : `${ev.event_token}/days/${routeDay}`;
+ const item={
+   id,createdAt:Date.now(),eventToken:ev.event_token,
+   originalPath:`${routeBase}/original/${id}.${ext}`,
+   designedPath:`${routeBase}/designed/${id}.jpg`,
+   originalBlob:selectedFile,designedBlob,originalType:selectedFile.type||'image/jpeg'
+ };
  try{
-  if(navigator.onLine){btn.textContent='Foto wird hochgeladen …';try{await uploadItem(item);showMessage('✓ Original und deine Event-Version erfolgreich hochgeladen. Danke!','ok')}catch(e){await queuePut(item);showMessage('✓ Foto sicher gespeichert. Upload läuft automatisch weiter, sobald die Verbindung stabil ist.','warn');registerBackgroundSync()}}
-  else{btn.textContent='Foto wird offline gespeichert …';await queuePut(item);showMessage('✓ Foto sicher auf diesem Handy gespeichert. Sobald Internet wieder da ist, wird es automatisch hochgeladen.','warn');registerBackgroundSync()}
+  if(navigator.onLine){btn.textContent=tr('uploading');try{await uploadItem(item);showMessage(tr('success'),'ok')}catch(e){await queuePut(item);showMessage(tr('queued'),'warn');registerBackgroundSync()}}
+  else{btn.textContent=tr('offlineSaving');await queuePut(item);showMessage(tr('queuedOffline'),'warn');registerBackgroundSync()}
   selectedFile=null;designedBlob=null;document.getElementById('photo').value='';document.getElementById('consent').checked=false;await updateQueueCount();
- }catch(e){console.error(e);showMessage('Das Foto konnte nicht sicher gespeichert werden: '+(e?.message||'Fehler'),'err')}
- finally{btn.disabled=false;btn.textContent='Original + Design senden'}
+ }catch(e){console.error(e);showMessage(tr('saveError')+': '+(e?.message||'Error'),'err')}
+ finally{btn.disabled=false;btn.textContent=tr('send')}
 }
 async function registerBackgroundSync(){try{const reg=await navigator.serviceWorker.ready;if('sync'in reg)await reg.sync.register('fts-upload-queue')}catch(e){console.warn('Background Sync nicht verfügbar',e)}}
 window.addEventListener('online',()=>{updateNet();processQueue()});window.addEventListener('offline',updateNet);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)processQueue()});

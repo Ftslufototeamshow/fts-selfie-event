@@ -22,6 +22,8 @@ h1{font-size:clamp(2rem,6vw,3.7rem);margin:8px 0 10px}
 .meta{color:#95a8a4;font-size:.84rem}
 .expires{color:var(--accent);font-size:.78rem;font-weight:800}
 .eventActions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.dayFolder{margin-top:14px;padding:13px;border-radius:16px;background:#081d1f;border:1px solid rgba(255,255,255,.07)}
+.dayHead{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:11px}.dayTitle{font-weight:900;color:var(--accent);font-size:1.02rem}
 .photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
 .card{background:#0b1e20;border:1px solid rgba(255,255,255,.07);border-radius:17px;padding:10px}
 .pair{display:grid;grid-template-columns:1fr 1fr;gap:7px}
@@ -82,8 +84,8 @@ async function boot(){
   }
 
   const [{data:events,error:e1},{data:photos,error:e2}] = await Promise.all([
-    client.rpc('fts_get_customer_events',{p_customer_token:customerToken}),
-    client.rpc('fts_get_customer_photos',{p_customer_token:customerToken})
+    client.rpc('fts_get_customer_events_v6',{p_customer_token:customerToken}),
+    client.rpc('fts_get_customer_photos_v6',{p_customer_token:customerToken})
   ]);
 
   if(e1||e2){
@@ -97,8 +99,11 @@ async function boot(){
 
   const map=new Map();
   for(const p of photos||[]){
-    if(!map.has(p.event_token))map.set(p.event_token,[]);
-    map.get(p.event_token).push(p);
+    if(!map.has(p.event_token))map.set(p.event_token,new Map());
+    const day=p.event_day || p.event_date;
+    const dayMap=map.get(p.event_token);
+    if(!dayMap.has(day))dayMap.set(day,[]);
+    dayMap.get(day).push(p);
   }
 
   allDownloadItems=[];
@@ -110,50 +115,80 @@ async function boot(){
     const section=document.createElement('section');
     section.className='event';
 
+    const days=eventDaysOf(ev);
+
     section.innerHTML=`
       <div class="eventHead">
         <div>
           <div class="eventTitle">${esc(ev.title)}${ev.subtitle?' · '+esc(ev.subtitle):''}</div>
-          <div class="meta">${esc(ev.location||'')} · ${fmt(ev.event_date)}</div>
+          <div class="meta">${esc(ev.location||'')} · ${days.map(d=>fmt(d)).join(' · ')}</div>
         </div>
         <div class="expires">sichtbar bis ${fmtDT(ev.expires_at)}</div>
       </div>
       <div class="eventActions">
-        <button class="downloadBtn eventZip" disabled>Event-Designs als ZIP herunterladen</button>
+        <button class="downloadBtn eventZip" disabled>Alle Event-Tage als ZIP herunterladen</button>
       </div>
-      <div class="photos"></div>
+      <div class="dayFolders"></div>
     `;
     root.appendChild(section);
 
-    const grid=section.querySelector('.photos');
+    const folders=section.querySelector('.dayFolders');
     const eventZipBtn=section.querySelector('.eventZip');
-    let count=0;
+    const dayMap=map.get(ev.event_token)||new Map();
 
-    for(const p of map.get(ev.event_token)||[]){
-      const items=addCard(
-        grid,
-        liveBase+enc(p.original_path),
-        p.designed_path?liveBase+enc(p.designed_path):null,
-        ev,
-        p.original_path,
-        p.designed_path
-      );
-      // Nur Event-Designs dürfen in ZIP-Downloads.
-      eventItems.push(...items.filter(x=>x.kind==='design'));
-      count++;
+    for(const day of days){
+      const dayItems=[];
+      const dayFolder=document.createElement('section');
+      dayFolder.className='dayFolder';
+      dayFolder.innerHTML=`
+        <div class="dayHead">
+          <div class="dayTitle">${weekday(day)} · ${fmt(day)}</div>
+          <button class="downloadBtn dayZip" disabled>Diesen Tag als ZIP herunterladen</button>
+        </div>
+        <div class="photos"></div>
+      `;
+      folders.appendChild(dayFolder);
+
+      const grid=dayFolder.querySelector('.photos');
+      const dayZipBtn=dayFolder.querySelector('.dayZip');
+      let count=0;
+
+      for(const p of dayMap.get(day)||[]){
+        const items=addCard(
+          grid,
+          liveBase+enc(p.original_path),
+          p.designed_path?liveBase+enc(p.designed_path):null,
+          ev,
+          p.original_path,
+          p.designed_path,
+          day
+        );
+        dayItems.push(...items.filter(x=>x.kind==='design'));
+        count++;
+      }
+
+      if(ev.legacy_prefix && day===ev.event_date){
+        count += await addLegacy(ev,grid,dayItems);
+      }
+
+      if(!count){
+        grid.innerHTML='<div class="empty">Noch keine Fotos an diesem Event-Tag.</div>';
+      }else{
+        dayZipBtn.disabled=dayItems.length===0;
+        dayZipBtn.onclick=()=>downloadZip(
+          dayItems,
+          `FTS-${slug(ev.title)}-${day}.zip`,
+          dayZipBtn
+        );
+        eventItems.push(...dayItems);
+      }
     }
 
-    if(ev.legacy_prefix){
-      count += await addLegacy(ev,grid,eventItems);
-    }
-
-    if(!count){
-      grid.innerHTML='<div class="empty">Noch keine Fotos in diesem Event.</div>';
-    }else{
+    if(eventItems.length){
       eventZipBtn.disabled=false;
       eventZipBtn.onclick=()=>downloadZip(
         eventItems,
-        `FTS-${slug(ev.title)}-${slug(ev.subtitle||'event')}.zip`,
+        `FTS-${slug(ev.title)}-alle-tage.zip`,
         eventZipBtn
       );
       allDownloadItems.push(...eventItems);
@@ -163,6 +198,15 @@ async function boot(){
   document.getElementById('downloadAll').disabled=allDownloadItems.length===0;
 }
 
+function eventDaysOf(ev){
+  let d=ev.event_days;
+  if(!Array.isArray(d)){try{d=JSON.parse(d||'[]')}catch{d=[]}}
+  if(!d.length)d=[ev.event_date];
+  return [...new Set(d.filter(Boolean))].sort();
+}
+function weekday(d){
+  return new Date(d+'T12:00:00').toLocaleDateString('de-DE',{weekday:'long'});
+}
 async function addLegacy(ev,grid,eventItems){
   let count=0;
   try{
@@ -218,9 +262,9 @@ async function signed(b,p){
   return data.signedUrl;
 }
 
-function addCard(grid,originalUrl,designUrl,ev,originalPath,designPath){
+function addCard(grid,originalUrl,designUrl,ev,originalPath,designPath,eventDay){
   const baseName = originalPath ? fileStem(originalPath) : `foto-${Date.now()}`;
-  const folder = `${slug(ev.title)}-${slug(ev.subtitle||'event')}`;
+  const folder = `${slug(ev.title)}-${slug(ev.subtitle||'event')}/${eventDay||ev.event_date}`;
 
   const designName = designUrl
     ? `${folder}/Event-Design/${baseName}-design${fileExt(designPath)||'.jpg'}`
