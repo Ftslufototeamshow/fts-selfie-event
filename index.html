@@ -62,6 +62,13 @@ async function uploadItem(item){await uploadObject(item.originalPath,item.origin
 async function processQueue(){if(!navigator.onLine)return updateNet();const items=await queueAll();for(const item of items){try{await uploadItem(item);await queueDelete(item.id)}catch(e){console.warn('Queue upload',e);break}}updateNet();updateQueueCount()}
 function updateNet(){const el=document.getElementById('net');if(!el)return;el.className='net '+(navigator.onLine?'online':'offline');el.textContent=navigator.onLine?'● Internet vorhanden':'● Offline – Fotos werden auf diesem Handy zwischengespeichert'}
 function assetUrl(path){if(!path)return'';return `${cfg.supabaseUrl}/storage/v1/object/public/${encodeURIComponent(cfg.liveBucket)}/${encodePath(path)}`}
+function logoItemsFor(target){
+  let items=[];
+  if(Array.isArray(ev?.logo_items))items=ev.logo_items;
+  else{try{items=JSON.parse(ev?.logo_items||'[]')}catch{}}
+  if(!items.length&&ev?.logo_path)items=[{path:ev.logo_path,name:'Logo',position:'top-right',size:'medium',show_poster:true,show_photo:true}];
+  return items.filter(x=>x?.path && (target==='photo'?x.show_photo!==false:x.show_poster!==false));
+}
 function asArray(v,fallback){if(Array.isArray(v)&&v.length)return v;try{const p=JSON.parse(v);if(Array.isArray(p)&&p.length)return p}catch{}return fallback}
 async function boot(){
  let data=null;
@@ -76,7 +83,7 @@ function render(){
  selectedLayout=layouts[0]||'solo';selectedFilter=filters[0]||'natural';
  document.getElementById('card').innerHTML=`
    <div class="brand">FTS.LU · SELFIE EVENT</div>
-   ${ev.logo_path?`<img class="logoEvent show" src="${assetUrl(ev.logo_path)}" crossorigin="anonymous" alt="Event-Logo">`:''}
+   ${logoItemsFor('photo')[0]?.path?`<img class="logoEvent show" src="${assetUrl(logoItemsFor('photo')[0].path)}" crossorigin="anonymous" alt="Event-Logo">`:''}
    <h1>${esc(ev.title)}</h1><div class="sub">${esc(ev.subtitle||'')}</div>
    <div class="meta">${esc(ev.location||'')} ${ev.event_date?'· '+new Date(ev.event_date+'T12:00:00').toLocaleDateString('de-DE'):''}</div>
    <div class="themeChip">${esc(eventMotif())} ${esc(themeLabel())}</div>
@@ -141,6 +148,54 @@ function drawThemeDecor(ctx,w,h){
  ctx.save();ctx.globalAlpha=.92;ctx.textAlign='right';ctx.textBaseline='top';ctx.font=`700 ${size}px system-ui`;ctx.fillText(motif,w-Math.max(22,w*.03),Math.max(18,w*.025));ctx.restore();
 }
 function fitText(ctx,text,maxWidth,startSize,minSize,weight=900){let size=startSize;for(;size>minSize;size-=2){ctx.font=`${weight} ${size}px system-ui`;if(ctx.measureText(text).width<=maxWidth)break}return size}
+function logoSizeSpec(item,w,h){
+  const size=item.size||'medium';
+  const map={small:[.12,.075],medium:[.18,.105],large:[.26,.145]};
+  const [mw,mh]=map[size]||map.medium;
+  return {maxW:w*mw,maxH:h*mh};
+}
+async function drawEventLogos(ctx,w,h,target='photo'){
+  const items=logoItemsFor(target);
+  if(!items.length)return;
+
+  const loaded=[];
+  for(const item of items){
+    const img=await loadRemoteImage(assetUrl(item.path));
+    if(img)loaded.push({item,img});
+  }
+
+  const groups={};
+  loaded.forEach(x=>(groups[x.item.position||'top-right']??=[]).push(x));
+
+  const pad=Math.max(22,w*.035),gap=Math.max(10,w*.012);
+  for(const [position,arr] of Object.entries(groups)){
+    const dims=arr.map(({item,img})=>{
+      const spec=logoSizeSpec(item,w,h);
+      const s=Math.min(spec.maxW/img.naturalWidth,spec.maxH/img.naturalHeight,1);
+      return {item,img,w:img.naturalWidth*s,h:img.naturalHeight*s};
+    });
+
+    const totalW=dims.reduce((s,d)=>s+d.w,0)+gap*Math.max(0,dims.length-1);
+    const rowH=Math.max(...dims.map(d=>d.h),0);
+
+    let x=pad,y=pad;
+    if(position.includes('center'))x=(w-totalW)/2;
+    else if(position.includes('right'))x=w-pad-totalW;
+
+    if(position.startsWith('middle'))y=(h-rowH)/2;
+    else if(position.startsWith('bottom'))y=h-pad-rowH;
+
+    for(const d of dims){
+      const yy=y+(rowH-d.h)/2;
+      ctx.save();
+      ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=Math.max(6,w*.008);ctx.shadowOffsetY=Math.max(3,w*.004);
+      ctx.drawImage(d.img,x,yy,d.w,d.h);
+      ctx.restore();
+      x+=d.w+gap;
+    }
+  }
+}
+
 async function makeDesign(file){
  const img=await loadImageFile(file),canvas=document.getElementById('designCanvas'),ctx=canvas.getContext('2d'),spec=layoutCanvas(img,selectedLayout);
  canvas.width=spec.w;canvas.height=spec.h;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle=ev.bg1||'#071315';ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -152,19 +207,11 @@ async function makeDesign(file){
  const pad=Math.max(24,canvas.width*.045),badgeH=Math.max(42,canvas.width*.05),badgeW=Math.max(220,canvas.width*.31);
  ctx.fillStyle='rgba(5,18,19,.84)';roundRect(ctx,pad,pad,badgeW,badgeH,badgeH/2);ctx.fill();ctx.fillStyle=ev.accent;ctx.font=`800 ${Math.max(17,canvas.width*.019)}px system-ui`;ctx.textBaseline='middle';ctx.fillText('FTS.LU · SELFIE EVENT',pad+badgeH*.34,pad+badgeH/2);
 
- if(ev.logo_path){
-   const logo=await loadRemoteImage(assetUrl(ev.logo_path));
-   if(logo){
-     const maxLW=canvas.width*.23,maxLH=canvas.height*.10,scale=Math.min(maxLW/logo.naturalWidth,maxLH/logo.naturalHeight,1);
-     const lw=logo.naturalWidth*scale,lh=logo.naturalHeight*scale;
-     ctx.save();ctx.globalAlpha=.98;ctx.drawImage(logo,canvas.width-pad-lw,pad,lw,lh);ctx.restore();
-   }
- }
-
  const maxW=canvas.width-pad*2,y=canvas.height-pad*2.35,title=String(ev.title||'');ctx.textBaseline='alphabetic';ctx.fillStyle='#fff';
  const titleSize=fitText(ctx,title,maxW,Math.max(38,canvas.width*.06),Math.max(25,canvas.width*.037),900);ctx.font=`900 ${titleSize}px system-ui`;ctx.fillText(title,pad,y-Math.max(48,canvas.width*.058));
  ctx.fillStyle=ev.accent;const sub=String(ev.subtitle||'');const subSize=fitText(ctx,sub,maxW,Math.max(25,canvas.width*.035),Math.max(18,canvas.width*.024),800);ctx.font=`800 ${subSize}px system-ui`;ctx.fillText(sub,pad,y);
  ctx.fillStyle='rgba(255,255,255,.88)';const over=String(ev.overlay_text||ev.title||'');const overSize=fitText(ctx,over,maxW,Math.max(18,canvas.width*.024),Math.max(14,canvas.width*.018),600);ctx.font=`600 ${overSize}px system-ui`;ctx.fillText(over,pad,y+Math.max(30,canvas.width*.035));
+ await drawEventLogos(ctx,canvas.width,canvas.height,'photo');
  designedBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',.91));
 }
 async function submitPhoto(){

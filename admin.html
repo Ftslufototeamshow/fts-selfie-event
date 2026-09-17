@@ -12,6 +12,20 @@
 .layout{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(340px,.92fr);gap:16px;align-items:start}.stack{display:grid;gap:14px}.card{background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:17px;box-shadow:0 20px 60px #0003}.card h2{margin:0 0 13px;font-size:1.1rem}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.full{grid-column:1/-1}label{display:block;color:#9eb0ad;font-size:.78rem;margin-bottom:5px}input,select{width:100%;padding:12px;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:#0a2426;color:#fff;font:inherit}input[type=color]{padding:3px;height:46px}.hint{font-size:.76rem;color:#809793;line-height:1.45;margin-top:5px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}button,a.btn{border:0;border-radius:12px;padding:12px 14px;background:var(--accent);color:#102020;font-weight:900;cursor:pointer;text-decoration:none;font:inherit}.secondary{background:#14383a!important;color:#f3f1e9!important;border:1px solid rgba(255,255,255,.08)!important}.result{margin-top:13px;padding:13px;border-radius:13px;background:#0a2426;word-break:break-word}.result a{color:#f0cf83}.resultBtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.resultBtns a{background:var(--accent);color:#102020;text-decoration:none;font-weight:900;padding:9px 11px;border-radius:10px}.small{font-size:.8rem;color:#91a5a1}.advanced summary{cursor:pointer;color:#a7b8b5;font-weight:800}.advanced .inside{margin-top:12px}.hidden{display:none!important}
 .themeGroups{display:grid;gap:9px}.themeGroup{border:1px solid rgba(255,255,255,.08);border-radius:14px;background:#081d1f}.themeGroup summary{padding:12px 13px;cursor:pointer;font-weight:900;color:#e7efed}.themeCards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 10px 10px}.themeCard{background:#0b292b!important;color:#e8efed!important;border:1px solid rgba(255,255,255,.08)!important;padding:10px!important;min-height:58px;text-align:left}.themeCard.active{outline:2px solid var(--accent);background:#123b3e!important}.themeCard small{display:block;color:#8fa6a2;margin-top:3px;font-weight:600}
 .moduleGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.uploadBox{border:1px dashed rgba(255,255,255,.18);border-radius:14px;padding:12px;background:#081d1f}.uploadBox input[type=file]{padding:8px}.assetPreview{margin-top:8px;display:none;align-items:center;gap:9px}.assetPreview img{width:70px;height:70px;object-fit:cover;border-radius:10px;background:#fff}.assetPreview.show{display:flex}
+.logoManager{display:grid;gap:10px;margin-top:10px}
+.logoItem{display:grid;grid-template-columns:70px 1fr;gap:10px;padding:10px;border:1px solid rgba(255,255,255,.09);border-radius:14px;background:#081d1f}
+.logoItem img{width:70px;height:70px;object-fit:contain;border-radius:10px;background:#fff}
+.logoItemHead{display:flex;justify-content:space-between;gap:8px;align-items:center}.logoItemHead b{font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.logoItem .controlsGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:7px}
+.logoItem .targetRow{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}.logoItem .targetRow label{display:flex;align-items:center;gap:6px;color:#cbd5d3;margin:0}.logoItem .targetRow input{width:auto}
+.logoItem button.removeLogo{padding:7px 9px;background:#3a1b1b!important;color:#ffb0b0!important}
+.previewLogoLayer{position:absolute!important;z-index:6!important;inset:0;pointer-events:none}
+.previewLogoSlot{position:absolute;display:flex;gap:6px;align-items:center;max-width:70%;flex-wrap:wrap}
+.previewLogoSlot img{object-fit:contain;filter:drop-shadow(0 5px 10px #0009);background:transparent}
+.previewLogoSlot img.small{max-width:62px;max-height:42px}.previewLogoSlot img.medium{max-width:90px;max-height:58px}.previewLogoSlot img.large{max-width:125px;max-height:80px}
+.pos-top-left{left:4%;top:4%;justify-content:flex-start}.pos-top-center{left:50%;top:4%;transform:translateX(-50%);justify-content:center}.pos-top-right{right:4%;top:4%;justify-content:flex-end}
+.pos-middle-left{left:4%;top:50%;transform:translateY(-50%);justify-content:flex-start}.pos-middle-center{left:50%;top:50%;transform:translate(-50%,-50%);justify-content:center}.pos-middle-right{right:4%;top:50%;transform:translateY(-50%);justify-content:flex-end}
+.pos-bottom-left{left:4%;bottom:4%;justify-content:flex-start}.pos-bottom-center{left:50%;bottom:4%;transform:translateX(-50%);justify-content:center}.pos-bottom-right{right:4%;bottom:4%;justify-content:flex-end}
 .checkGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.checkCard{display:flex;gap:9px;align-items:center;padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:#0a2426}.checkCard input{width:auto;transform:scale(1.15)}.checkCard b{font-size:.84rem}.checkCard span{display:block;color:#839a96;font-size:.7rem;margin-top:2px}
 .previewSticky{position:sticky;top:14px}.previewTitle{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:11px}.previewTabs{display:flex;gap:6px}.previewTabs button{padding:8px 10px;font-size:.76rem}.previewTabs button.off{background:#14383a;color:#d7e0de}.previewStage{min-height:610px;display:grid;place-items:center;border-radius:18px;background:#041011;padding:13px;overflow:hidden}
 .poster{position:relative;width:min(100%,440px);aspect-ratio:4/5;border-radius:28px;background:linear-gradient(145deg,var(--bg1),var(--bg2));display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8%;overflow:hidden;box-shadow:0 26px 65px #0009}.poster>*{position:relative;z-index:3}.flyerBg{position:absolute!important;z-index:0!important;inset:0;width:100%;height:100%;object-fit:cover;display:none}.flyerBg.show{display:block}.shade{position:absolute!important;z-index:1!important;inset:0;background:linear-gradient(rgba(0,0,0,.32),rgba(0,0,0,.22) 34%,rgba(0,0,0,.52))}.posterLogo{position:absolute!important;z-index:4!important;top:5%;right:5%;max-width:24%;max-height:11%;object-fit:contain;display:none;filter:drop-shadow(0 6px 10px #0008)}.posterLogo.show{display:block}.posterBrand{font-size:.62rem;letter-spacing:.2em;color:var(--accent);font-weight:900}.poster h3{font-size:clamp(2rem,5vw,3.5rem);line-height:.94;text-align:center;margin:12px 0 4px}.posterSub{color:var(--accent);font-weight:900;text-align:center}.fakeQr{width:54%;aspect-ratio:1;background:#fff;border-radius:20px;padding:6%;margin:7% 0 4%;display:grid;grid-template-columns:repeat(7,1fr);gap:2px}.fakeQr i{background:#0a0a0a}.fakeQr i:nth-child(3n),.fakeQr i:nth-child(5n){background:#fff}.posterCta{font-weight:900}.posterFoot{font-size:.72rem;color:#d0dad8;margin-top:4%}.deco{position:absolute!important;z-index:2!important;font-size:clamp(3rem,8vw,5.4rem);filter:drop-shadow(0 10px 15px #0004);opacity:.9}.deco.a{left:-4%;top:4%;transform:rotate(-15deg)}.deco.b{right:-4%;bottom:4%;transform:rotate(14deg)}
@@ -104,20 +118,23 @@
       </section>
 
       <section class="card">
-        <h2>5. Eigenes Logo / Flyer</h2>
-        <div class="moduleGrid">
-          <div class="uploadBox">
-            <label>Logo hinzufügen (optional)</label>
-            <input id="logoFile" type="file" accept="image/png,image/jpeg,image/webp">
-            <div class="hint">Das Logo erscheint im QR-Poster und auf dem Event-Foto.</div>
-            <div class="assetPreview" id="logoAssetPreview"><img id="logoThumb"><span id="logoName"></span></div>
-          </div>
-          <div class="uploadBox">
-            <label>Eigener Flyer als QR-Hintergrund (optional)</label>
-            <input id="flyerFile" type="file" accept="image/png,image/jpeg,image/webp">
-            <div class="hint">Der QR-Code bleibt vorne in einer hellen Fläche und dadurch gut scannbar.</div>
-            <div class="assetPreview" id="flyerAssetPreview"><img id="flyerThumb"><span id="flyerName"></span></div>
-          </div>
+        <h2>5. Logos / Sponsoren & Flyer</h2>
+
+        <div class="uploadBox">
+          <label>Logo oder Sponsorenlogo hinzufügen</label>
+          <input id="logoFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple>
+          <div class="hint">Du kannst mehrere Logos auswählen. Jedes Logo kann getrennt auf QR-Poster, Foto-Design oder beidem erscheinen.</div>
+        </div>
+
+        <div class="logoManager" id="logoManager"></div>
+        <div class="hint" id="noLogosHint">Noch kein Logo hinzugefügt.</div>
+
+        <div class="uploadBox" style="margin-top:12px">
+          <label>Eigener Flyer als QR-Hintergrund (optional)</label>
+          <input id="flyerFile" type="file" accept="image/png,image/jpeg,image/webp">
+          <div class="hint">Nur für das QR-Poster. Der QR-Code bleibt vorne in einer hellen Fläche.</div>
+          <div class="assetPreview" id="flyerAssetPreview"><img id="flyerThumb"><span id="flyerName"></span></div>
+          <div class="actions"><button type="button" class="secondary hidden" id="removeFlyer">Flyer entfernen</button></div>
         </div>
       </section>
 
@@ -155,14 +172,14 @@
         <div class="poster" id="posterPreview">
           <img class="flyerBg" id="previewFlyer">
           <div class="shade"></div>
-          <img class="posterLogo" id="previewPosterLogo">
+          <div class="previewLogoLayer" id="previewPosterLogos"></div>
           <div class="deco a" id="decoA">🎃</div><div class="deco b" id="decoB">🎃</div>
           <div class="posterBrand">FTS.LU · SELFIE EVENT</div><h3 id="pvTitle">Kürbisfestival</h3><div class="posterSub" id="pvSubtitle">Herbstfestival 2026</div>
           <div class="fakeQr" id="fakeQr"></div><div class="posterCta">Scannen & Selfie hochladen</div><div class="posterFoot">FTS.lu · Eventfotografie</div>
         </div>
         <div class="photoMock hidden" id="photoPreview">
           <div class="photoPlaceholder"><div><div class="camera">📸</div><b>Selfie- / Gruppenfoto</b><span>Hier liegt später das echte Foto der Gäste – keine festen Ausschnitte oder „Löcher“.</span></div></div>
-          <img class="photoLogo" id="previewPhotoLogo">
+          <div class="previewLogoLayer" id="previewPhotoLogos"></div>
           <div class="photoDeco" id="photoDeco">🎃</div>
           <div class="photoCopy"><span class="tag">FTS.LU · SELFIE EVENT</span><h3 id="phTitle">Kürbisfestival</h3><div class="sub" id="phSubtitle">Herbstfestival 2026</div><div class="overlay" id="phOverlay">Kürbisfestival 2026</div></div>
         </div>
@@ -176,7 +193,7 @@
 <script>
 const cfg=window.FTS_CONFIG,LS='fts_selfie_customers_v1';
 const $=s=>document.querySelector(s);
-let logoFile=null,flyerFile=null,logoUrl='',flyerUrl='';
+let logoItems=[],flyerFile=null,flyerUrl='';
 
 const presets={
  standard:{accent:'#d9b56d',bg1:'#071315',bg2:'#10383a',motif:'✦'},
@@ -225,22 +242,104 @@ function showPreview(which){
   $('#posterPreview').classList.toggle('hidden',!poster);$('#photoPreview').classList.toggle('hidden',poster);
   $('#showPoster').classList.toggle('off',!poster);$('#showPhoto').classList.toggle('off',poster);
 }
-function setAssetPreview(kind,file){
-  const isLogo=kind==='logo',inputId=isLogo?'logoAssetPreview':'flyerAssetPreview',thumb=isLogo?'logoThumb':'flyerThumb',name=isLogo?'logoName':'flyerName';
+const POSITIONS=[
+  ['top-left','oben links'],['top-center','oben mittig'],['top-right','oben rechts'],
+  ['middle-left','mitte links'],['middle-center','mitte mittig'],['middle-right','mitte rechts'],
+  ['bottom-left','unten links'],['bottom-center','unten mittig'],['bottom-right','unten rechts']
+];
+function positionOptions(selected){
+  return POSITIONS.map(([v,l])=>`<option value="${v}" ${v===selected?'selected':''}>${l}</option>`).join('');
+}
+function renderLogoManager(){
+  const box=$('#logoManager'),hint=$('#noLogosHint');
+  hint.classList.toggle('hidden',logoItems.length>0);
+  box.innerHTML=logoItems.map((item,i)=>`
+    <div class="logoItem" data-logo-id="${item.id}">
+      <img src="${item.url}" alt="">
+      <div>
+        <div class="logoItemHead"><b title="${escAttr(item.name)}">${esc(item.name)}</b><div style="display:flex;gap:6px"><button type="button" class="secondary" data-replace-logo="${item.id}" style="padding:7px 9px">Ersetzen</button><button type="button" class="removeLogo" data-remove-logo="${item.id}">Entfernen</button></div></div>
+        <div class="controlsGrid">
+          <div><label>Position</label><select data-logo-position="${item.id}">${positionOptions(item.position)}</select></div>
+          <div><label>Größe</label><select data-logo-size="${item.id}">
+            <option value="small" ${item.size==='small'?'selected':''}>klein</option>
+            <option value="medium" ${item.size==='medium'?'selected':''}>mittel</option>
+            <option value="large" ${item.size==='large'?'selected':''}>groß</option>
+          </select></div>
+        </div>
+        <div class="targetRow">
+          <label><input type="checkbox" data-logo-poster="${item.id}" ${item.showPoster?'checked':''}> auf QR-Poster</label>
+          <label><input type="checkbox" data-logo-photo="${item.id}" ${item.showPhoto?'checked':''}> auf Foto</label>
+        </div>
+      </div>
+    </div>`).join('');
+
+  box.querySelectorAll('[data-remove-logo]').forEach(b=>b.onclick=()=>removeLogo(b.dataset.removeLogo));
+  box.querySelectorAll('[data-replace-logo]').forEach(b=>b.onclick=()=>replaceLogo(b.dataset.replaceLogo));
+  box.querySelectorAll('[data-logo-position]').forEach(s=>s.onchange=()=>updateLogo(s.dataset.logoPosition,{position:s.value}));
+  box.querySelectorAll('[data-logo-size]').forEach(s=>s.onchange=()=>updateLogo(s.dataset.logoSize,{size:s.value}));
+  box.querySelectorAll('[data-logo-poster]').forEach(c=>c.onchange=()=>updateLogo(c.dataset.logoPoster,{showPoster:c.checked}));
+  box.querySelectorAll('[data-logo-photo]').forEach(c=>c.onchange=()=>updateLogo(c.dataset.logoPhoto,{showPhoto:c.checked}));
+  renderLogoPreview();
+}
+function addLogoFiles(files){
+  [...files].forEach((file,idx)=>{
+    const url=URL.createObjectURL(file);
+    logoItems.push({
+      id:crypto.randomUUID(),file,url,name:file.name,
+      position:idx===0&&logoItems.length===0?'top-right':'bottom-center',
+      size:'medium',showPoster:true,showPhoto:true
+    });
+  });
+  renderLogoManager();
+}
+function replaceLogo(id){
+  const item=logoItems.find(x=>x.id===id);
+  if(!item)return;
+  const input=document.createElement('input');
+  input.type='file';input.accept='image/png,image/jpeg,image/webp';
+  input.onchange=()=>{
+    const file=input.files?.[0];if(!file)return;
+    if(item.url)URL.revokeObjectURL(item.url);
+    item.file=file;item.name=file.name;item.url=URL.createObjectURL(file);
+    renderLogoManager();
+  };
+  input.click();
+}
+function removeLogo(id){
+  const item=logoItems.find(x=>x.id===id);
+  if(item?.url)URL.revokeObjectURL(item.url);
+  logoItems=logoItems.filter(x=>x.id!==id);
+  renderLogoManager();
+}
+function updateLogo(id,patch){
+  const item=logoItems.find(x=>x.id===id);
+  if(item)Object.assign(item,patch);
+  renderLogoPreview();
+}
+function renderLogoPreview(){
+  renderTargetLogos($('#previewPosterLogos'),'poster');
+  renderTargetLogos($('#previewPhotoLogos'),'photo');
+}
+function renderTargetLogos(layer,target){
+  if(!layer)return;
+  const filtered=logoItems.filter(x=>target==='poster'?x.showPoster:x.showPhoto);
+  const groups={};
+  filtered.forEach(x=>(groups[x.position]??=[]).push(x));
+  layer.innerHTML=Object.entries(groups).map(([pos,items])=>
+    `<div class="previewLogoSlot pos-${pos}">${items.map(x=>`<img class="${x.size}" src="${x.url}" alt="">`).join('')}</div>`
+  ).join('');
+}
+function setFlyerPreview(file){
   if(!file){
-    $('#'+inputId).classList.remove('show');
+    if(flyerUrl){URL.revokeObjectURL(flyerUrl);flyerUrl=''}
+    $('#previewFlyer').removeAttribute('src');$('#previewFlyer').classList.remove('show');
+    $('#flyerAssetPreview').classList.remove('show');$('#removeFlyer').classList.add('hidden');
     return;
   }
-  const url=URL.createObjectURL(file);
-  if(isLogo){
-    if(logoUrl)URL.revokeObjectURL(logoUrl);logoUrl=url;
-    $('#previewPosterLogo').src=url;$('#previewPosterLogo').classList.add('show');
-    $('#previewPhotoLogo').src=url;$('#previewPhotoLogo').classList.add('show');
-  }else{
-    if(flyerUrl)URL.revokeObjectURL(flyerUrl);flyerUrl=url;
-    $('#previewFlyer').src=url;$('#previewFlyer').classList.add('show');
-  }
-  $('#'+thumb).src=url;$('#'+name).textContent=file.name;$('#'+inputId).classList.add('show');
+  if(flyerUrl)URL.revokeObjectURL(flyerUrl);
+  flyerUrl=URL.createObjectURL(file);
+  $('#previewFlyer').src=flyerUrl;$('#previewFlyer').classList.add('show');
+  $('#flyerThumb').src=flyerUrl;$('#flyerName').textContent=file.name;$('#flyerAssetPreview').classList.add('show');$('#removeFlyer').classList.remove('hidden');
 }
 function encodePath(path){return path.split('/').map(encodeURIComponent).join('/')}
 async function uploadAsset(path,file){
@@ -263,8 +362,9 @@ $('#shortCode').addEventListener('input',()=>{$('#shortCode').dataset.manual='1'
 ['subtitle','overlay','motif','accent','bg1','bg2'].forEach(id=>$('#'+id).addEventListener('input',updatePreview));
 document.querySelectorAll('.themeCard').forEach(b=>b.onclick=()=>applyTheme(b.dataset.theme));
 $('#showPoster').onclick=()=>showPreview('poster');$('#showPhoto').onclick=()=>showPreview('photo');
-$('#logoFile').addEventListener('change',e=>{logoFile=e.target.files?.[0]||null;setAssetPreview('logo',logoFile)});
-$('#flyerFile').addEventListener('change',e=>{flyerFile=e.target.files?.[0]||null;setAssetPreview('flyer',flyerFile)});
+$('#logoFiles').addEventListener('change',e=>{addLogoFiles(e.target.files||[]);e.target.value=''});
+$('#flyerFile').addEventListener('change',e=>{flyerFile=e.target.files?.[0]||null;setFlyerPreview(flyerFile)});
+$('#removeFlyer').onclick=()=>{flyerFile=null;$('#flyerFile').value='';setFlyerPreview(null)};
 
 $('#createEvent').onclick=async()=>{
   const btn=$('#createEvent');btn.disabled=true;btn.textContent='Event wird erstellt …';
@@ -286,26 +386,39 @@ $('#createEvent').onclick=async()=>{
 
     const d=await rpc('fts_admin_create_event_v3',args),r=d[0];
     const eventToken=r.event_token;
-    let logoPath='',flyerPath='',assetWarning='';
+    let flyerPath='',assetWarning='';
+    const persistedLogos=[];
 
     try{
-      if(logoFile){
-        logoPath=`${eventToken}/assets/logo-${Date.now()}.${safeExt(logoFile)}`;
-        await uploadAsset(logoPath,logoFile);
+      for(let i=0;i<logoItems.length;i++){
+        const item=logoItems[i];
+        const path=`${eventToken}/assets/logo-${i+1}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.${safeExt(item.file)}`;
+        await uploadAsset(path,item.file);
+        persistedLogos.push({
+          path,
+          name:item.name,
+          position:item.position,
+          size:item.size,
+          show_poster:!!item.showPoster,
+          show_photo:!!item.showPhoto
+        });
       }
       if(flyerFile){
         flyerPath=`${eventToken}/assets/poster-bg-${Date.now()}.${safeExt(flyerFile)}`;
         await uploadAsset(flyerPath,flyerFile);
       }
-      if(logoPath||flyerPath){
-        await rpc('fts_admin_set_event_assets',{
-          p_admin_code:args.p_admin_code,p_event_token:eventToken,
-          p_logo_path:logoPath,p_poster_bg_path:flyerPath
+
+      if(persistedLogos.length||flyerPath){
+        await rpc('fts_admin_set_event_assets_v2',{
+          p_admin_code:args.p_admin_code,
+          p_event_token:eventToken,
+          p_logo_items:persistedLogos,
+          p_poster_bg_path:flyerPath
         });
       }
     }catch(assetErr){
       console.error(assetErr);
-      assetWarning='<br><b style="color:#f0b86a">Hinweis:</b> Event wurde erstellt, aber Logo/Flyer konnte nicht vollständig gespeichert werden.';
+      assetWarning='<br><b style="color:#f0b86a">Hinweis:</b> Event wurde erstellt, aber ein Logo/Flyer konnte nicht vollständig gespeichert werden.';
     }
 
     const alias=r.short_code||code;
@@ -319,7 +432,7 @@ $('#createEvent').onclick=async()=>{
 };
 
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
-renderCustomers();setToday();$('#fakeQr').innerHTML='<i></i>'.repeat(49);applyTheme('autumn');updatePreview();
+renderCustomers();setToday();$('#fakeQr').innerHTML='<i></i>'.repeat(49);applyTheme('autumn');updatePreview();renderLogoManager();
 </script>
 </body>
 </html>
