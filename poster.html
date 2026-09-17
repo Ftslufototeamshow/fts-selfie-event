@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#071315">
-<title>FTS QR Poster</title>
+<title>FTS QR Poster · V3 Print</title>
 <style>
 :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--accent:#d9b56d;--bg1:#071315;--bg2:#10383a}
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#071315;color:#fff}body{display:grid;place-items:center;padding:14px}.wrap{width:100%;display:grid;place-items:center}.loading{padding:60px 20px;text-align:center;color:#a8b6b4}
@@ -18,9 +18,18 @@
 .brand{font-size:clamp(.64rem,1.8vw,.9rem);letter-spacing:.2em;color:var(--accent);font-weight:900;text-shadow:0 2px 8px #000}.poster h1{font-size:clamp(2.4rem,8vw,5rem);line-height:.92;text-align:center;margin:14px 0 6px;text-shadow:0 4px 18px #000}.sub{font-size:clamp(1rem,3vw,1.55rem);color:var(--accent);font-weight:900;text-align:center;text-shadow:0 2px 10px #000}
 .qrbox{width:55%;aspect-ratio:1;background:#fff;border-radius:26px;padding:6%;margin:7% 0 4%;box-shadow:0 16px 38px #0007;display:grid;place-items:center}.qrbox #qr{width:100%;height:100%;display:grid;place-items:center}.qrbox>div,.qrbox img,.qrbox canvas{width:100%!important;height:100%!important}.cta{font-size:clamp(1rem,3vw,1.5rem);font-weight:900;text-align:center;text-shadow:0 2px 8px #000}.foot{font-size:.82rem;color:#e2e8e6;margin-top:3%;text-shadow:0 2px 8px #000}.code{position:absolute!important;bottom:2.5%;font-size:.62rem;letter-spacing:.14em;color:#d5dfdcaa}
 .controls{width:min(720px,calc(100vw - 28px));display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}.controls button{border:0;border-radius:12px;padding:12px 14px;font:inherit;font-weight:900;background:var(--accent);color:#102020;cursor:pointer}.controls .secondary{background:#14383a;color:#fff;border:1px solid rgba(255,255,255,.1)}
-.displayMode body,.displayMode{background:#000}.displayMode body{padding:0}.displayMode .controls{display:none!important}.displayMode .poster{height:100svh;width:auto;max-width:100vw;border-radius:0;box-shadow:none}
-:fullscreen .controls{display:none}:fullscreen body{padding:0}:fullscreen .poster{height:100svh;width:auto;max-width:100vw;border-radius:0;box-shadow:none}
-@media print{@page{size:A4 portrait;margin:0}body{padding:0;background:#fff}.controls{display:none!important}.poster{width:210mm;height:297mm;aspect-ratio:auto;border-radius:0;box-shadow:none}.qrbox{width:58%}}
+.displayMode,.displayMode body{background:#000}.displayMode body{padding:0;overflow:hidden;display:grid;place-items:center}.displayMode .wrap{width:100vw;min-height:100svh}.displayMode .controls{display:none!important}.displayMode .poster{width:min(100vw,80svh);height:auto;aspect-ratio:4/5;max-width:none;max-height:100svh;border-radius:0;box-shadow:none}
+:fullscreen .controls{display:none!important}:fullscreen body{padding:0;overflow:hidden;display:grid;place-items:center}:fullscreen .wrap{width:100vw;min-height:100svh}:fullscreen .poster{width:min(100vw,80svh);height:auto;aspect-ratio:4/5;max-width:none;max-height:100svh;border-radius:0;box-shadow:none}
+.exporting .poster{border-radius:0!important;box-shadow:none!important}
+.printSheet{display:none}
+@media print{
+  @page{size:A4 portrait;margin:0}
+  html,body{width:210mm;height:297mm;margin:0!important;padding:0!important;background:#fff!important}
+  body>*{display:none!important}
+  .printSheet{display:flex!important;position:fixed!important;inset:0!important;width:210mm!important;height:297mm!important;align-items:center!important;justify-content:center!important;background:#fff!important;z-index:999999!important}
+  .printSheet img{display:block!important;width:210mm!important;height:auto!important;max-height:297mm!important;object-fit:contain!important}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+}
 @media(max-width:540px){body{padding:8px}.poster{border-radius:24px}.controls{width:calc(100% - 16px)}.controls button{font-size:.78rem;padding:10px 11px}}
 
 .decoStack{position:absolute!important;z-index:5!important;display:flex;gap:8px;align-items:center;max-width:72%;flex-wrap:wrap}.decoStack span{filter:drop-shadow(0 7px 12px #0008);line-height:1}.decoStack .small{font-size:2.8rem}.decoStack .medium{font-size:4rem}.decoStack .large{font-size:5.7rem}
@@ -114,17 +123,68 @@ async function boot(){
     <div class="qrbox"><div id="qr"></div></div><div class="cta">Scannen & Selfie hochladen</div>${ev.poster_bilingual!==false?`<div class="ctaEn">Scan & upload your selfie</div>`:''}<div class="foot">FTS.lu · Eventfotografie</div>
     ${ev.short_code?`<div class="code">${esc(ev.short_code)}</div>`:''}
   </section>
-  <div class="controls" id="controls"><button id="full">Vollbild / Anzeige</button><button id="png">PNG herunterladen</button><button id="print" class="secondary">Drucken</button></div>`;
+  <div class="controls" id="controls"><button id="full">Vollbild / Anzeige</button><button id="png">PNG herunterladen</button><button id="print" class="secondary">A4 drucken</button></div>`;
   const guest=cfg.baseUrl+'?e='+encodeURIComponent(ev.short_code||ref);
   renderQr(document.getElementById('qr'),guest,ev);
-  document.getElementById('full').onclick=enterDisplay;document.getElementById('png').onclick=downloadPng;document.getElementById('print').onclick=()=>window.print();
+  document.getElementById('full').onclick=enterDisplay;document.getElementById('png').onclick=downloadPng;document.getElementById('print').onclick=printPoster;
   if(display){document.documentElement.classList.add('displayMode');setTimeout(()=>document.documentElement.requestFullscreen?.().catch(()=>{}),250)}
  }catch(e){console.error(e);document.getElementById('root').innerHTML='<div class="loading"><h2>Event konnte nicht geladen werden.</h2><p>Bitte prüfe den Event-Link.</p></div>'}
 }
 async function enterDisplay(){document.documentElement.classList.add('displayMode');try{if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen()}catch{}}
 document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&params.get('display')!=='1')document.documentElement.classList.remove('displayMode')});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!document.fullscreenElement)document.documentElement.classList.remove('displayMode')});
-async function downloadPng(){const poster=document.getElementById('poster');if(!poster)return;const controls=document.getElementById('controls');if(controls)controls.style.display='none';try{await document.fonts?.ready;const c=await html2canvas(poster,{scale:2.5,backgroundColor:null,useCORS:true,allowTaint:false});const a=document.createElement('a');a.download='FTS-'+String(ref).replace(/[^a-z0-9_-]/gi,'-')+'-QR-Poster.png';a.href=c.toDataURL('image/png');document.body.appendChild(a);a.click();a.remove()}finally{if(controls&&!document.documentElement.classList.contains('displayMode'))controls.style.display='flex'}}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+async function waitForPosterAssets(poster){
+  const imgs=[...poster.querySelectorAll('img')];
+  await Promise.all(imgs.map(img=>{
+    if(img.complete&&img.naturalWidth)return Promise.resolve();
+    return new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});setTimeout(resolve,2500)});
+  }));
+  await document.fonts?.ready;
+  await sleep(180);
+}
+async function renderPosterCanvas(){
+  const poster=document.getElementById('poster');if(!poster)throw new Error('Poster fehlt');
+  await waitForPosterAssets(poster);
+  document.documentElement.classList.add('exporting');
+  try{
+    const rect=poster.getBoundingClientRect();
+    const scale=Math.max(1,1600/Math.max(rect.width,1));
+    const raw=await html2canvas(poster,{scale,backgroundColor:null,useCORS:true,allowTaint:false,logging:false});
+    const out=document.createElement('canvas');out.width=1600;out.height=2000;
+    const ctx=out.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(raw,0,0,1600,2000);
+    return out;
+  }finally{document.documentElement.classList.remove('exporting')}
+}
+async function downloadPng(){
+  const btn=document.getElementById('png');const old=btn?.textContent;
+  if(btn){btn.disabled=true;btn.textContent='PNG wird erstellt …'}
+  try{
+    const c=await renderPosterCanvas();
+    const name='FTS-'+String(ref).replace(/[^a-z0-9_-]/gi,'-')+'-QR-Poster-1600x2000.png';
+    const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));
+    if(blob){const a=document.createElement('a');const url=URL.createObjectURL(blob);a.download=name;a.href=url;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500)}
+    else{const a=document.createElement('a');a.download=name;a.href=c.toDataURL('image/png');document.body.appendChild(a);a.click();a.remove()}
+  }catch(e){console.error(e);alert('Das Poster konnte nicht als PNG erstellt werden. Bitte Seite neu laden und erneut versuchen.')}
+  finally{if(btn){btn.disabled=false;btn.textContent=old||'PNG herunterladen'}}
+}
+async function printPoster(){
+  const btn=document.getElementById('print');const old=btn?.textContent;
+  if(btn){btn.disabled=true;btn.textContent='Druck wird vorbereitet …'}
+  let sheet;
+  try{
+    const c=await renderPosterCanvas();
+    sheet=document.createElement('div');sheet.className='printSheet';
+    const img=document.createElement('img');img.alt='FTS QR Poster';img.src=c.toDataURL('image/png');sheet.appendChild(img);document.body.appendChild(sheet);
+    if(img.decode)await img.decode().catch(()=>{});
+    await sleep(120);
+    window.print();
+  }catch(e){console.error(e);alert('Die Druckansicht konnte nicht vorbereitet werden. Bitte Seite neu laden und erneut versuchen.')}
+  finally{
+    setTimeout(()=>sheet?.remove(),1200);
+    if(btn){btn.disabled=false;btn.textContent=old||'A4 drucken'}
+  }
+}
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});boot();
 </script>
 </body>
