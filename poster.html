@@ -16,7 +16,7 @@
 .logoStack.pos-middle-left{left:5%;top:50%;transform:translateY(-50%)}.logoStack.pos-middle-center{left:50%;top:50%;transform:translate(-50%,-50%);justify-content:center}.logoStack.pos-middle-right{right:5%;top:50%;transform:translateY(-50%);justify-content:flex-end}
 .logoStack.pos-bottom-left{left:5%;bottom:5%}.logoStack.pos-bottom-center{left:50%;bottom:5%;transform:translateX(-50%);justify-content:center}.logoStack.pos-bottom-right{right:5%;bottom:5%;justify-content:flex-end}.deco{position:absolute!important;z-index:3!important;font-size:clamp(3rem,10vw,6.4rem);filter:drop-shadow(0 10px 15px #0006);opacity:.9}.deco.a{left:-3%;top:4%;transform:rotate(-12deg)}.deco.b{right:-3%;bottom:4%;transform:rotate(12deg)}
 .brand{font-size:clamp(.64rem,1.8vw,.9rem);letter-spacing:.2em;color:var(--accent);font-weight:900;text-shadow:0 2px 8px #000}.poster h1{font-size:clamp(2.4rem,8vw,5rem);line-height:.92;text-align:center;margin:14px 0 6px;text-shadow:0 4px 18px #000}.sub{font-size:clamp(1rem,3vw,1.55rem);color:var(--accent);font-weight:900;text-align:center;text-shadow:0 2px 10px #000}
-.qrbox{width:55%;aspect-ratio:1;background:#fff;border-radius:26px;padding:6%;margin:7% 0 4%;box-shadow:0 16px 38px #0007}.qrbox>div,.qrbox img,.qrbox canvas{width:100%!important;height:100%!important}.cta{font-size:clamp(1rem,3vw,1.5rem);font-weight:900;text-align:center;text-shadow:0 2px 8px #000}.foot{font-size:.82rem;color:#e2e8e6;margin-top:3%;text-shadow:0 2px 8px #000}.code{position:absolute!important;bottom:2.5%;font-size:.62rem;letter-spacing:.14em;color:#d5dfdcaa}
+.qrbox{width:55%;aspect-ratio:1;background:#fff;border-radius:26px;padding:6%;margin:7% 0 4%;box-shadow:0 16px 38px #0007;display:grid;place-items:center}.qrbox #qr{width:100%;height:100%;display:grid;place-items:center}.qrbox>div,.qrbox img,.qrbox canvas{width:100%!important;height:100%!important}.cta{font-size:clamp(1rem,3vw,1.5rem);font-weight:900;text-align:center;text-shadow:0 2px 8px #000}.foot{font-size:.82rem;color:#e2e8e6;margin-top:3%;text-shadow:0 2px 8px #000}.code{position:absolute!important;bottom:2.5%;font-size:.62rem;letter-spacing:.14em;color:#d5dfdcaa}
 .controls{width:min(720px,calc(100vw - 28px));display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}.controls button{border:0;border-radius:12px;padding:12px 14px;font:inherit;font-weight:900;background:var(--accent);color:#102020;cursor:pointer}.controls .secondary{background:#14383a;color:#fff;border:1px solid rgba(255,255,255,.1)}
 .displayMode body,.displayMode{background:#000}.displayMode body{padding:0}.displayMode .controls{display:none!important}.displayMode .poster{height:100svh;width:auto;max-width:100vw;border-radius:0;box-shadow:none}
 :fullscreen .controls{display:none}:fullscreen body{padding:0}:fullscreen .poster{height:100svh;width:auto;max-width:100vw;border-radius:0;box-shadow:none}
@@ -34,6 +34,7 @@
 <body>
 <div class="wrap" id="root"><div class="loading">QR-Event wird geladen …</div></div>
 <script src="./config.js"></script>
+<script src="https://unpkg.com/qr-code-styling@1.9.2/lib/qr-code-styling.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
@@ -70,6 +71,34 @@ function decoStacksHtml(ev){
     `<div class="decoStack pos-${pos}">${items.map(x=>`<span class="${esc(x.size||'medium')}">${esc(x.symbol)}</span>`).join('')}</div>`
   ).join('');
 }
+function qrDotType(v){return v==='dots'?'dots':v==='rounded'?'rounded':'square'}
+function qrCornerType(v){return v==='dot'?'dot':v==='rounded'?'extra-rounded':'square'}
+function renderQr(el,data,ev){
+  el.innerHTML='';
+  const image=ev.qr_logo_path?assetUrl(ev.qr_logo_path):undefined;
+  const scale=Math.max(.10,Math.min(Number(ev.qr_logo_scale||.18),.24));
+  if(window.QRCodeStyling){
+    const qr=new QRCodeStyling({
+      width:900,height:900,type:'canvas',data,
+      image,
+      margin:10,
+      qrOptions:{errorCorrectionLevel:'H'},
+      dotsOptions:{color:'#000000',type:qrDotType(ev.qr_dot_style)},
+      cornersSquareOptions:{color:'#000000',type:qrCornerType(ev.qr_corner_style)},
+      cornersDotOptions:{color:'#000000',type:ev.qr_corner_style==='dot'?'dot':'square'},
+      backgroundOptions:{color:'#ffffff'},
+      imageOptions:{crossOrigin:'anonymous',margin:8,imageSize:scale,hideBackgroundDots:true}
+    });
+    qr.append(el);
+    return;
+  }
+  if(window.QRCode){
+    new QRCode(el,{text:data,width:700,height:700,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});
+    if(image){
+      const img=document.createElement('img');img.src=image;img.crossOrigin='anonymous';img.style.cssText=`position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:${scale*100}%;height:${scale*100}%;object-fit:contain;background:#fff;padding:2%;border-radius:10px;z-index:9`;el.style.position='relative';el.appendChild(img);
+    }
+  }
+}
 async function boot(){
  try{
   const data=await rpc('fts_get_event',{p_event_token:ref});if(!data?.length)throw new Error('Event nicht aktiv');
@@ -87,7 +116,7 @@ async function boot(){
   </section>
   <div class="controls" id="controls"><button id="full">Vollbild / Anzeige</button><button id="png">PNG herunterladen</button><button id="print" class="secondary">Drucken</button></div>`;
   const guest=cfg.baseUrl+'?e='+encodeURIComponent(ev.short_code||ref);
-  new QRCode(document.getElementById('qr'),{text:guest,width:700,height:700,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});
+  renderQr(document.getElementById('qr'),guest,ev);
   document.getElementById('full').onclick=enterDisplay;document.getElementById('png').onclick=downloadPng;document.getElementById('print').onclick=()=>window.print();
   if(display){document.documentElement.classList.add('displayMode');setTimeout(()=>document.documentElement.requestFullscreen?.().catch(()=>{}),250)}
  }catch(e){console.error(e);document.getElementById('root').innerHTML='<div class="loading"><h2>Event konnte nicht geladen werden.</h2><p>Bitte prüfe den Event-Link.</p></div>'}

@@ -48,20 +48,30 @@
 .previewEmpty{width:min(100%,440px);aspect-ratio:4/5;border-radius:26px;border:2px dashed rgba(255,255,255,.15);display:grid;place-items:center;text-align:center;color:#819793;padding:28px;background:#061012}.previewEmpty b{display:block;color:#c5d0ce;margin-bottom:7px}
 .langSetting{display:flex;gap:10px;align-items:flex-start;padding:11px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:#0a2426}.langSetting input{width:auto;margin-top:4px}
 
+
+.authOk{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;border-radius:14px;background:rgba(65,170,113,.11);border:1px solid rgba(65,170,113,.28)}
+.customerLibrary{display:grid;gap:8px;margin-top:10px}.libraryItem{display:grid;grid-template-columns:58px minmax(0,1fr) auto;gap:9px;align-items:center;padding:9px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:#0a2426}.libraryItem img{width:58px;height:58px;object-fit:contain;background:#fff;border-radius:9px}.libraryActions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.libraryActions button{padding:8px 9px;font-size:.72rem}.danger{background:#3a1b1b!important;color:#ffb0b0!important}.qrGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.rangeLine{display:grid;grid-template-columns:1fr 62px;gap:8px;align-items:center}.modeBadge{display:inline-flex;padding:6px 9px;border-radius:999px;background:#14383a;color:#c9d6d3;font-size:.75rem;font-weight:900;margin-left:8px}.modeBadge.edit{background:#4c3512;color:#ffd78a}.modeBadge.dup{background:#173855;color:#a9d9ff}
+.fakeQr{position:relative}.qrPreviewLogo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);object-fit:contain;background:#fff;border:4px solid #fff;border-radius:8px;z-index:6;display:none}.qrPreviewLogo.show{display:block}.photoBrandPreview{font-size:.65rem;color:#d0dad8;margin-top:6px;letter-spacing:.08em}.photoCopy .tag{display:none!important}
+
 </style>
 </head>
 <body>
 <main class="wrap">
-  <div class="brand">FTS.LU · SELFIE EVENT STUDIO</div>
-  <h1>Event gestalten & anlegen</h1>
+  <div class="brand">FTS.LU · SELFIE EVENT STUDIO · V2</div>
+  <h1>Event gestalten & anlegen <span id="modeBadge" class="modeBadge hidden"></span></h1>
   <div class="intro">Jedes neue Event startet leer. Kunde wählen, Event-Tage hinzufügen, Design festlegen und danach die drei Links automatisch erzeugen.</div>
 
   <div class="layout">
     <div class="stack">
-      <section class="card">
+      <section class="card" id="authCard">
         <h2>1. FTS-Zugang</h2>
-        <label>Admin-Code</label><input id="adminCode" type="password" autocomplete="off" placeholder="FTS Admin-Code">
-        <div class="hint">Der Code bleibt nur bei FTS und wird nicht in den Event-Link eingebaut.</div>
+        <div id="trustedDevice" class="authOk hidden"><div><b>✓ Dieses Gerät ist freigeschaltet</b><div class="hint">Der Admin-Code wird auf diesem Gerät nicht mehr angezeigt oder abgefragt.</div></div><button type="button" class="secondary" id="forgetDevice">Gerät abmelden</button></div>
+        <div id="deviceLogin">
+          <label>Admin-Code – nur beim ersten Mal auf diesem Gerät</label>
+          <input id="adminCode" type="password" autocomplete="off" placeholder="FTS Admin-Code">
+          <div class="actions"><button type="button" id="trustDevice">Dieses Gerät freischalten</button></div>
+          <div class="hint">Danach wird auf diesem Laptop/Handy ein eigener Gerätezugang gespeichert. Auf einem neuen Gerät wird der Code wieder einmal benötigt.</div>
+        </div>
       </section>
 
       <section class="card">
@@ -177,6 +187,11 @@
         <div class="logoManager" id="logoManager"></div>
         <div class="hint" id="noLogosHint">Noch kein Logo hinzugefügt.</div>
 
+        <details class="advanced" style="margin-top:12px" open>
+          <summary>Gespeicherte Logos dieses Kunden</summary>
+          <div class="inside"><div id="customerLibrary" class="customerLibrary"></div><div id="libraryHint" class="hint">Kunde auswählen – dann erscheinen hier seine Logos für spätere Events wieder.</div></div>
+        </details>
+
         <div class="uploadBox" style="margin-top:12px">
           <label>Eigener Flyer als QR-Hintergrund (optional)</label>
           <input id="flyerFile" type="file" accept="image/png,image/jpeg,image/webp">
@@ -187,7 +202,19 @@
       </section>
 
       <section class="card">
-        <h2>6. Module für die Gäste</h2>
+        <h2>6. QR-Code gestalten</h2>
+        <div class="qrGrid">
+          <div><label>QR-Punkte</label><select id="qrDotStyle"><option value="square">Viereckig</option><option value="rounded">Abgerundet</option><option value="dots">Rund</option></select></div>
+          <div><label>QR-Ecken</label><select id="qrCornerStyle"><option value="square">Viereckig</option><option value="rounded">Abgerundet</option><option value="dot">Rund</option></select></div>
+          <div class="full"><label>Logo in der Mitte des QR-Codes</label><select id="qrLogoSelect"><option value="">— kein QR-Logo —</option></select><div class="hint">Das ist unabhängig davon, ob das Logo zusätzlich auf Poster oder Foto angezeigt wird.</div></div>
+          <div class="full"><label>Größe des QR-Logos</label><div class="rangeLine"><input id="qrLogoScale" type="range" min="10" max="24" value="18"><output id="qrLogoScaleOut">18%</output></div></div>
+          <div class="full"><label>FTS-Branding auf dem fertigen Foto</label><select id="photoBranding"><option value="bottom">Dezent unten</option><option value="none">Kein FTS-Branding</option></select></div>
+        </div>
+        <div class="hint" style="margin-top:10px">Der QR-Hintergrund bleibt weiß und die Fehlerkorrektur hoch, damit der Code trotz Logo zuverlässig scannt.</div>
+      </section>
+
+      <section class="card">
+        <h2>7. Module für die Gäste</h2>
         <div class="hint" style="margin-bottom:10px">Diese Auswahl sehen die Gäste vor dem Selfie. Sie können danach noch wechseln und sofort die neue Vorschau sehen.</div>
         <b class="small" style="color:#e7efed">Foto-Layouts</b>
         <div class="checkGrid" style="margin-top:8px" id="layoutChecks">
@@ -214,7 +241,7 @@
       </section>
 
       <section class="card">
-        <h2>7. Event erzeugen</h2>
+        <h2>8. Event speichern</h2>
         <button id="createEvent" style="width:100%">Event jetzt erstellen</button>
         <div id="eventResult" class="result hidden"></div>
       </section>
@@ -235,7 +262,7 @@
           <div class="posterBrand">FTS.LU · SELFIE EVENT</div>
           <h3 id="pvTitle"></h3>
           <div class="posterSub" id="pvSubtitle"></div>
-          <div class="fakeQr" id="fakeQr"></div>
+          <div class="fakeQr" id="fakeQr"><img id="previewQrLogo" class="qrPreviewLogo" alt=""></div>
           <div class="posterCta">Scannen & Selfie hochladen</div>
           <div class="posterFoot" id="previewEnglishCta">Scan & upload your selfie<br>FTS.lu · Eventfotografie</div>
         </div>
@@ -248,7 +275,7 @@
             <span class="tag">FTS.LU · SELFIE EVENT</span>
             <h3 id="phTitle"></h3>
             <div class="sub" id="phSubtitle"></div>
-            <div class="overlay" id="phOverlay"></div>
+            <div class="overlay" id="phOverlay"></div><div class="photoBrandPreview" id="photoBrandPreview">FTS.lu · Selfie Event</div>
           </div>
         </div>
       </div>
@@ -260,8 +287,11 @@
 <script src="./config.js"></script>
 <script>
 const cfg=window.FTS_CONFIG,LS='fts_selfie_customers_v1';
+const DEVICE_KEY='fts_device_token_v1',LEGACY_CODE_KEY='fts_cockpit_admin_code';
+const params=new URLSearchParams(location.search),EDIT_TOKEN=params.get('edit'),DUP_TOKEN=params.get('duplicate');
 const $=s=>document.querySelector(s);
-let logoItems=[],decoItems=[],flyerFile=null,flyerUrl='',eventDayCounter=0;
+let logoItems=[],decoItems=[],flyerFile=null,flyerUrl='',eventDayCounter=0,serverCustomers=[];
+let customerAssets=[],existingFlyerPath='',originalFlyerPath='',editStorageSlug='',modeLoaded=false;
 
 const presets={
  standard:{accent:'#d9b56d',bg1:'#071315',bg2:'#10383a'},
@@ -299,10 +329,30 @@ const decoLibrary={
 
 function H(){return {'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':'application/json'}}
 async function rpc(n,b){const r=await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/${n}`,{method:'POST',headers:H(),body:JSON.stringify(b)});if(!r.ok)throw new Error(await r.text());const t=await r.text();return t?JSON.parse(t):null}
+function authCredential(){return localStorage.getItem(DEVICE_KEY)||$('#adminCode')?.value.trim()||''}
+function deviceLabel(){return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)?'FTS Handy/Tablet':'FTS Computer'}
+function setTrustedUi(ok){$('#trustedDevice').classList.toggle('hidden',!ok);$('#deviceLogin').classList.toggle('hidden',ok)}
+async function registerDevice(code){const token=await rpc('fts_admin_register_device',{p_admin_code:code,p_label:deviceLabel(),p_user_agent:navigator.userAgent});if(!token)throw new Error('Gerätezugang konnte nicht erstellt werden');localStorage.setItem(DEVICE_KEY,token);localStorage.removeItem(LEGACY_CODE_KEY);$('#adminCode').value='';setTrustedUi(true);await loadServerCustomers();await loadCustomerAssets().catch(()=>{});await initMode();return token}
+async function initAuth(){const dev=localStorage.getItem(DEVICE_KEY);if(dev){try{await rpc('fts_admin_dashboard_events',{p_admin_code:dev});setTrustedUi(true);await loadServerCustomers();await initMode();return}catch(e){localStorage.removeItem(DEVICE_KEY)}}const old=localStorage.getItem(LEGACY_CODE_KEY);if(old){try{await registerDevice(old);return}catch(e){localStorage.removeItem(LEGACY_CODE_KEY)}}setTrustedUi(false)}
+async function adminFiles(action,extra={}){const r=await fetch(`${cfg.supabaseUrl}/functions/v1/fts-admin-files`,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({credential:authCredential(),action,...extra})});const j=await r.json().catch(()=>({}));if(!r.ok||j.ok===false)throw new Error(j.error||`HTTP ${r.status}`);return j}
+function assetUrl(path){if(!path)return'';return `${cfg.supabaseUrl}/storage/v1/object/public/${encodeURIComponent(cfg.liveBucket)}/${encodePath(path)}`}
+
 function saved(){try{return JSON.parse(localStorage.getItem(LS)||'[]')}catch{return[]}}
 function setSaved(x){localStorage.setItem(LS,JSON.stringify(x));renderCustomers()}
-function renderCustomers(){const s=$('#savedCustomers'),a=saved();s.innerHTML='<option value="">— auswählen —</option>'+a.map(x=>`<option value="${escAttr(x.token)}">${esc(x.name)}</option>`).join('')}
-function saveCustomer(n,t){let a=saved().filter(x=>x.token!==t);a.unshift({name:n,token:t});setSaved(a);$('#customerToken').value=t;$('#savedCustomers').value=t}
+function renderCustomers(){
+  const s=$('#savedCustomers'),map=new Map();
+  for(const x of serverCustomers||[])map.set(x.customer_token,{token:x.customer_token,name:x.customer_name});
+  for(const x of saved())if(!map.has(x.token))map.set(x.token,x);
+  const a=[...map.values()].sort((x,y)=>String(x.name||'').localeCompare(String(y.name||''),'de'));
+  const current=s.value||$('#customerToken')?.value||'';
+  s.innerHTML='<option value="">— auswählen —</option>'+a.map(x=>`<option value="${escAttr(x.token)}">${esc(x.name)}</option>`).join('');
+  if(current&&a.some(x=>x.token===current))s.value=current;
+}
+async function loadServerCustomers(){
+  if(!authCredential())return;
+  try{serverCustomers=await rpc('fts_admin_list_customers',{p_admin_code:authCredential()})||[];renderCustomers()}catch(e){console.warn('Kundenliste',e)}
+}
+function saveCustomer(n,t){let a=saved().filter(x=>x.token!==t);a.unshift({name:n,token:t});setSaved(a);$('#customerToken').value=t;$('#savedCustomers').value=t;loadCustomerAssets().catch(console.warn)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function escAttr(s){return esc(s)}
 function slug(v){return String(v||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/Ä/g,'AE').replace(/Ö/g,'OE').replace(/Ü/g,'UE').replace(/ß/g,'SS').replace(/[^A-Z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,30)}
@@ -329,6 +379,21 @@ function getEventDays(){
     .filter((v,i,a)=>a.indexOf(v)===i)
     .sort();
 }
+async function loadCustomerAssets(){const token=$('#customerToken').value.trim();const box=$('#customerLibrary');if(!token){customerAssets=[];box.innerHTML='';$('#libraryHint').textContent='Kunde auswählen – dann erscheinen hier seine Logos für spätere Events wieder.';return}try{customerAssets=await rpc('fts_admin_get_customer_assets',{p_admin_code:authCredential(),p_customer_token:token})||[];renderCustomerAssets()}catch(e){console.warn(e);customerAssets=[];renderCustomerAssets()}}
+function renderCustomerAssets(){const box=$('#customerLibrary');$('#libraryHint').textContent=customerAssets.length?'Gespeicherte Logos können mit einem Klick wieder verwendet werden.':'Für diesen Kunden ist noch kein Logo gespeichert.';box.innerHTML=customerAssets.map(a=>`<div class="libraryItem"><img src="${assetUrl(a.asset_path)}" alt=""><div><b>${esc(a.asset_name)}</b><div class="hint">für zukünftige Events gespeichert</div></div><div class="libraryActions"><button type="button" data-use-asset="${a.asset_id}">Verwenden</button><button type="button" class="danger" data-delete-asset="${a.asset_id}">Löschen</button></div></div>`).join('');box.querySelectorAll('[data-use-asset]').forEach(b=>b.onclick=()=>useCustomerAsset(b.dataset.useAsset));box.querySelectorAll('[data-delete-asset]').forEach(b=>b.onclick=()=>deleteCustomerAsset(b.dataset.deleteAsset))}
+async function useCustomerAsset(id){
+  const a=customerAssets.find(x=>x.asset_id===id);if(!a)return;
+  try{
+    if(!String(a.asset_path||'').startsWith('library/')){
+      const moved=await adminFiles('promote-customer-asset',{customer_token:$('#customerToken').value.trim(),name:a.asset_name,source_path:a.asset_path});
+      a.asset_path=moved.path||a.asset_path;a.asset_id=moved.asset_id||a.asset_id;
+      await loadCustomerAssets();
+    }
+    if(logoItems.some(x=>x.path===a.asset_path))return;
+    logoItems.push({id:crypto.randomUUID(),path:a.asset_path,sourceAssetId:a.asset_id,url:assetUrl(a.asset_path),name:a.asset_name,position:logoItems.length?'bottom-center':'top-right',size:'medium',showPoster:true,showPhoto:true});renderLogoManager();
+  }catch(e){alert('Logo konnte nicht geladen werden: '+e.message)}
+}
+async function deleteCustomerAsset(id){const a=customerAssets.find(x=>x.asset_id===id);if(!a)return;if(!confirm(`Logo „${a.asset_name}“ wirklich aus der Kundenbibliothek UND aus Supabase löschen?`))return;try{await adminFiles('delete-customer-asset',{asset_id:id});logoItems=logoItems.filter(x=>x.path!==a.asset_path);await loadCustomerAssets();renderLogoManager()}catch(e){alert('Logo konnte nicht gelöscht werden: '+e.message)}}
 function selectedValues(container){return [...document.querySelectorAll(`#${container} input[type=checkbox]:checked`)].map(x=>x.value)}
 function applyTheme(name){
   const p=presets[name]||presets.standard;
@@ -372,6 +437,8 @@ function updatePreview(){
   }
 
   renderDecoPreview();
+  updateQrPreview();
+  $('#photoBrandPreview').classList.toggle('hidden',$('#photoBranding').value==='none');
 }
 function showPreview(which){
   const poster=which==='poster';
@@ -428,6 +495,7 @@ function renderLogoManager(){
   box.querySelectorAll('[data-logo-poster]').forEach(c=>c.onchange=()=>updateLogo(c.dataset.logoPoster,{showPoster:c.checked}));
   box.querySelectorAll('[data-logo-photo]').forEach(c=>c.onchange=()=>updateLogo(c.dataset.logoPhoto,{showPhoto:c.checked}));
   renderLogoPreview();
+  renderQrLogoOptions();
 }
 function addLogoFiles(files){
   [...files].forEach((file,idx)=>{
@@ -448,7 +516,7 @@ function replaceLogo(id){
   input.onchange=()=>{
     const file=input.files?.[0];if(!file)return;
     if(item.url)URL.revokeObjectURL(item.url);
-    item.file=file;item.name=file.name;item.url=URL.createObjectURL(file);
+    item.file=file;item.path='';item.sourceAssetId=null;item.name=file.name;item.url=URL.createObjectURL(file);
     renderLogoManager();
   };
   input.click();
@@ -477,6 +545,9 @@ function renderTargetLogos(layer,target){
     `<div class="previewLogoSlot pos-${pos}">${items.map(x=>`<img class="${x.size}" src="${x.url}" alt="">`).join('')}</div>`
   ).join('');
 }
+function renderQrLogoOptions(){const sel=$('#qrLogoSelect');if(!sel)return;const current=sel.dataset.selectedPath||sel.value||'';sel.innerHTML='<option value="">— kein QR-Logo —</option>'+logoItems.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');const byPath=logoItems.find(x=>x.path&&x.path===current);if(byPath)sel.value=byPath.id;else if(logoItems.some(x=>x.id===current))sel.value=current;sel.dataset.selectedPath='';updateQrPreview()}
+function selectedQrItem(){return logoItems.find(x=>x.id===$('#qrLogoSelect').value)||null}
+function updateQrPreview(){const qr=$('#fakeQr');if(!qr)return;const style=$('#qrDotStyle')?.value||'square';qr.querySelectorAll('i').forEach(i=>i.style.borderRadius=style==='dots'?'50%':style==='rounded'?'35%':'0');const img=$('#previewQrLogo');const item=selectedQrItem();if(item){img.src=item.url;img.style.width=($('#qrLogoScale').value||18)+'%';img.style.height=($('#qrLogoScale').value||18)+'%';img.classList.add('show')}else{img.classList.remove('show');img.removeAttribute('src')}$('#qrLogoScaleOut').textContent=($('#qrLogoScale').value||18)+'%'}
 function setFlyerPreview(file){
   if(!file){
     if(flyerUrl){URL.revokeObjectURL(flyerUrl);flyerUrl=''}
@@ -594,9 +665,11 @@ function safeExt(file){
   if(file?.type==='image/webp')return'webp';
   return'jpg';
 }
-$('#savedCustomers').onchange=e=>{if(e.target.value)$('#customerToken').value=e.target.value};
+$('#savedCustomers').onchange=e=>{if(e.target.value){$('#customerToken').value=e.target.value;loadCustomerAssets().catch(console.warn)}};
 $('#saveExisting').onclick=()=>{const t=$('#customerToken').value.trim();if(!t)return alert('Kunden-Token fehlt');saveCustomer(prompt('Name für diesen Kunden?')||'Kunde',t)};
-$('#createCustomer').onclick=async()=>{try{const c=$('#adminCode').value.trim(),n=$('#newCustomerName').value.trim();const d=await rpc('fts_admin_create_customer',{p_admin_code:c,p_name:n}),r=d[0];saveCustomer(r.customer_name,r.customer_token);const link=cfg.baseUrl+'customer.html?c='+encodeURIComponent(r.customer_token);const b=$('#customerResult');b.classList.remove('hidden');b.innerHTML=`<b>Kunde erstellt:</b> ${esc(r.customer_name)}<div class="resultBtns"><a href="${link}" target="_blank">Kundenportal öffnen</a></div>`}catch(e){alert('Kunde konnte nicht erstellt werden: '+e.message)}};
+$('#createCustomer').onclick=async()=>{try{const c=authCredential(),n=$('#newCustomerName').value.trim();const d=await rpc('fts_admin_create_customer',{p_admin_code:c,p_name:n}),r=d[0];saveCustomer(r.customer_name,r.customer_token);await loadServerCustomers();const link=cfg.baseUrl+'customer.html?c='+encodeURIComponent(r.customer_token);const b=$('#customerResult');b.classList.remove('hidden');b.innerHTML=`<b>Kunde erstellt:</b> ${esc(r.customer_name)}<div class="resultBtns"><a href="${link}" target="_blank">Kundenportal öffnen</a></div>`}catch(e){alert('Kunde konnte nicht erstellt werden: '+e.message)}};
+$('#trustDevice').onclick=async()=>{const code=$('#adminCode').value.trim();if(!code)return alert('Bitte Admin-Code eingeben.');try{$('#trustDevice').disabled=true;await registerDevice(code)}catch(e){alert('Gerät konnte nicht freigeschaltet werden: '+e.message)}finally{$('#trustDevice').disabled=false}};
+$('#forgetDevice').onclick=async()=>{const token=localStorage.getItem(DEVICE_KEY);try{if(token)await rpc('fts_admin_revoke_device',{p_device_token:token})}catch{}localStorage.removeItem(DEVICE_KEY);setTrustedUi(false);location.href='./admin.html'};
 $('#title').addEventListener('input',()=>{
   if(!$('#shortCode').dataset.manual){
     const s=slug($('#title').value);
@@ -610,107 +683,119 @@ document.querySelectorAll('.themeCard').forEach(b=>b.onclick=()=>applyTheme(b.da
 $('#addEventDay').onclick=()=>addEventDay('');
 $('#addDeco').onclick=addDecoration;
 $('#posterBilingual').addEventListener('change',updatePreview);
+['qrDotStyle','qrCornerStyle','qrLogoSelect','qrLogoScale','photoBranding'].forEach(id=>$('#'+id).addEventListener('input',updatePreview));
 $('#showPoster').onclick=()=>showPreview('poster');$('#showPhoto').onclick=()=>showPreview('photo');
 $('#logoFiles').addEventListener('change',e=>{addLogoFiles(e.target.files||[]);e.target.value=''});
 $('#flyerFile').addEventListener('change',e=>{flyerFile=e.target.files?.[0]||null;setFlyerPreview(flyerFile)});
-$('#removeFlyer').onclick=()=>{flyerFile=null;$('#flyerFile').value='';setFlyerPreview(null)};
+$('#removeFlyer').onclick=()=>{flyerFile=null;existingFlyerPath='';$('#flyerFile').value='';setFlyerPreview(null)};
+
+async function persistEventAssets(eventToken,storageSlug,customerToken){
+  const persisted=[];
+  const idToPath=new Map();
+  for(let i=0;i<logoItems.length;i++){
+    const item=logoItems[i];
+    let path=item.path||'';
+    if(item.file){
+      const tempPath=`${eventToken}/${storageSlug}/assets/logo-${i+1}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.${safeExt(item.file)}`;
+      await uploadAsset(tempPath,item.file);
+      try{
+        const promoted=await adminFiles('promote-customer-asset',{customer_token:customerToken,name:item.name,source_path:tempPath});
+        path=promoted.path||tempPath;
+        item.sourceAssetId=promoted.asset_id||null;
+      }catch(e){
+        console.warn('Permanente Logo-Bibliothek nicht erreichbar, nutze Event-Datei',e);
+        path=tempPath;
+        try{item.sourceAssetId=await rpc('fts_admin_register_customer_asset',{p_admin_code:authCredential(),p_customer_token:customerToken,p_name:item.name,p_path:path})}catch(_e){}
+      }
+      item.path=path;
+    }
+    if(path){idToPath.set(item.id,path);persisted.push({path,name:item.name,position:item.position,size:item.size,show_poster:!!item.showPoster,show_photo:!!item.showPhoto})}
+  }
+
+  let flyerPath=existingFlyerPath||'';
+  if(flyerFile){
+    flyerPath=`${eventToken}/${storageSlug}/assets/poster-bg-${Date.now()}.${safeExt(flyerFile)}`;
+    await uploadAsset(flyerPath,flyerFile);
+  }else if(DUP_TOKEN&&existingFlyerPath){
+    const ext=(existingFlyerPath.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,5)||'jpg';
+    const target=`${eventToken}/${storageSlug}/assets/poster-bg-${Date.now()}.${ext}`;
+    const copied=await adminFiles('copy-path',{source_path:existingFlyerPath,target_path:target});
+    flyerPath=copied.path||target;
+  }
+
+  const qrItem=selectedQrItem();
+  const qrLogoPath=qrItem?(idToPath.get(qrItem.id)||qrItem.path||''):'';
+  await rpc('fts_admin_set_event_assets_v9',{p_admin_code:authCredential(),p_event_token:eventToken,p_logo_items:persisted,p_poster_bg_path:flyerPath,p_qr_logo_path:qrLogoPath});
+  if(EDIT_TOKEN&&originalFlyerPath&&originalFlyerPath!==flyerPath){try{await adminFiles('delete-paths',{paths:[originalFlyerPath]})}catch(e){console.warn('Alter Flyer blieb gespeichert',e)}}
+  originalFlyerPath=flyerPath;existingFlyerPath=flyerPath;
+  return {persisted,flyerPath,qrLogoPath};
+}
+
+function eventArgs(includeShort=true){
+  const layouts=selectedValues('layoutChecks'),filters=selectedValues('filterChecks'),eventDays=getEventDays();
+  if(!authCredential())throw new Error('Dieses Gerät ist noch nicht freigeschaltet.');
+  if(!layouts.length)throw new Error('Bitte mindestens ein Foto-Layout aktivieren.');
+  if(!filters.length)throw new Error('Bitte mindestens einen Filter aktivieren.');
+  if(!eventDays.length)throw new Error('Bitte mindestens einen Event-Tag eintragen.');
+  if(!$('#title').value.trim())throw new Error('Bitte den Eventnamen eintragen.');
+  if(!$('#customerToken').value.trim())throw new Error('Bitte einen Kunden auswählen oder anlegen.');
+  const common={
+    p_admin_code:authCredential(),p_title:$('#title').value.trim(),p_subtitle:$('#subtitle').value.trim(),p_event_days:eventDays,
+    p_location:$('#location').value.trim(),p_overlay_text:$('#overlay').value.trim(),p_accent:$('#accent').value,p_bg1:$('#bg1').value,p_bg2:$('#bg2').value,
+    p_retention_days:Number($('#days').value||3),p_theme:$('#theme').value||'standard',p_available_layouts:layouts,p_available_filters:filters,
+    p_test_days_before:Number($('#testDays').value||0),p_poster_bilingual:$('#posterBilingual').checked,
+    p_decoration_items:decoItems.map(x=>({symbol:x.symbol,position:x.position,size:x.size,show_poster:!!x.showPoster,show_photo:!!x.showPhoto})),
+    p_qr_dot_style:$('#qrDotStyle').value,p_qr_corner_style:$('#qrCornerStyle').value,p_qr_logo_scale:Number($('#qrLogoScale').value||18)/100,p_photo_branding:$('#photoBranding').value
+  };
+  if(includeShort){const code=$('#shortCode').value=slug($('#shortCode').value);if(code.length<3)throw new Error('Bitte einen Kurzcode mit mindestens 3 Zeichen eingeben.');return {...common,p_customer_token:$('#customerToken').value.trim(),p_short_code:code}}
+  return {...common,p_event_token:EDIT_TOKEN};
+}
 
 $('#createEvent').onclick=async()=>{
-  const btn=$('#createEvent');btn.disabled=true;btn.textContent='Event wird erstellt …';
+  const btn=$('#createEvent');btn.disabled=true;btn.textContent=EDIT_TOKEN?'Änderungen werden gespeichert …':'Event wird erstellt …';
   try{
-    const code=$('#shortCode').value=slug($('#shortCode').value);
-    if(code.length<3)throw new Error('Bitte einen Kurzcode mit mindestens 3 Zeichen eingeben.');
-    const layouts=selectedValues('layoutChecks'),filters=selectedValues('filterChecks');
-    if(!layouts.length)throw new Error('Bitte mindestens ein Foto-Layout aktivieren.');
-    if(!filters.length)throw new Error('Bitte mindestens einen Filter aktivieren.');
-
-    const eventDays=getEventDays();
-    if(!eventDays.length)throw new Error('Bitte mindestens einen Event-Tag eintragen.');
-    if(!$('#title').value.trim())throw new Error('Bitte den Eventnamen eintragen.');
-    if(!$('#customerToken').value.trim())throw new Error('Bitte einen Kunden auswählen oder anlegen.');
-
-    const args={
-      p_admin_code:$('#adminCode').value.trim(),
-      p_customer_token:$('#customerToken').value.trim(),
-      p_title:$('#title').value.trim(),
-      p_subtitle:$('#subtitle').value.trim(),
-      p_event_days:eventDays,
-      p_location:$('#location').value.trim(),
-      p_overlay_text:$('#overlay').value.trim(),
-      p_accent:$('#accent').value,
-      p_bg1:$('#bg1').value,
-      p_bg2:$('#bg2').value,
-      p_retention_days:Number($('#days').value||3),
-      p_short_code:code,
-      p_theme:$('#theme').value||'standard',
-      p_available_layouts:layouts,
-      p_available_filters:filters,
-      p_test_days_before:Number($('#testDays').value||0),
-      p_poster_bilingual:$('#posterBilingual').checked,
-      p_decoration_items:decoItems.map(x=>({
-        symbol:x.symbol,
-        position:x.position,
-        size:x.size,
-        show_poster:!!x.showPoster,
-        show_photo:!!x.showPhoto
-      }))
-    };
-
-    const d=await rpc('fts_admin_create_event_v6',args),r=d[0];
-    const eventToken=r.event_token;
-    let flyerPath='',assetWarning='';
-    const persistedLogos=[];
-
-    try{
-      for(let i=0;i<logoItems.length;i++){
-        const item=logoItems[i];
-        const path=`${eventToken}/assets/logo-${i+1}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.${safeExt(item.file)}`;
-        await uploadAsset(path,item.file);
-        persistedLogos.push({
-          path,
-          name:item.name,
-          position:item.position,
-          size:item.size,
-          show_poster:!!item.showPoster,
-          show_photo:!!item.showPhoto
-        });
-      }
-      if(flyerFile){
-        flyerPath=`${eventToken}/assets/poster-bg-${Date.now()}.${safeExt(flyerFile)}`;
-        await uploadAsset(flyerPath,flyerFile);
-      }
-
-      if(persistedLogos.length||flyerPath){
-        await rpc('fts_admin_set_event_assets_v3',{
-          p_admin_code:args.p_admin_code,
-          p_event_token:eventToken,
-          p_logo_items:persistedLogos,
-          p_poster_bg_path:flyerPath
-        });
-      }
-    }catch(assetErr){
-      console.error(assetErr);
-      assetWarning='<br><b style="color:#f0b86a">Hinweis:</b> Event wurde erstellt, aber ein Logo/Flyer konnte nicht vollständig gespeichert werden.';
+    let eventToken,storageSlug,alias,expires,eventDays=getEventDays();
+    if(EDIT_TOKEN){
+      const args=eventArgs(false);const r=await rpc('fts_admin_update_event_v9',args);eventToken=EDIT_TOKEN;storageSlug=editStorageSlug;alias=$('#shortCode').value;expires=r?.[0]?.expires_at||null;
+      await persistEventAssets(eventToken,storageSlug,$('#customerToken').value.trim());
+    }else{
+      const args=eventArgs(true);const d=await rpc('fts_admin_create_event_v9',args),r=d[0];eventToken=r.event_token;storageSlug=r.storage_slug;alias=r.short_code;expires=r.expires_at;
+      await persistEventAssets(eventToken,storageSlug,args.p_customer_token);
     }
 
-    const alias=r.short_code||code;
-    const guest=cfg.baseUrl+'?e='+encodeURIComponent(alias);
-    const poster=cfg.baseUrl+'poster.html?e='+encodeURIComponent(alias);
-    const customer=cfg.baseUrl+'customer.html?c='+encodeURIComponent(args.p_customer_token);
-    const b=$('#eventResult');b.classList.remove('hidden');
-    b.innerHTML=`<b>Event erstellt.</b>${assetWarning}<br><span class="small">Kurzcode: ${esc(alias)} · Event-Tage: ${(r.event_days||eventDays).map(x=>new Date(x+'T12:00:00').toLocaleDateString('de-DE')).join(' · ')} · sichtbar bis ${new Date(r.expires_at).toLocaleString('de-DE')}</span><div class="resultBtns"><a href="${guest}" target="_blank">Gastseite öffnen</a><a href="${poster}" target="_blank">QR-Poster öffnen</a><a href="${customer}" target="_blank">Kundenportal öffnen</a></div><details class="advanced" style="margin-top:10px"><summary>Links anzeigen / kopieren</summary><div class="inside small"><b>Gast:</b><br>${esc(guest)}<br><br><b>Poster:</b><br>${esc(poster)}<br><br><b>Kunde:</b><br>${esc(customer)}</div></details>`;
-  }catch(e){alert('Event konnte nicht erstellt werden: '+e.message)}
-  finally{btn.disabled=false;btn.textContent='Event jetzt erstellen'}
+    const guest=cfg.baseUrl+'?e='+encodeURIComponent(alias);const poster=cfg.baseUrl+'poster.html?e='+encodeURIComponent(alias);const customer=cfg.baseUrl+'customer.html?c='+encodeURIComponent($('#customerToken').value.trim());
+    const b=$('#eventResult');b.classList.remove('hidden');b.innerHTML=`<b>${EDIT_TOKEN?'Event gespeichert.':'Event erstellt.'}</b><br><span class="small">Kurzcode: ${esc(alias)} · Event-Tage: ${eventDays.map(x=>new Date(x+'T12:00:00').toLocaleDateString('de-DE')).join(' · ')}${expires?' · sichtbar bis '+new Date(expires).toLocaleString('de-DE'):''}</span><div class="resultBtns"><a href="${guest}" target="_blank">Gastseite öffnen</a><a href="${poster}" target="_blank">QR-Poster öffnen</a><a href="${customer}" target="_blank">Kundenportal öffnen</a><a href="./dashboard.html">Zum Cockpit</a></div>`;
+    await loadCustomerAssets().catch(()=>{});
+  }catch(e){alert((EDIT_TOKEN?'Event konnte nicht gespeichert werden: ':'Event konnte nicht erstellt werden: ')+e.message)}
+  finally{btn.disabled=false;btn.textContent=EDIT_TOKEN?'Änderungen speichern':'Event jetzt erstellen'}
 };
+
+function clearDays(){document.querySelectorAll('.dayRow').forEach(x=>x.remove())}
+function setChecks(container,values){const set=new Set(Array.isArray(values)?values:[]);document.querySelectorAll(`#${container} input[type=checkbox]`).forEach(x=>x.checked=set.has(x.value))}
+function parseArr(v){if(Array.isArray(v))return v;try{return JSON.parse(v||'[]')}catch{return[]}}
+async function loadModeEvent(token,duplicate=false){
+  const e=await rpc('fts_admin_get_event_v9',{p_admin_code:authCredential(),p_event_token:token});if(!e)throw new Error('Event nicht gefunden.');
+  saveCustomer(e.customer_name,e.customer_token);$('#title').value=e.title||'';$('#subtitle').value=e.subtitle||'';$('#location').value=e.location||'';$('#overlay').value=e.overlay_text||'';
+  $('#shortCode').value=duplicate?slug(((e.short_code||slug(e.title))+'-2')).slice(0,30):(e.short_code||'');$('#shortCode').disabled=!duplicate;$('#shortCode').dataset.manual='1';$('#days').value=e.retention_days||3;$('#testDays').value=e.test_days_before??2;
+  clearDays();parseArr(e.event_days).forEach(d=>addEventDay(d));if(!document.querySelector('.dayRow'))addEventDay('');
+  if(e.theme)applyTheme(e.theme);$('#accent').value=e.accent||'#d9b56d';$('#bg1').value=e.bg1||'#071315';$('#bg2').value=e.bg2||'#10383a';
+  setChecks('layoutChecks',parseArr(e.available_layouts));setChecks('filterChecks',parseArr(e.available_filters));$('#posterBilingual').checked=e.poster_bilingual!==false;
+  decoItems=parseArr(e.decoration_items).map(x=>({id:crypto.randomUUID(),symbol:x.symbol,position:x.position||'bottom-right',size:x.size||'medium',showPoster:x.show_poster!==false,showPhoto:x.show_photo!==false}));renderDecoPicker();renderDecoManager();
+  logoItems=parseArr(e.logo_items).map(x=>({id:crypto.randomUUID(),path:x.path||'',url:assetUrl(x.path),name:x.name||'Logo',position:x.position||'top-right',size:x.size||'medium',showPoster:x.show_poster!==false,showPhoto:x.show_photo!==false}));
+  existingFlyerPath=e.poster_bg_path||'';originalFlyerPath=existingFlyerPath;if(existingFlyerPath){flyerUrl=assetUrl(existingFlyerPath);$('#previewFlyer').src=flyerUrl;$('#previewFlyer').classList.add('show');$('#flyerThumb').src=flyerUrl;$('#flyerName').textContent='Gespeicherter Flyer';$('#flyerAssetPreview').classList.add('show');$('#removeFlyer').classList.remove('hidden')}
+  editStorageSlug=e.storage_slug||'event';$('#qrDotStyle').value=e.qr_dot_style||'square';$('#qrCornerStyle').value=e.qr_corner_style||'square';$('#qrLogoScale').value=Math.round(Number(e.qr_logo_scale||.18)*100);$('#photoBranding').value=e.photo_branding||'bottom';
+  renderLogoManager();const qrMatch=logoItems.find(x=>x.path&&x.path===e.qr_logo_path);if(qrMatch)$('#qrLogoSelect').value=qrMatch.id;updatePreview();
+  if(!duplicate){$('#savedCustomers').disabled=true;$('#customerToken').disabled=true;}
+  if(duplicate){$('#modeBadge').textContent='Event duplizieren';$('#modeBadge').className='modeBadge dup';$('#createEvent').textContent='Kopie als neues Event erstellen';editStorageSlug='';}else{$('#modeBadge').textContent='Event bearbeiten';$('#modeBadge').className='modeBadge edit';$('#createEvent').textContent='Änderungen speichern'}
+}
+async function initMode(){if(modeLoaded||!authCredential())return;modeLoaded=true;try{if(EDIT_TOKEN)await loadModeEvent(EDIT_TOKEN,false);else if(DUP_TOKEN)await loadModeEvent(DUP_TOKEN,true)}catch(e){alert('Event konnte nicht geladen werden: '+e.message)}}
+
 
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 renderCustomers();
 addEventDay('');
-$('#fakeQr').innerHTML='<i></i>'.repeat(49);
-renderLogoManager();
-renderDecoPicker();
-renderDecoManager();
-updatePreview();
+$('#fakeQr').innerHTML='<i></i>'.repeat(49)+'<img id="previewQrLogo" class="qrPreviewLogo" alt="">';
+renderLogoManager();renderDecoPicker();renderDecoManager();updatePreview();initAuth();
 </script>
 </body>
 </html>

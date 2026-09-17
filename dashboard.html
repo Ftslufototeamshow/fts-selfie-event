@@ -1,467 +1,70 @@
 <!doctype html>
 <html lang="de">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#071315">
-<link rel="manifest" href="./dashboard.webmanifest">
-<link rel="apple-touch-icon" href="./icon-192.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#071315">
+<link rel="manifest" href="./dashboard.webmanifest"><link rel="apple-touch-icon" href="./icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>FTS Selfie Cockpit</title>
 <style>
-:root{
-  font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  background:#071315;color:#f5f1e8;--accent:#d9b56d
-}
-*{box-sizing:border-box}
-body{margin:0;min-height:100vh;background:
-  radial-gradient(circle at 85% 5%,rgba(25,112,116,.25),transparent 34%),
-  linear-gradient(145deg,#061012,#10383a)}
-.wrap{width:min(1220px,calc(100% - 24px));margin:auto;padding:24px 0 60px}
-.top{display:flex;gap:18px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap}
-.brand{font-size:.72rem;letter-spacing:.2em;color:var(--accent);font-weight:900}
-h1{font-size:clamp(2.1rem,6vw,4rem);margin:6px 0 0;line-height:1}
-.topActions{display:flex;gap:8px;flex-wrap:wrap}
-button,a.button{
-  border:0;border-radius:11px;padding:11px 14px;background:var(--accent);
-  color:#102020;font-weight:900;cursor:pointer;text-decoration:none;font:inherit
-}
-button.secondary,a.secondary{background:#15383a;color:#f4f1e9;border:1px solid rgba(255,255,255,.09)}
-button:disabled{opacity:.5;cursor:wait}
-.login{margin:24px 0;background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:18px}
-.loginGrid{display:grid;grid-template-columns:1fr auto auto;gap:9px}
-input{width:100%;padding:12px;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:#0a2426;color:white;font:inherit}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin:20px 0}
-.stat{background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:15px}
-.stat .n{font-size:2rem;font-weight:900;color:var(--accent)}
-.stat .l{color:#8fa29f;font-size:.8rem}
-.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0}
-select{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0a2426;color:#fff}
-.statusline{color:#90a29f;font-size:.82rem;margin-left:auto}
-.events{display:grid;gap:14px}
-.event{
-  background:#071719;border:1px solid rgba(255,255,255,.08);
-  border-radius:20px;padding:16px
-}
-.event.newPhoto{box-shadow:0 0 0 2px rgba(217,181,109,.42)}
-.head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}
-.name{font-size:1.35rem;font-weight:900}
-.customer{color:var(--accent);font-weight:800;font-size:.85rem;margin-top:4px}
-.meta{color:#91a5a1;font-size:.82rem;margin-top:5px}
-.right{text-align:right}
-.count{font-size:2rem;font-weight:900;color:var(--accent)}
-.countLabel{font-size:.75rem;color:#91a5a1}
-.badges{display:flex;gap:7px;flex-wrap:wrap;margin:11px 0}
-.badge{padding:6px 9px;border-radius:999px;font-size:.74rem;font-weight:900;background:#15383a;color:#bcd0cc}
-.badge.live{background:rgba(60,166,108,.14);color:#83dda8;border:1px solid rgba(60,166,108,.28)}
-.badge.expired{background:rgba(210,88,88,.14);color:#ef9a9a;border:1px solid rgba(210,88,88,.28)}
-.badge.new{background:rgba(217,181,109,.17);color:#f0ce82;border:1px solid rgba(217,181,109,.3)}
-.links{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-.links a{color:#102020;background:var(--accent);text-decoration:none;font-weight:900;padding:8px 10px;border-radius:9px;font-size:.78rem}
-.links a.dark{background:#15383a;color:#e7eeec}
-.toast{
-  position:fixed;right:16px;bottom:16px;z-index:10;max-width:360px;
-  background:#102d2f;border:1px solid rgba(217,181,109,.35);border-radius:15px;
-  padding:13px 15px;box-shadow:0 15px 50px #0008;display:none
-}
-.toast.show{display:block}
-.settings{margin-top:24px;background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:16px}
-.settings summary{cursor:pointer;font-weight:900;color:var(--accent)}
-.changeGrid{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:12px}
-.note{color:#8da09c;font-size:.78rem;line-height:1.45}
-.empty{padding:30px;text-align:center;color:#8da09c;background:#071719;border-radius:18px}
-@media(max-width:760px){
-  .stats{grid-template-columns:1fr 1fr}
-  .loginGrid{grid-template-columns:1fr}
-  .changeGrid{grid-template-columns:1fr}
-  .right{text-align:left}
-}
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#071315;color:#f5f1e8;--accent:#d9b56d}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 85% 5%,rgba(25,112,116,.25),transparent 34%),linear-gradient(145deg,#061012,#10383a)}.wrap{width:min(1220px,calc(100% - 24px));margin:auto;padding:24px 0 60px}.top{display:flex;gap:18px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap}.brand{font-size:.72rem;letter-spacing:.2em;color:var(--accent);font-weight:900}h1{font-size:clamp(2.1rem,6vw,4rem);margin:6px 0 0;line-height:1}.topActions,.links,.galleryActions{display:flex;gap:8px;flex-wrap:wrap}button,a.button{border:0;border-radius:11px;padding:11px 14px;background:var(--accent);color:#102020;font-weight:900;cursor:pointer;text-decoration:none;font:inherit}.secondary{background:#15383a!important;color:#f4f1e8!important;border:1px solid rgba(255,255,255,.09)!important}.danger{background:#472020!important;color:#ffc1c1!important}.okBtn{background:#1f5a3d!important;color:#d7ffe7!important}button:disabled{opacity:.5;cursor:wait}.login{margin:24px 0;background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:18px}.loginGrid{display:grid;grid-template-columns:1fr auto;gap:9px}input,select{width:100%;padding:11px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0a2426;color:#fff;font:inherit}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin:20px 0}.stat{background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:15px}.stat .n{font-size:2rem;font-weight:900;color:var(--accent)}.stat .l{color:#8fa29f;font-size:.8rem}.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0}.statusline{color:#90a29f;font-size:.82rem;margin-left:auto}.events{display:grid;gap:14px}.event{background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:16px}.event.newPhoto{box-shadow:0 0 0 2px rgba(217,181,109,.42)}.head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}.name{font-size:1.35rem;font-weight:900}.customer{color:var(--accent);font-weight:800;font-size:.85rem;margin-top:4px}.meta{color:#91a5a1;font-size:.82rem;margin-top:5px}.right{text-align:right}.count{font-size:2rem;font-weight:900;color:var(--accent)}.countLabel{font-size:.75rem;color:#91a5a1}.badges{display:flex;gap:7px;flex-wrap:wrap;margin:11px 0}.badge{padding:6px 9px;border-radius:999px;font-size:.74rem;font-weight:900;background:#15383a;color:#bcd0cc}.badge.live{background:rgba(60,166,108,.14);color:#83dda8;border:1px solid rgba(60,166,108,.28)}.badge.expired{background:rgba(210,88,88,.14);color:#ef9a9a;border:1px solid rgba(210,88,88,.28)}.badge.new{background:rgba(217,181,109,.17);color:#f0ce82;border:1px solid rgba(217,181,109,.3)}.badge.archived{background:#2c2f32;color:#b7bdc1}.links a,.links button{font-size:.78rem;padding:9px 10px}.settings{margin-top:24px;background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:16px}.settings summary{cursor:pointer;font-weight:900;color:var(--accent)}.changeGrid{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:12px}.note,.empty{color:#8da09c;font-size:.78rem;line-height:1.45}.empty{padding:30px;text-align:center;background:#071719;border-radius:18px}.toast{position:fixed;right:16px;bottom:16px;z-index:40;max-width:380px;background:#102d2f;border:1px solid rgba(217,181,109,.35);border-radius:15px;padding:13px 15px;box-shadow:0 15px 50px #0008;display:none}.toast.show{display:block}.hidden{display:none!important}
+.modal{position:fixed;inset:0;background:#000b;z-index:30;display:grid;place-items:center;padding:14px}.modalPanel{width:min(1180px,100%);max-height:94vh;overflow:auto;background:#071719;border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:16px;box-shadow:0 30px 90px #000}.modalHead{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;position:sticky;top:-16px;background:#071719;padding:10px 0;z-index:4}.photoGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:12px}.photoCard{background:#0a2426;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:10px}.photoPair{display:grid;grid-template-columns:1fr 1fr;gap:7px}.photoPair img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:10px;background:#041011}.photoLabel{font-size:.7rem;color:var(--accent);font-weight:900;margin:3px 0 6px}.photoMeta{font-size:.72rem;color:#8da09c;margin:8px 0}.recoveryBox{margin-top:10px;padding:12px;border-radius:13px;background:#0a2426}.recoveryCode{font-family:ui-monospace,monospace;color:#ffd887;font-weight:900;word-break:break-all;font-size:1.05rem;padding:10px;background:#051416;border-radius:9px;margin-top:8px}
+@media(max-width:760px){.stats{grid-template-columns:1fr 1fr}.loginGrid,.changeGrid{grid-template-columns:1fr}.right{text-align:left}.photoPair{grid-template-columns:1fr}.statusline{width:100%;margin-left:0}}
 </style>
 </head>
 <body>
 <main class="wrap">
-  <div class="top">
-    <div>
-      <div class="brand">FTS.LU · ADMIN COCKPIT</div>
-      <h1>Selfie Events</h1>
-    </div>
-    <div class="topActions">
-      <a class="button secondary" href="./admin.html">+ Neues Event</a>
-      <button class="secondary" id="installBtn">Als App installieren</button>
-      <button class="secondary" id="notifyBtn">Push aktivieren</button>
-      <button class="secondary" id="testPushBtn" style="display:none">Push testen</button>
-      <button class="secondary" id="logoutBtn" style="display:none">Abmelden</button>
-    </div>
-  </div>
+  <div class="top"><div><div class="brand">FTS.LU · ADMIN COCKPIT · V2</div><h1>Selfie Events</h1></div><div class="topActions"><a class="button secondary" href="./admin.html">+ Neues Event</a><button class="secondary" id="installBtn">Als App installieren</button><button class="secondary" id="notifyBtn">Push aktivieren</button><button class="secondary hidden" id="testPushBtn">Push testen</button><button class="secondary hidden" id="logoutBtn">Gerät abmelden</button></div></div>
 
   <section class="login" id="loginPanel">
-    <div class="loginGrid">
-      <input id="adminCode" type="password" placeholder="FTS Admin-Code">
-      <button id="loadBtn">Cockpit öffnen</button>
-      <button class="secondary" id="forgetBtn">Code vergessen</button>
-    </div>
-    <div class="note" style="margin-top:9px">
-      Der Admin-Code wird auf Wunsch nur auf diesem Gerät gespeichert. Das Cockpit aktualisiert die Fotozahlen automatisch.
-    </div>
+    <div class="loginGrid"><input id="adminCode" type="password" placeholder="FTS Admin-Code – nur auf neuem Gerät"><button id="loadBtn">Gerät freischalten & Cockpit öffnen</button></div>
+    <div class="note" style="margin-top:9px">Nach der ersten Freischaltung wird ein Gerätezugang gespeichert. Der eigentliche Admin-Code bleibt danach auf diesem Gerät verborgen.</div>
+    <details style="margin-top:12px"><summary>Admin-Code vergessen?</summary><div class="recoveryBox"><div class="note">Funktioniert, wenn vorher im Cockpit ein Wiederherstellungscode erzeugt und sicher aufbewahrt wurde.</div><div class="changeGrid"><input id="recoveryInput" placeholder="REC-..."><input id="recoveryNewCode" type="password" placeholder="Neuer Admin-Code (mind. 8 Zeichen)"><button id="recoveryResetBtn">Code neu setzen</button></div></div></details>
   </section>
 
-  <section id="cockpit" style="display:none">
-    <div class="stats">
-      <div class="stat"><div class="n" id="activeN">0</div><div class="l">aktive Events</div></div>
-      <div class="stat"><div class="n" id="photoN">0</div><div class="l">Fotos gesamt</div></div>
-      <div class="stat"><div class="n" id="todayN">0</div><div class="l">Events heute</div></div>
-      <div class="stat"><div class="n" id="newN">0</div><div class="l">neue Fotos seit Öffnen</div></div>
-    </div>
-
-    <div class="toolbar">
-      <select id="filter">
-        <option value="active">Aktive Events</option>
-        <option value="all">Alle Events</option>
-        <option value="expired">Abgelaufene Events</option>
-      </select>
-      <button class="secondary" id="refreshBtn">Jetzt aktualisieren</button>
-      <span class="statusline" id="statusLine"></span>
-    </div>
-
+  <section id="cockpit" class="hidden">
+    <div class="stats"><div class="stat"><div class="n" id="activeN">0</div><div class="l">aktive Events</div></div><div class="stat"><div class="n" id="photoN">0</div><div class="l">Fotos gesamt</div></div><div class="stat"><div class="n" id="todayN">0</div><div class="l">Events heute</div></div><div class="stat"><div class="n" id="newN">0</div><div class="l">neue Fotos seit Öffnen</div></div></div>
+    <div class="toolbar"><select id="filter"><option value="all">Alle Events</option><option value="active">Aktive Events</option><option value="expired">Abgelaufene Events</option><option value="archived">Archivierte Events</option></select><button class="secondary" id="refreshBtn">Jetzt aktualisieren</button><span class="statusline" id="statusLine"></span></div>
     <section class="events" id="events"></section>
-
-    <details class="settings">
-      <summary>Admin-Einstellungen</summary>
-      <div class="changeGrid">
-        <input id="oldCode" type="password" placeholder="Alter Admin-Code">
-        <input id="newCode" type="text" placeholder="Neuer Admin-Code (mind. 8 Zeichen)">
-        <button id="changeCodeBtn">Admin-Code ändern</button>
-      </div>
-      <p class="note">
-        Den neuen Code anschließend sicher notieren. Er gilt danach für Event-Manager und Cockpit.
-      </p>
-    </details>
+    <details class="settings"><summary>Admin-Einstellungen & Wiederherstellung</summary><div class="changeGrid"><input id="newCode" type="password" placeholder="Neuer Admin-Code (mind. 8 Zeichen)"><button id="changeCodeBtn">Admin-Code ändern</button></div><div class="galleryActions" style="margin-top:12px"><button class="secondary" id="recoveryBtn">Neuen Wiederherstellungscode erzeugen</button></div><div id="recoveryResult" class="hidden recoveryCode"></div><p class="note">Den Wiederherstellungscode außerhalb des Geräts sicher aufbewahren. Er wird nur einmal angezeigt und kann einen vergessenen Admin-Code zurücksetzen.</p></details>
   </section>
 </main>
 
+<div class="modal hidden" id="galleryModal"><div class="modalPanel"><div class="modalHead"><div><div class="brand">FTS · INTERNE FOTOGALERIE</div><h2 id="galleryTitle" style="margin:4px 0">Fotos</h2></div><div class="galleryActions"><button id="activePhotosBtn">Aktive Fotos</button><button class="secondary" id="trashPhotosBtn">Papierkorb</button><button class="danger hidden" id="emptyTrashBtn">Papierkorb leeren</button><button class="secondary" id="closeGalleryBtn">Schließen</button></div></div><div id="galleryInfo" class="note"></div><div id="photoGrid" class="photoGrid"></div></div></div>
 <div class="toast" id="toast"></div>
-
 <script src="./config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const cfg=window.FTS_CONFIG;
 const VAPID_PUBLIC_KEY='BA4ooYZBIcpChVCyvDWS-ovJF6I6VFJ5UVOrDdv0EoDHJ7hCUOQXxShbV9VJ-KPKAKVXdiYDaZ4bLOwidSUSgtA';
-const CODE_KEY='fts_cockpit_admin_code';
-const COUNTS_KEY='fts_cockpit_counts_v1';
-const POLL_MS=8000;
-
-let events=[];
-let timer=null;
-let sessionStartCounts=new Map();
-let newSinceOpen=0;
-let firstLoad=true;
-
+const DEVICE_KEY='fts_device_token_v1',LEGACY_CODE_KEY='fts_cockpit_admin_code',POLL_MS=8000;
+let events=[],timer=null,sessionStartCounts=new Map(),newSinceOpen=0,firstLoad=true,currentGalleryEvent=null,currentGalleryView='active',deferredInstallPrompt=null;
+const storageClient=window.supabase?supabase.createClient(cfg.supabaseUrl,cfg.publishableKey):null;
 const $=s=>document.querySelector(s);
-
-function headers(){
-  return {
-    'apikey':cfg.publishableKey,
-    'Authorization':'Bearer '+cfg.publishableKey,
-    'Content-Type':'application/json'
-  };
-}
-
-async function rpc(name,body){
-  const r=await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/${name}`,{
-    method:'POST',headers:headers(),body:JSON.stringify(body)
-  });
-  if(!r.ok)throw new Error((await r.text())||`HTTP ${r.status}`);
-  const t=await r.text();
-  return t?JSON.parse(t):null;
-}
-
-function adminCode(){return $('#adminCode').value.trim()}
-
-function rememberCode(){
-  if(adminCode())localStorage.setItem(CODE_KEY,adminCode());
-}
-
-function fmtDate(d){
-  if(!d)return '—';
-  return new Date(d+'T12:00:00').toLocaleDateString('de-DE');
-}
-function fmtDateTime(d){
-  if(!d || String(d).includes('-infinity'))return 'noch kein Foto';
-  return new Date(d).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'});
-}
-function esc(s){
-  return String(s??'').replace(/[&<>"']/g,m=>({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
-  }[m]));
-}
-function isExpired(e){return new Date(e.expires_at)<=new Date() || !e.active}
-function isToday(e){
-  const a=new Date(e.event_date+'T12:00:00');
-  const n=new Date();
-  return a.getFullYear()===n.getFullYear() && a.getMonth()===n.getMonth() && a.getDate()===n.getDate();
-}
-
-function showToast(text){
-  const t=$('#toast');
-  t.textContent=text;
-  t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),5000);
-}
-
-function urlBase64ToUint8Array(base64String){
-  const padding='='.repeat((4-base64String.length%4)%4);
-  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
-  const raw=atob(base64);
-  return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
-}
-
-async function currentPushSubscription(){
-  if(!('serviceWorker' in navigator) || !('PushManager' in window))return null;
-  const reg=await navigator.serviceWorker.ready;
-  return reg.pushManager.getSubscription();
-}
-
-async function refreshPushButton(){
-  if(!('Notification' in window) || !('PushManager' in window)){
-    $('#notifyBtn').textContent='Push nicht unterstützt';
-    $('#notifyBtn').disabled=true;
-    return;
-  }
-
-  const sub=await currentPushSubscription().catch(()=>null);
-  if(Notification.permission==='granted' && sub){
-    $('#notifyBtn').textContent='Push ist an';
-  }else{
-    $('#notifyBtn').textContent='Push aktivieren';
-  }
-}
-
-async function enableNotifications(){
-  if(!adminCode()){
-    alert('Bitte zuerst das Cockpit mit deinem Admin-Code öffnen.');
-    return;
-  }
-
-  if(!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)){
-    alert('Dieser Browser unterstützt Web-Push auf diesem Gerät nicht.');
-    return;
-  }
-
-  const permission=await Notification.requestPermission();
-  if(permission!=='granted'){
-    alert('Benachrichtigungen wurden nicht erlaubt.');
-    await refreshPushButton();
-    return;
-  }
-
-  try{
-    const reg=await navigator.serviceWorker.ready;
-    let sub=await reg.pushManager.getSubscription();
-
-    if(!sub){
-      sub=await reg.pushManager.subscribe({
-        userVisibleOnly:true,
-        applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-      });
-    }
-
-    const j=sub.toJSON();
-
-    await rpc('fts_admin_save_push_subscription',{
-      p_admin_code:adminCode(),
-      p_endpoint:j.endpoint,
-      p_p256dh:j.keys?.p256dh||'',
-      p_auth:j.keys?.auth||'',
-      p_user_agent:navigator.userAgent
-    });
-
-    $('#notifyBtn').textContent='Push ist an';
-    $('#testPushBtn').style.display='inline-block';
-    showToast('Push ist jetzt für dieses Handy aktiviert.');
-  }catch(e){
-    console.error(e);
-    alert('Push konnte nicht aktiviert werden: '+e.message);
-  }
-}
-
-async function testPush(){
-  if(!adminCode()){
-    alert('Bitte zuerst das Cockpit öffnen.');
-    return;
-  }
-
-  try{
-    $('#testPushBtn').disabled=true;
-    await rpc('fts_admin_test_push',{p_admin_code:adminCode()});
-    showToast('Test-Push wurde ausgelöst. Er sollte gleich auf dem Handy erscheinen.');
-  }catch(e){
-    alert('Test-Push konnte nicht ausgelöst werden: '+e.message);
-  }finally{
-    setTimeout(()=>$('#testPushBtn').disabled=false,1500);
-  }
-}
-
-async function loadEvents(manual=false){
-  if(!adminCode())return alert('Bitte Admin-Code eingeben.');
-
-  $('#loadBtn').disabled=true;
-  $('#statusLine').textContent='Aktualisiere …';
-
-  try{
-    const data=await rpc('fts_admin_dashboard_events',{p_admin_code:adminCode()});
-    rememberCode();
-
-    const oldCounts=new Map(events.map(e=>[e.event_token,Number(e.photo_count||0)]));
-    events=data||[];
-
-    if(firstLoad){
-      sessionStartCounts=new Map(events.map(e=>[e.event_token,Number(e.photo_count||0)]));
-      firstLoad=false;
-    }else{
-      for(const e of events){
-        const old=oldCounts.get(e.event_token);
-        const now=Number(e.photo_count||0);
-        if(old!==undefined && now>old){
-          const delta=now-old;
-          newSinceOpen+=delta;
-          showToast(`${delta} neues Foto bei ${e.title}${e.subtitle?' · '+e.subtitle:''}`);
-        }
-      }
-    }
-
-    $('#cockpit').style.display='block';
-    $('#loginPanel').style.display='none';
-    $('#logoutBtn').style.display='inline-block';
-    refreshPushButton().then(async()=>{
-      const sub=await currentPushSubscription().catch(()=>null);
-      $('#testPushBtn').style.display=(Notification.permission==='granted' && sub)?'inline-block':'none';
-    });
-    render();
-    $('#statusLine').textContent='zuletzt '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-
-    if(!timer)timer=setInterval(()=>loadEvents(false),POLL_MS);
-  }catch(e){
-    console.error(e);
-    if(manual)alert('Cockpit konnte nicht geladen werden: '+e.message);
-    $('#statusLine').textContent='Fehler beim Aktualisieren';
-  }finally{
-    $('#loadBtn').disabled=false;
-  }
-}
-
-function render(){
-  const active=events.filter(e=>!isExpired(e));
-  $('#activeN').textContent=active.length;
-  $('#photoN').textContent=events.reduce((s,e)=>s+Number(e.photo_count||0),0);
-  $('#todayN').textContent=events.filter(isToday).length;
-  $('#newN').textContent=newSinceOpen;
-
-  const filter=$('#filter').value;
-  let list=events;
-  if(filter==='active')list=events.filter(e=>!isExpired(e));
-  if(filter==='expired')list=events.filter(isExpired);
-
-  const root=$('#events');
-  if(!list.length){
-    const msg = filter==='active' && events.length
-      ? 'Zurzeit gibt es keine aktiven Events. Wähle oben „Alle Events“, um ältere Events und Fotos zu sehen.'
-      : 'Keine Events in dieser Ansicht.';
-    root.innerHTML='<div class="empty">'+msg+'</div>';
-    return;
-  }
-
-  root.innerHTML=list.map(e=>{
-    const expired=isExpired(e);
-    const count=Number(e.photo_count||0);
-    const start=sessionStartCounts.get(e.event_token)??count;
-    const added=Math.max(0,count-start);
-
-    const guest=cfg.baseUrl+'?e='+encodeURIComponent(e.event_token);
-    const poster=cfg.baseUrl+'poster.html?e='+encodeURIComponent(e.event_token);
-    const customer=cfg.baseUrl+'customer.html?c='+encodeURIComponent(e.customer_token);
-
-    return `
-      <article class="event ${added>0?'newPhoto':''}">
-        <div class="head">
-          <div>
-            <div class="name">${esc(e.title)}${e.subtitle?' · '+esc(e.subtitle):''}</div>
-            <div class="customer">${esc(e.customer_name)}</div>
-            <div class="meta">${esc(e.location||'')} · ${fmtDate(e.event_date)} · letztes Foto: ${fmtDateTime(e.last_photo_at)}</div>
-          </div>
-          <div class="right">
-            <div class="count">${count}</div>
-            <div class="countLabel">Fotos</div>
-          </div>
-        </div>
-
-        <div class="badges">
-          <span class="badge ${expired?'expired':'live'}">${expired?'abgelaufen':'aktiv bis '+fmtDateTime(e.expires_at)}</span>
-          ${added>0?`<span class="badge new">+${added} neu seit Öffnen</span>`:''}
-          ${e.legacy_prefix?'<span class="badge">älteres Event übernommen</span>':''}
-        </div>
-
-        <div class="links">
-          <a href="${guest}" target="_blank">Gastseite</a>
-          <a href="${poster}" target="_blank">QR-Poster</a>
-          <a href="${customer}" target="_blank">Kundenportal</a>
-          <a class="dark" href="./admin.html" target="_blank">Event-Manager</a>
-        </div>
-      </article>
-    `;
-  }).join('');
-}
-
-async function changeAdminCode(){
-  const old=$('#oldCode').value.trim() || adminCode();
-  const neu=$('#newCode').value.trim();
-  if(!old||!neu)return alert('Alter und neuer Admin-Code werden benötigt.');
-
-  try{
-    await rpc('fts_admin_change_code',{p_old_code:old,p_new_code:neu});
-    localStorage.setItem(CODE_KEY,neu);
-    $('#adminCode').value=neu;
-    $('#oldCode').value='';
-    $('#newCode').value='';
-    alert('Admin-Code wurde geändert.');
-  }catch(e){
-    alert('Admin-Code konnte nicht geändert werden: '+e.message);
-  }
-}
-
-$('#loadBtn').onclick=()=>loadEvents(true);
-$('#refreshBtn').onclick=()=>loadEvents(true);
-$('#filter').onchange=render;
-$('#notifyBtn').onclick=enableNotifications;
-$('#testPushBtn').onclick=testPush;
-$('#changeCodeBtn').onclick=changeAdminCode;
-function logoutCockpit(){
-  localStorage.removeItem(CODE_KEY);
-  $('#adminCode').value='';
-  $('#oldCode').value='';
-  if(timer){clearInterval(timer);timer=null}
-  $('#cockpit').style.display='none';
-  $('#loginPanel').style.display='block';
-  $('#logoutBtn').style.display='none';
-  $('#testPushBtn').style.display='none';
-  events=[];
-  firstLoad=true;
-  newSinceOpen=0;
-}
-
-$('#forgetBtn').onclick=logoutCockpit;
-$('#logoutBtn').onclick=logoutCockpit;
-
-const saved=localStorage.getItem(CODE_KEY);
-if(saved){
-  $('#adminCode').value=saved;
-  loadEvents(false);
-}
-
-refreshPushButton();
-
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('./sw.js').catch(()=>{});
-}
+function headers(){return {'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':'application/json'}}
+async function rpc(name,body){const r=await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/${name}`,{method:'POST',headers:headers(),body:JSON.stringify(body)});if(!r.ok)throw new Error((await r.text())||`HTTP ${r.status}`);const t=await r.text();return t?JSON.parse(t):null}
+function credential(){return localStorage.getItem(DEVICE_KEY)||''}function deviceLabel(){return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)?'FTS Handy/Tablet':'FTS Computer'}
+async function adminFiles(action,extra={}){const r=await fetch(`${cfg.supabaseUrl}/functions/v1/fts-admin-files`,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({credential:credential(),action,...extra})});const j=await r.json().catch(()=>({}));if(!r.ok||j.ok===false)throw new Error(j.error||`HTTP ${r.status}`);return j}
+function setLoggedIn(ok){$('#loginPanel').classList.toggle('hidden',ok);$('#cockpit').classList.toggle('hidden',!ok);$('#logoutBtn').classList.toggle('hidden',!ok)}
+async function registerDevice(code){const token=await rpc('fts_admin_register_device',{p_admin_code:code,p_label:deviceLabel(),p_user_agent:navigator.userAgent});if(!token)throw new Error('Gerät konnte nicht freigeschaltet werden');localStorage.setItem(DEVICE_KEY,token);localStorage.removeItem(LEGACY_CODE_KEY);$('#adminCode').value='';return token}
+async function ensureDevice(){let dev=credential();if(dev){try{await rpc('fts_admin_dashboard_events',{p_admin_code:dev});setLoggedIn(true);return true}catch{localStorage.removeItem(DEVICE_KEY)}}const old=localStorage.getItem(LEGACY_CODE_KEY);if(old){try{await registerDevice(old);setLoggedIn(true);return true}catch{localStorage.removeItem(LEGACY_CODE_KEY)}}setLoggedIn(false);return false}
+function fmtDate(d){return d?new Date(d+'T12:00:00').toLocaleDateString('de-DE'):'—'}function fmtDateTime(d){if(!d||String(d).includes('-infinity'))return'noch kein Foto';return new Date(d).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'})}function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}function eventDays(e){let d=e.event_days;if(!Array.isArray(d)){try{d=JSON.parse(d||'[]')}catch{d=[]}}if(!d.length)d=[e.event_date];return d}function isArchived(e){return !e.active||!!e.archived_at}function isExpired(e){return !isArchived(e)&&new Date(e.expires_at)<=new Date()}function isActive(e){return !isArchived(e)&&!isExpired(e)}function isToday(e){const today=new Date().toLocaleDateString('en-CA');return eventDays(e).includes(today)}
+function showToast(text){const t=$('#toast');t.textContent=text;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),5000)}
+function photoUrl(path){return `${cfg.supabaseUrl}/storage/v1/object/public/${encodeURIComponent(cfg.liveBucket)}/${String(path).split('/').map(encodeURIComponent).join('/')}`}
+async function loadEvents(manual=false){if(!credential())return;$('#statusLine').textContent='Aktualisiere …';try{const data=await rpc('fts_admin_dashboard_events',{p_admin_code:credential()}),oldCounts=new Map(events.map(e=>[e.event_token,Number(e.photo_count||0)]));events=data||[];if(firstLoad){sessionStartCounts=new Map(events.map(e=>[e.event_token,Number(e.photo_count||0)]));firstLoad=false}else for(const e of events){const old=oldCounts.get(e.event_token),now=Number(e.photo_count||0);if(old!==undefined&&now>old){const delta=now-old;newSinceOpen+=delta;showToast(`${delta} neues Foto bei ${e.title}`)}}render();$('#statusLine').textContent='zuletzt '+new Date().toLocaleTimeString('de-DE');if(!timer)timer=setInterval(()=>loadEvents(false),POLL_MS)}catch(e){console.error(e);if(manual)alert('Cockpit konnte nicht geladen werden: '+e.message);$('#statusLine').textContent='Fehler beim Aktualisieren'}}
+function render(){const active=events.filter(isActive);$('#activeN').textContent=active.length;$('#photoN').textContent=events.reduce((s,e)=>s+Number(e.photo_count||0),0);$('#todayN').textContent=events.filter(e=>isActive(e)&&isToday(e)).length;$('#newN').textContent=newSinceOpen;const filter=$('#filter').value;let list=events;if(filter==='active')list=events.filter(isActive);if(filter==='expired')list=events.filter(isExpired);if(filter==='archived')list=events.filter(isArchived);const root=$('#events');if(!list.length){root.innerHTML='<div class="empty">Keine Events in dieser Ansicht.</div>';return}root.innerHTML=list.map(e=>{const archived=isArchived(e),expired=isExpired(e),count=Number(e.photo_count||0),added=Math.max(0,count-(sessionStartCounts.get(e.event_token)??count)),alias=e.short_code||e.event_token,guest=cfg.baseUrl+'?e='+encodeURIComponent(alias),poster=cfg.baseUrl+'poster.html?e='+encodeURIComponent(alias),customer=cfg.baseUrl+'customer.html?c='+encodeURIComponent(e.customer_token);return `<article class="event ${added>0?'newPhoto':''}"><div class="head"><div><div class="name">${esc(e.title)}${e.subtitle?' · '+esc(e.subtitle):''}</div><div class="customer">${esc(e.customer_name)}</div><div class="meta">${esc(e.location||'')} · ${eventDays(e).map(fmtDate).join(' · ')} · letztes Foto: ${fmtDateTime(e.last_photo_at)}</div></div><div class="right"><div class="count">${count}</div><div class="countLabel">Fotos${Number(e.test_photo_count||0)?` · ${e.test_photo_count} Test`:''}</div></div></div><div class="badges"><span class="badge ${archived?'archived':expired?'expired':'live'}">${archived?'archiviert':expired?'abgelaufen':'aktiv bis '+fmtDateTime(e.expires_at)}</span>${added>0?`<span class="badge new">+${added} neu</span>`:''}${e.short_code?`<span class="badge">${esc(e.short_code)}</span>`:''}</div><div class="links"><button data-photos="${e.event_token}">Fotos ansehen</button><a href="${guest}" target="_blank">Gastseite</a><a href="${poster}" target="_blank">QR-Poster</a><a href="${customer}" target="_blank">Kundenportal</a><a class="button secondary" href="./admin.html?edit=${encodeURIComponent(e.event_token)}">Bearbeiten</a><a class="button secondary" href="./admin.html?duplicate=${encodeURIComponent(e.event_token)}">Duplizieren</a><button class="secondary" data-archive="${e.event_token}" data-state="${archived?'restore':'archive'}">${archived?'Reaktivieren':'Archivieren'}</button></div></article>`}).join('');root.querySelectorAll('[data-photos]').forEach(b=>b.onclick=()=>openGallery(b.dataset.photos));root.querySelectorAll('[data-archive]').forEach(b=>b.onclick=()=>toggleArchive(b.dataset.archive,b.dataset.state))}
+async function toggleArchive(token,state){const text=state==='archive'?'Event archivieren? Es verschwindet sofort aus dem Kundenportal.':'Event wieder aktivieren?';if(!confirm(text))return;try{await rpc(state==='archive'?'fts_admin_archive_event':'fts_admin_unarchive_event',{p_admin_code:credential(),p_event_token:token});await loadEvents(true)}catch(e){alert(e.message)}}
+async function openGallery(token){currentGalleryEvent=token;currentGalleryView='active';const ev=events.find(x=>x.event_token===token);$('#galleryTitle').textContent=ev?`${ev.title} · FTS intern`:'FTS Fotos';$('#galleryModal').classList.remove('hidden');await loadGallery('active')}
+async function loadGallery(view){currentGalleryView=view;$('#activePhotosBtn').classList.toggle('secondary',view!=='active');$('#trashPhotosBtn').classList.toggle('secondary',view!=='trash');$('#emptyTrashBtn').classList.toggle('hidden',view!=='trash');$('#photoGrid').innerHTML='<div class="empty">Fotos werden geladen …</div>';try{let rows=await rpc('fts_admin_get_event_photos',{p_admin_code:credential(),p_event_token:currentGalleryEvent,p_view:view})||[];const ev=events.find(x=>x.event_token===currentGalleryEvent);if(view==='active'&&!rows.length&&ev?.legacy_prefix)rows=await loadLegacyAdmin(ev);$('#galleryInfo').textContent=view==='trash'?'Papierkorb: Bilder sind bereits aus dem Kundenportal entfernt. Erst „Papierkorb leeren“ löscht die Dateien endgültig aus Supabase.':ev?.legacy_prefix?'FTS intern · älteres Event: Original + Design aus dem bisherigen Speicher.':'FTS intern: Original + fertiges Design. Testfotos sind entsprechend markiert.';renderPhotos(rows)}catch(e){$('#photoGrid').innerHTML='<div class="empty">Galerie konnte nicht geladen werden: '+esc(e.message)+'</div>'}}
+async function loadLegacyAdmin(ev){if(!storageClient)return[];const bucket=ev.legacy_bucket||cfg.legacyBucket;const [or,de]=await Promise.all([storageClient.storage.from(bucket).list(`${ev.legacy_prefix}/original`,{limit:1000}),storageClient.storage.from(bucket).list(`${ev.legacy_prefix}/designed`,{limit:1000})]);const O=(or.data||[]).filter(x=>x.name&&x.name!=='.emptyFolderPlaceholder'),D=(de.data||[]).filter(x=>x.name&&x.name!=='.emptyFolderPlaceholder');const rows=[];for(let i=0;i<Math.max(O.length,D.length);i++){const o=O[i],d=D[i];let ou=null,du=null;if(o){const r=await storageClient.storage.from(bucket).createSignedUrl(`${ev.legacy_prefix}/original/${o.name}`,21600);ou=r.data?.signedUrl||null}if(d){const r=await storageClient.storage.from(bucket).createSignedUrl(`${ev.legacy_prefix}/designed/${d.name}`,21600);du=r.data?.signedUrl||null}rows.push({legacy:true,photo_id:`legacy-${i}`,event_day:ev.event_date,is_test:false,original_path:ou,designed_path:du,created_at:o?.created_at||d?.created_at||null,original_exists:!!ou,design_exists:!!du})}return rows}
+function renderPhotos(rows){const root=$('#photoGrid');if(!rows.length){root.innerHTML='<div class="empty">Keine Fotos in dieser Ansicht.</div>';return}root.innerHTML=rows.map(p=>`<article class="photoCard"><div class="photoPair"><div><div class="photoLabel">Original · FTS intern</div>${p.original_exists?`<img src="${p.legacy?p.original_path:photoUrl(p.original_path)}" loading="lazy">`:'<div class="empty">Datei nicht mehr vorhanden</div>'}</div><div><div class="photoLabel">Event-Design</div>${p.design_exists?`<img src="${p.legacy?p.designed_path:photoUrl(p.designed_path)}" loading="lazy">`:'<div class="empty">Datei nicht mehr vorhanden</div>'}</div></div><div class="photoMeta">${p.is_test?'TEST · ':''}${p.event_day?fmtDate(p.event_day)+' · ':''}${fmtDateTime(p.created_at)}</div><div class="galleryActions">${p.original_exists?`<button data-dl="${esc(p.original_path)}" data-legacy="${p.legacy?'1':'0'}">Original herunterladen</button>`:''}${p.design_exists?`<button data-dl="${esc(p.designed_path)}" data-legacy="${p.legacy?'1':'0'}">Design herunterladen</button>`:''}${currentGalleryView==='active'&&!p.legacy?`<button class="danger" data-trash="${p.photo_id}">In Papierkorb</button>`:currentGalleryView==='trash'&&!p.legacy?`<button class="okBtn" data-restore="${p.photo_id}">Wiederherstellen</button>`:''}</div></article>`).join('');root.querySelectorAll('[data-dl]').forEach(b=>b.onclick=()=>downloadPath(b.dataset.dl,b,b.dataset.legacy==='1'));root.querySelectorAll('[data-trash]').forEach(b=>b.onclick=()=>trashPhoto(b.dataset.trash));root.querySelectorAll('[data-restore]').forEach(b=>b.onclick=()=>restorePhoto(b.dataset.restore))}
+async function downloadPath(path,button,legacy=false){const old=button.textContent;button.disabled=true;try{const r=await fetch(legacy?path:photoUrl(path));if(!r.ok)throw new Error('Download fehlgeschlagen');const blob=await r.blob(),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=(legacy?'foto.jpg':path.split('/').pop()||'foto.jpg');document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000)}catch(e){alert(e.message)}finally{button.disabled=false;button.textContent=old}}
+async function trashPhoto(id){if(!confirm('Foto in den Papierkorb verschieben? Es verschwindet sofort aus dem Kundenportal.'))return;await rpc('fts_admin_trash_photo',{p_admin_code:credential(),p_photo_id:id});await loadGallery('active');await loadEvents(false)}async function restorePhoto(id){await rpc('fts_admin_restore_photo',{p_admin_code:credential(),p_photo_id:id});await loadGallery('trash');await loadEvents(false)}
+async function emptyTrash(){if(!confirm('Papierkorb endgültig leeren? Original + Design werden aus Supabase gelöscht und können nicht wiederhergestellt werden.'))return;try{$('#emptyTrashBtn').disabled=true;const r=await adminFiles('empty-photo-trash',{event_token:currentGalleryEvent});showToast(`${r.deleted_photos||0} Fotos endgültig gelöscht.`);await loadGallery('trash');await loadEvents(false)}catch(e){alert('Papierkorb konnte nicht geleert werden: '+e.message)}finally{$('#emptyTrashBtn').disabled=false}}
+function urlBase64ToUint8Array(base64String){const padding='='.repeat((4-base64String.length%4)%4),base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/'),raw=atob(base64);return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)))}async function currentPushSubscription(){if(!('serviceWorker'in navigator)||!('PushManager'in window))return null;const reg=await navigator.serviceWorker.ready;return reg.pushManager.getSubscription()}async function refreshPushButton(){if(!('Notification'in window)||!('PushManager'in window)){ $('#notifyBtn').textContent='Push nicht unterstützt';$('#notifyBtn').disabled=true;return}const sub=await currentPushSubscription().catch(()=>null);$('#notifyBtn').textContent=(Notification.permission==='granted'&&sub)?'Push ist an':'Push aktivieren';$('#testPushBtn').classList.toggle('hidden',!(Notification.permission==='granted'&&sub))}
+async function enableNotifications(){if(!credential())return alert('Cockpit zuerst freischalten.');if(!('Notification'in window)||!('serviceWorker'in navigator)||!('PushManager'in window))return alert('Web-Push wird auf diesem Gerät nicht unterstützt.');if(await Notification.requestPermission()!=='granted')return;try{const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});const j=sub.toJSON();await rpc('fts_admin_save_push_subscription',{p_admin_code:credential(),p_endpoint:j.endpoint,p_p256dh:j.keys?.p256dh||'',p_auth:j.keys?.auth||'',p_user_agent:navigator.userAgent});showToast('Push ist auf diesem Gerät aktiv.');await refreshPushButton()}catch(e){alert('Push konnte nicht aktiviert werden: '+e.message)}}async function testPush(){try{await rpc('fts_admin_test_push',{p_admin_code:credential()});showToast('Test-Push wurde ausgelöst.')}catch(e){alert(e.message)}}
+async function changeAdminCode(){const neu=$('#newCode').value.trim();if(neu.length<8)return alert('Mindestens 8 Zeichen.');try{await rpc('fts_admin_change_code',{p_old_code:credential(),p_new_code:neu});$('#newCode').value='';alert('Admin-Code geändert. Dieses freigeschaltete Gerät bleibt angemeldet.')}catch(e){alert(e.message)}}async function generateRecovery(){try{const code=await rpc('fts_admin_generate_recovery',{p_admin_code:credential()});$('#recoveryResult').textContent=code;$('#recoveryResult').classList.remove('hidden');alert('Diesen Wiederherstellungscode jetzt sicher außerhalb des Geräts speichern.')}catch(e){alert(e.message)}}async function resetWithRecovery(){const rec=$('#recoveryInput').value.trim(),neu=$('#recoveryNewCode').value.trim();if(!rec||neu.length<8)return alert('Recovery-Code und neuen Admin-Code eingeben.');try{await rpc('fts_admin_reset_code_with_recovery',{p_recovery_code:rec,p_new_code:neu});alert('Admin-Code wurde neu gesetzt. Jetzt dieses Gerät mit dem neuen Code freischalten.');localStorage.removeItem(DEVICE_KEY);location.reload()}catch(e){alert(e.message)}}
+async function logout(){const dev=credential();try{if(dev)await rpc('fts_admin_revoke_device',{p_device_token:dev})}catch{}localStorage.removeItem(DEVICE_KEY);if(timer){clearInterval(timer);timer=null}location.reload()}
+function standaloneMode(){return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e});$('#installBtn').onclick=async()=>{if(standaloneMode())return;if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null}else alert('Android/Samsung: Browser-Menü → Seite hinzufügen / Zum Startbildschirm hinzufügen. iPhone: Teilen → Zum Home-Bildschirm.')};if(standaloneMode())$('#installBtn').classList.add('hidden');
+$('#loadBtn').onclick=async()=>{const code=$('#adminCode').value.trim();if(!code)return alert('Admin-Code eingeben.');try{$('#loadBtn').disabled=true;await registerDevice(code);setLoggedIn(true);await loadEvents(true);await refreshPushButton()}catch(e){alert('Freischaltung fehlgeschlagen: '+e.message)}finally{$('#loadBtn').disabled=false}};$('#refreshBtn').onclick=()=>loadEvents(true);$('#filter').onchange=render;$('#notifyBtn').onclick=enableNotifications;$('#testPushBtn').onclick=testPush;$('#logoutBtn').onclick=logout;$('#changeCodeBtn').onclick=changeAdminCode;$('#recoveryBtn').onclick=generateRecovery;$('#recoveryResetBtn').onclick=resetWithRecovery;$('#closeGalleryBtn').onclick=()=>$('#galleryModal').classList.add('hidden');$('#activePhotosBtn').onclick=()=>loadGallery('active');$('#trashPhotosBtn').onclick=()=>loadGallery('trash');$('#emptyTrashBtn').onclick=emptyTrash;$('#galleryModal').addEventListener('click',e=>{if(e.target===$('#galleryModal'))$('#galleryModal').classList.add('hidden')});
+(async()=>{if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});if(await ensureDevice()){await loadEvents(false);await refreshPushButton()}})();
 </script>
-</body>
-</html>
+</body></html>

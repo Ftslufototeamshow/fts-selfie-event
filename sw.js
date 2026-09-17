@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE=(cfg.cacheVersion||'fts-selfie-v4-offline')+'-push2';
+const CACHE='fts-selfie-v9-final-20260917';
 const CORE=['./','./index.html','./config.js','./manifest.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{

@@ -395,13 +395,12 @@ async function makeDesign(file){
  const bottom=ctx.createLinearGradient(0,canvas.height*.48,0,canvas.height);bottom.addColorStop(0,'rgba(3,14,15,0)');bottom.addColorStop(.3,'rgba(3,14,15,.64)');bottom.addColorStop(1,'rgba(3,14,15,.96)');ctx.fillStyle=bottom;ctx.fillRect(0,canvas.height*.48,canvas.width,canvas.height*.52);
 
 
- const pad=Math.max(24,canvas.width*.045),badgeH=Math.max(42,canvas.width*.05),badgeW=Math.max(220,canvas.width*.31);
- ctx.fillStyle='rgba(5,18,19,.84)';roundRect(ctx,pad,pad,badgeW,badgeH,badgeH/2);ctx.fill();ctx.fillStyle=ev.accent;ctx.font=`800 ${Math.max(17,canvas.width*.019)}px system-ui`;ctx.textBaseline='middle';ctx.fillText('FTS.LU · SELFIE EVENT',pad+badgeH*.34,pad+badgeH/2);
-
+ const pad=Math.max(24,canvas.width*.045);
  const maxW=canvas.width-pad*2,y=canvas.height-pad*2.35,title=String(ev.title||'');ctx.textBaseline='alphabetic';ctx.fillStyle='#fff';
  const titleSize=fitText(ctx,title,maxW,Math.max(38,canvas.width*.06),Math.max(25,canvas.width*.037),900);ctx.font=`900 ${titleSize}px system-ui`;ctx.fillText(title,pad,y-Math.max(48,canvas.width*.058));
  ctx.fillStyle=ev.accent;const sub=String(ev.subtitle||'');const subSize=fitText(ctx,sub,maxW,Math.max(25,canvas.width*.035),Math.max(18,canvas.width*.024),800);ctx.font=`800 ${subSize}px system-ui`;ctx.fillText(sub,pad,y);
  ctx.fillStyle='rgba(255,255,255,.88)';const over=String(ev.overlay_text||ev.title||'');const overSize=fitText(ctx,over,maxW,Math.max(18,canvas.width*.024),Math.max(14,canvas.width*.018),600);ctx.font=`600 ${overSize}px system-ui`;ctx.fillText(over,pad,y+Math.max(30,canvas.width*.035));
+ if((ev.photo_branding||'bottom')!=='none'){ctx.save();ctx.textAlign='right';ctx.textBaseline='alphabetic';ctx.fillStyle='rgba(255,255,255,.72)';ctx.font=`600 ${Math.max(14,canvas.width*.016)}px system-ui`;ctx.fillText('FTS.lu · Selfie Event',canvas.width-pad,canvas.height-Math.max(18,canvas.height*.018));ctx.restore()}
  await drawEventLogos(ctx,canvas.width,canvas.height,'photo');
  await Promise.resolve(drawEventDecorations(ctx,canvas.width,canvas.height,'photo'));
  designedBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',.91));
@@ -413,14 +412,15 @@ async function submitPhoto(){
  if(selectedFile.size>15*1024*1024)return showMessage(tr('tooBig'));
  if(!designedBlob)await makeDesign(selectedFile);
 
- const btn=document.getElementById('uploadBtn');btn.disabled=true;const id=`${Date.now()}_${crypto.randomUUID()}`;const ext=(selectedFile.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+ const btn=document.getElementById('uploadBtn');btn.disabled=true;const queueId=`${Date.now()}_${crypto.randomUUID()}`;const originalId=`${Date.now()}_${crypto.randomUUID()}`;const designId=`${Date.now()}_${crypto.randomUUID()}`;const ext=(selectedFile.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+ const storageSlug=String(ev.storage_slug||'event').replace(/[^a-z0-9-]/gi,'-').replace(/-+/g,'-');
  const routeBase=routeMode==='test'
-   ? `${ev.event_token}/test`
-   : `${ev.event_token}/days/${routeDay}`;
+   ? `${ev.event_token}/${storageSlug}/test`
+   : `${ev.event_token}/${storageSlug}/days/${routeDay}`;
  const item={
-   id,createdAt:Date.now(),eventToken:ev.event_token,
-   originalPath:`${routeBase}/original/${id}.${ext}`,
-   designedPath:`${routeBase}/designed/${id}.jpg`,
+   id:queueId,createdAt:Date.now(),eventToken:ev.event_token,
+   originalPath:`${routeBase}/original/${originalId}.${ext}`,
+   designedPath:`${routeBase}/designed/${designId}.jpg`,
    originalBlob:selectedFile,designedBlob,originalType:selectedFile.type||'image/jpeg'
  };
  try{
