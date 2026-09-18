@@ -8,7 +8,7 @@
 <style>
 :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--accent:#d9b56d;--bg1:#071315;--bg2:#10383a}
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#071315;color:#fff}body{display:grid;place-items:center;padding:14px}.wrap{width:100%;display:grid;place-items:center}.loading{padding:60px 20px;text-align:center;color:#a8b6b4}
-.poster{position:relative;width:min(720px,calc(100vw - 28px));aspect-ratio:4/5;border-radius:34px;background:linear-gradient(145deg,var(--bg1),var(--bg2));display:flex;flex-direction:column;align-items:center;justify-content:center;padding:7%;overflow:hidden;box-shadow:0 30px 90px #0009}.poster>*{position:relative;z-index:4}.flyer{position:absolute!important;z-index:0!important;inset:0;width:100%;height:100%;object-fit:cover}.shade{position:absolute!important;z-index:1!important;inset:0;background:linear-gradient(rgba(0,0,0,.38),rgba(0,0,0,.18) 30%,rgba(0,0,0,.58))}.glow{position:absolute!important;z-index:2!important;border-radius:50%;filter:blur(50px);opacity:.26}.glow.one{width:48%;aspect-ratio:1;background:var(--accent);left:-15%;top:-12%}.glow.two{width:42%;aspect-ratio:1;background:var(--accent);right:-18%;bottom:-12%}
+.poster{position:relative;width:min(720px,calc(100vw - 28px));aspect-ratio:4/5;border-radius:34px;background:linear-gradient(145deg,var(--bg1),var(--bg2));display:flex;flex-direction:column;align-items:center;justify-content:center;padding:7%;overflow:hidden;box-shadow:0 30px 90px #0009}.poster>*{position:relative;z-index:4}.flyer{position:absolute!important;z-index:0!important;inset:0;width:100%;height:100%;object-fit:cover}.shade{position:absolute!important;z-index:1!important;inset:0;background:linear-gradient(rgba(0,0,0,.38),rgba(0,0,0,.18) 30%,rgba(0,0,0,.58))}.glow{position:absolute!important;z-index:2!important;border-radius:50%;filter:blur(70px);opacity:.18}.poster.hasFlyer .glow{display:none!important}.poster.hasFlyer .shade{background:linear-gradient(rgba(0,0,0,.10),rgba(0,0,0,.02) 34%,rgba(0,0,0,.18))}.glow.one{width:48%;aspect-ratio:1;background:var(--accent);left:-15%;top:-12%}.glow.two{width:42%;aspect-ratio:1;background:var(--accent);right:-18%;bottom:-12%}
 .logoStack{position:absolute!important;z-index:6!important;display:flex;gap:10px;align-items:center;max-width:72%;flex-wrap:wrap}
 .logoStack img{object-fit:contain;filter:drop-shadow(0 6px 12px #0009)}
 .logoStack img.small{max-width:85px;max-height:55px}.logoStack img.medium{max-width:125px;max-height:80px}.logoStack img.large{max-width:175px;max-height:110px}
@@ -114,7 +114,7 @@ async function boot(){
   const ev=data[0];
   document.documentElement.style.setProperty('--accent',ev.accent||'#d9b56d');document.documentElement.style.setProperty('--bg1',ev.bg1||'#071315');document.documentElement.style.setProperty('--bg2',ev.bg2||'#10383a');
   const root=document.getElementById('root');
-  root.innerHTML=`<section class="poster" id="poster">
+  root.innerHTML=`<section class="poster${ev.poster_bg_path?' hasFlyer':''}" id="poster">
     ${ev.poster_bg_path?`<img class="flyer" crossorigin="anonymous" src="${assetUrl(ev.poster_bg_path)}">`:''}
     <div class="shade"></div><div class="glow one"></div><div class="glow two"></div>
     ${logoStacksHtml(ev)}

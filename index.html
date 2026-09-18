@@ -278,6 +278,29 @@ async function onPhoto(){const file=document.getElementById('photo').files?.[0];
 function themeLabel(){return ({standard:'FTS Standard',autumn:'Kürbis / Herbst',halloween:'Halloween',streetfood:'Streetfood',cars:'Auto / Motorsport',neon:'Party / Neon',winter:'Winter / Weihnachten',spring:'Frühling',summer:'Sommer',wedding:'Hochzeit',sports:'Sport',business:'Firmen / Business',festival:'Festival',carnival:'Karneval'})[ev?.theme||'standard']||'FTS Event'}
 function eventMotif(){return ev?.motif||({standard:'✦',autumn:'🎃',halloween:'👻',streetfood:'🍔',cars:'🏎️',neon:'✦',winter:'❄',spring:'🌸',summer:'☀️',wedding:'♥',sports:'⚽',business:'◆',festival:'🎪',carnival:'🎭'})[ev?.theme||'standard']||'✦'}
 function filterCss(key){return ({natural:'none',warm:'saturate(1.08) sepia(.14) contrast(1.03)',vivid:'saturate(1.38) contrast(1.10)',mono:'grayscale(1) contrast(1.09)',cool:'saturate(.96) hue-rotate(10deg) brightness(1.03)'})[key]||'none'}
+function clamp255(v){return v<0?0:v>255?255:v}
+function applyPixelFilter(canvas,key){
+ if(!canvas||key==='natural')return;
+ const c=canvas.getContext('2d',{willReadFrequently:true}),im=c.getImageData(0,0,canvas.width,canvas.height),d=im.data;
+ for(let i=0;i<d.length;i+=4){
+  if(d[i+3]===0)continue;
+  let r=d[i],g=d[i+1],b=d[i+2];
+  if(key==='mono'){
+   let y=.2126*r+.7152*g+.0722*b;y=(y-128)*1.10+128;r=g=b=y;
+  }else if(key==='warm'){
+   const y=.2126*r+.7152*g+.0722*b;r=y+(r-y)*1.08+9;g=y+(g-y)*1.05+3;b=y+(b-y)*.92-5;
+  }else if(key==='vivid'){
+   const y=.2126*r+.7152*g+.0722*b;r=y+(r-y)*1.38;g=y+(g-y)*1.38;b=y+(b-y)*1.38;r=(r-128)*1.10+128;g=(g-128)*1.10+128;b=(b-128)*1.10+128;
+  }else if(key==='cool'){
+   const y=.2126*r+.7152*g+.0722*b;r=y+(r-y)*.98-5;g=y+(g-y)*1.02+1;b=y+(b-y)*1.10+10;
+  }
+  d[i]=clamp255(r);d[i+1]=clamp255(g);d[i+2]=clamp255(b);
+ }
+ c.putImageData(im,0,0);
+}
+function makePhotoLayer(w,h,draw,key){const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');draw(x);applyPixelFilter(c,key);return c}
+function drawFilteredCover(ctx,img,w,h,zoom=1,key=selectedFilter){const layer=makePhotoLayer(w,h,x=>drawCover(x,img,w,h,zoom),key);ctx.drawImage(layer,0,0)}
+
 function layoutCanvas(img,key){
  const maxW=1600;
  if(key==='solo')return {w:1200,h:1500,mode:'cover',zoom:1.08};
@@ -291,10 +314,11 @@ function drawCover(ctx,img,w,h,zoom=1){
  ctx.drawImage(img,(w-dw)/2,(h-dh)/2,dw,dh);
 }
 function drawContainWithBlur(ctx,img,w,h){
- ctx.save();const baseFilter=filterCss(selectedFilter);ctx.filter=(baseFilter==='none'?'blur(26px)':baseFilter+' blur(26px)');ctx.globalAlpha=.72;drawCover(ctx,img,w,h,1.04);ctx.restore();
- ctx.fillStyle='rgba(0,0,0,.12)';ctx.fillRect(0,0,w,h);
+ ctx.save();ctx.globalAlpha=.68;drawCover(ctx,img,w,h,1.04);ctx.restore();
+ ctx.fillStyle='rgba(0,0,0,.18)';ctx.fillRect(0,0,w,h);
  const s=Math.min(w/img.naturalWidth,h/img.naturalHeight)*.96,dw=img.naturalWidth*s,dh=img.naturalHeight*s;
- ctx.save();ctx.filter=filterCss(selectedFilter);ctx.drawImage(img,(w-dw)/2,(h-dh)/2,dw,dh);ctx.restore();
+ const layer=makePhotoLayer(w,h,x=>x.drawImage(img,(w-dw)/2,(h-dh)/2,dw,dh),selectedFilter);
+ ctx.drawImage(layer,0,0);
 }
 function drawThemeDecor(ctx,w,h){
  const motif=String(eventMotif()||'').trim(),size=Math.max(48,w*.06);
@@ -390,7 +414,7 @@ function drawEventDecorations(ctx,w,h,target='photo'){
 async function makeDesign(file){
  const img=await loadImageFile(file),canvas=document.getElementById('designCanvas'),ctx=canvas.getContext('2d'),spec=layoutCanvas(img,selectedLayout);
  canvas.width=spec.w;canvas.height=spec.h;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle=ev.bg1||'#071315';ctx.fillRect(0,0,canvas.width,canvas.height);
- if(spec.mode==='contain')drawContainWithBlur(ctx,img,canvas.width,canvas.height);else{ctx.save();ctx.filter=filterCss(selectedFilter);drawCover(ctx,img,canvas.width,canvas.height,spec.zoom||1);ctx.restore()}
+ if(spec.mode==='contain')drawContainWithBlur(ctx,img,canvas.width,canvas.height);else drawFilteredCover(ctx,img,canvas.width,canvas.height,spec.zoom||1,selectedFilter)
  const top=ctx.createLinearGradient(0,0,0,canvas.height*.28);top.addColorStop(0,'rgba(0,0,0,.48)');top.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=top;ctx.fillRect(0,0,canvas.width,canvas.height*.32);
  const bottom=ctx.createLinearGradient(0,canvas.height*.48,0,canvas.height);bottom.addColorStop(0,'rgba(3,14,15,0)');bottom.addColorStop(.3,'rgba(3,14,15,.64)');bottom.addColorStop(1,'rgba(3,14,15,.96)');ctx.fillStyle=bottom;ctx.fillRect(0,canvas.height*.48,canvas.width,canvas.height*.52);
 
