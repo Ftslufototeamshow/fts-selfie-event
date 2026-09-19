@@ -18,6 +18,7 @@
 .brand{font-size:clamp(.64rem,1.8vw,.9rem);letter-spacing:.2em;color:var(--accent);font-weight:900;text-shadow:0 2px 8px #000}.poster h1{font-size:clamp(2.4rem,8vw,5rem);line-height:.92;text-align:center;margin:14px 0 6px;text-shadow:0 4px 18px #000}.sub{font-size:clamp(1rem,3vw,1.55rem);color:var(--accent);font-weight:900;text-align:center;text-shadow:0 2px 10px #000}
 .qrbox{width:55%;aspect-ratio:1;background:#fff;border-radius:26px;padding:6%;margin:7% 0 4%;box-shadow:0 16px 38px #0007;display:grid;place-items:center}.qrbox #qr{width:100%;height:100%;display:grid;place-items:center}.qrbox>div,.qrbox img,.qrbox canvas{width:100%!important;height:100%!important}.cta{font-size:clamp(1rem,3vw,1.5rem);font-weight:900;text-align:center;text-shadow:0 2px 8px #000}.foot{font-size:.82rem;color:#e2e8e6;margin-top:3%;text-shadow:0 2px 8px #000}.code{position:absolute!important;bottom:2.5%;font-size:.62rem;letter-spacing:.14em;color:#d5dfdcaa}
 .controls{width:min(720px,calc(100vw - 28px));display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}.controls button{border:0;border-radius:12px;padding:12px 14px;font:inherit;font-weight:900;background:var(--accent);color:#102020;cursor:pointer}.controls .secondary{background:#14383a;color:#fff;border:1px solid rgba(255,255,255,.1)}
+.screenAd{display:none;width:min(720px,calc(100vw - 28px));margin-top:10px}.screenAd.show{display:block}.screenAdLabel{font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:#829592;margin:0 0 4px 3px}.screenAd a{display:block;border-radius:12px;overflow:hidden;background:#02090a;border:1px solid rgba(255,255,255,.09)}.screenAd img{display:block;width:100%;aspect-ratio:4/1;object-fit:cover}.displayMode .screenAd,:fullscreen .screenAd{width:min(100vw,64svh);margin-top:5px}.displayMode.hasScreenAds .poster,.hasScreenAds:fullscreen .poster{width:min(100vw,64svh)!important}.displayMode .screenAdLabel,:fullscreen .screenAdLabel{display:none}.displayMode .screenAd a,:fullscreen .screenAd a{border-radius:0;border:0}
 .displayMode,.displayMode body{background:#000}.displayMode body{padding:0;overflow:hidden;display:grid;place-items:center}.displayMode .wrap{width:100vw;min-height:100svh}.displayMode .controls{display:none!important}.displayMode .poster{width:min(100vw,80svh);height:auto;aspect-ratio:4/5;max-width:none;max-height:100svh;border-radius:0;box-shadow:none}
 :fullscreen .controls{display:none!important}:fullscreen body{padding:0;overflow:hidden;display:grid;place-items:center}:fullscreen .wrap{width:100vw;min-height:100svh}:fullscreen .poster{width:min(100vw,80svh);height:auto;aspect-ratio:4/5;max-width:none;max-height:100svh;border-radius:0;box-shadow:none}
 .exporting .poster{border-radius:0!important;box-shadow:none!important}
@@ -26,6 +27,7 @@
   @page{size:A4 portrait;margin:0}
   html,body{width:210mm;height:297mm;margin:0!important;padding:0!important;background:#fff!important}
   body>*{display:none!important}
+  .screenAd{display:none!important}
   .printSheet{display:flex!important;position:fixed!important;inset:0!important;width:210mm!important;height:297mm!important;align-items:center!important;justify-content:center!important;background:#fff!important;z-index:999999!important}
   .printSheet img{display:block!important;width:210mm!important;height:auto!important;max-height:297mm!important;object-fit:contain!important}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
@@ -53,6 +55,20 @@ async function rpc(name,body){const r=await fetch(`${cfg.supabaseUrl}/rest/v1/rp
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function encodePath(path){return path.split('/').map(encodeURIComponent).join('/')}
 function assetUrl(path){if(!path)return'';return `${cfg.supabaseUrl}/storage/v1/object/public/${encodeURIComponent(cfg.liveBucket)}/${encodePath(path)}`}
+function adItemsFor(ev){
+  if(ev?.ads_enabled!==true)return[];let items=ev?.ad_items;if(!Array.isArray(items)){try{items=JSON.parse(items||'[]')}catch{items=[]}}
+  return items.filter(x=>x?.path&&x.active!==false);
+}
+function safeAdLink(v){try{const u=new URL(String(v||''));return ['http:','https:'].includes(u.protocol)?u.href:''}catch{return''}}
+let screenAds=[],screenAdIndex=0,screenAdTimer=null;
+function renderScreenAd(){
+  const rail=document.getElementById('screenAd'),img=document.getElementById('screenAdImg'),a=document.getElementById('screenAdLink');
+  if(!rail||!img||!a||!screenAds.length){rail?.classList.remove('show');document.documentElement.classList.remove('hasScreenAds');return}
+  const item=screenAds[screenAdIndex%screenAds.length];img.src=assetUrl(item.path);img.alt=item.name||'Werbung';const href=safeAdLink(item.link);
+  if(href){a.href=href;a.target='_blank';a.rel='noopener noreferrer'}else{a.removeAttribute('href');a.removeAttribute('target');a.removeAttribute('rel')}
+  rail.classList.add('show');document.documentElement.classList.add('hasScreenAds');
+}
+function startScreenAds(ev){screenAds=adItemsFor(ev);if(screenAdTimer)clearInterval(screenAdTimer);screenAdIndex=0;renderScreenAd();if(screenAds.length>1)screenAdTimer=setInterval(()=>{screenAdIndex=(screenAdIndex+1)%screenAds.length;renderScreenAd()},3000)}
 function logoItemsFor(ev,target){
   let items=[];
   if(Array.isArray(ev.logo_items))items=ev.logo_items;
@@ -110,7 +126,7 @@ function renderQr(el,data,ev){
 }
 async function boot(){
  try{
-  const data=await rpc('fts_get_event',{p_event_token:ref});if(!data?.length)throw new Error('Event nicht aktiv');
+  const data=await rpc('fts_get_event_v10',{p_event_token:ref});if(!data?.length)throw new Error('Event nicht aktiv');
   const ev=data[0];
   document.documentElement.style.setProperty('--accent',ev.accent||'#d9b56d');document.documentElement.style.setProperty('--bg1',ev.bg1||'#071315');document.documentElement.style.setProperty('--bg2',ev.bg2||'#10383a');
   const root=document.getElementById('root');
@@ -123,9 +139,11 @@ async function boot(){
     <div class="qrbox"><div id="qr"></div></div><div class="cta">Scannen & Selfie hochladen</div>${ev.poster_bilingual!==false?`<div class="ctaEn">Scan & upload your selfie</div>`:''}<div class="foot">FTS.lu · Eventfotografie</div>
     ${ev.short_code?`<div class="code">${esc(ev.short_code)}</div>`:''}
   </section>
+  <div class="screenAd" id="screenAd"><div class="screenAdLabel">Werbung</div><a id="screenAdLink"><img id="screenAdImg" alt="Werbung"></a></div>
   <div class="controls" id="controls"><button id="full">Vollbild / Anzeige</button><button id="png">PNG herunterladen</button><button id="print" class="secondary">A4 drucken</button></div>`;
   const guest=cfg.baseUrl+'?e='+encodeURIComponent(ev.short_code||ref);
   renderQr(document.getElementById('qr'),guest,ev);
+  startScreenAds(ev);
   document.getElementById('full').onclick=enterDisplay;document.getElementById('png').onclick=downloadPng;document.getElementById('print').onclick=printPoster;
   if(display){document.documentElement.classList.add('displayMode');setTimeout(()=>document.documentElement.requestFullscreen?.().catch(()=>{}),250)}
  }catch(e){console.error(e);document.getElementById('root').innerHTML='<div class="loading"><h2>Event konnte nicht geladen werden.</h2><p>Bitte prüfe den Event-Link.</p></div>'}

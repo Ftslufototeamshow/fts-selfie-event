@@ -25,6 +25,7 @@
 .logoItem .controlsGrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px;margin-top:7px;min-width:0}
 .logoItem .targetRow{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}.logoItem .targetRow label{display:flex;align-items:center;gap:6px;color:#cbd5d3;margin:0}.logoItem .targetRow input{width:auto}
 .logoItem button.removeLogo{padding:7px 9px;background:#3a1b1b!important;color:#ffb0b0!important}
+.adManager{display:grid;gap:10px;margin-top:10px}.adItem{display:grid;grid-template-columns:minmax(150px,240px) minmax(0,1fr);gap:12px;padding:11px;border:1px solid rgba(255,255,255,.09);border-radius:14px;background:#081d1f;min-width:0}.adThumb{width:100%;aspect-ratio:4/1;object-fit:cover;border-radius:10px;background:#02090a;border:1px solid rgba(255,255,255,.08)}.adControls{display:grid;grid-template-columns:1fr 1fr;gap:8px;min-width:0}.adControls .full{grid-column:1/-1}.adTop{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}.adTop b{font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.adActive{display:flex;gap:7px;align-items:center;color:#d6dfdd}.adActive input{width:auto}.adRemove{background:#3a1b1b!important;color:#ffb0b0!important;padding:7px 10px!important}.adPreviewNote{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(217,181,109,.08);border:1px solid rgba(217,181,109,.2);color:#cfd9d7;font-size:.79rem;line-height:1.45}@media(max-width:720px){.adItem{grid-template-columns:1fr}.adControls{grid-template-columns:1fr}}
 .previewLogoLayer{position:absolute!important;z-index:6!important;inset:0;pointer-events:none}
 .previewLogoSlot{position:absolute;display:flex;gap:6px;align-items:center;max-width:70%;flex-wrap:wrap}
 .previewLogoSlot img{object-fit:contain;filter:drop-shadow(0 5px 10px #0009);background:transparent}
@@ -214,7 +215,23 @@
       </section>
 
       <section class="card">
-        <h2>7. Module für die Gäste</h2>
+        <h2>7. Werbung / Banner</h2>
+        <label class="langSetting" style="margin-top:4px">
+          <input id="adsEnabled" type="checkbox">
+          <div><b>Digitale Werbung für dieses Event aktivieren</b><div class="hint">Die Banner erscheinen nur digital: auf der Selfie-Seite nach Auswahl eines Fotos und unter dem QR-Poster auf Bildschirm/Vollbild. Der QR-Code selbst bleibt unverändert.</div></div>
+        </label>
+        <div class="uploadBox" style="margin-top:12px">
+          <label>Werbebanner hinzufügen</label>
+          <input id="adFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple>
+          <div class="hint">Empfohlen: 1200 × 300 Pixel (4:1). Andere Bildgrößen werden automatisch sauber auf 1200 × 300 zugeschnitten und als platzsparendes WebP gespeichert.</div>
+        </div>
+        <div class="adManager" id="adManager"></div>
+        <div class="hint" id="noAdsHint">Noch keine Werbung hinterlegt.</div>
+        <div class="adPreviewNote"><b>Feste Regel:</b> Bei mehreren aktiven Bannern wechselt die Anzeige automatisch alle 3 Sekunden. PNG-Download, PDF/Druck des QR-Posters und Kundenportal bleiben immer komplett werbefrei.</div>
+      </section>
+
+      <section class="card">
+        <h2>8. Module für die Gäste</h2>
         <div class="hint" style="margin-bottom:10px">Diese Auswahl sehen die Gäste vor dem Selfie. Sie können danach noch wechseln und sofort die neue Vorschau sehen.</div>
         <b class="small" style="color:#e7efed">Foto-Layouts</b>
         <div class="checkGrid" style="margin-top:8px" id="layoutChecks">
@@ -241,7 +258,7 @@
       </section>
 
       <section class="card">
-        <h2>8. Event speichern</h2>
+        <h2>9. Event speichern</h2>
         <button id="createEvent" style="width:100%">Event jetzt erstellen</button>
         <div id="eventResult" class="result hidden"></div>
       </section>
@@ -290,7 +307,7 @@ const cfg=window.FTS_CONFIG,LS='fts_selfie_customers_v1';
 const DEVICE_KEY='fts_device_token_v1',LEGACY_CODE_KEY='fts_cockpit_admin_code';
 const params=new URLSearchParams(location.search),EDIT_TOKEN=params.get('edit'),DUP_TOKEN=params.get('duplicate');
 const $=s=>document.querySelector(s);
-let logoItems=[],decoItems=[],flyerFile=null,flyerUrl='',eventDayCounter=0,serverCustomers=[];
+let logoItems=[],decoItems=[],adItems=[],originalAdPaths=[],flyerFile=null,flyerUrl='',eventDayCounter=0,serverCustomers=[];
 let customerAssets=[],existingFlyerPath='',originalFlyerPath='',editStorageSlug='',modeLoaded=false;
 
 const presets={
@@ -652,6 +669,71 @@ function renderTargetDecos(layer,target){
   ).join('');
 }
 
+function safeHttpUrl(v){
+  const s=String(v||'').trim();if(!s)return'';
+  try{const u=new URL(s);return ['http:','https:'].includes(u.protocol)?u.href:''}catch{return''}
+}
+function adDisplayName(item,i){return item.name?.trim()||item.file?.name||`Werbung ${i+1}`}
+function renderAdManager(){
+  const box=$('#adManager'),hint=$('#noAdsHint');if(!box)return;
+  hint.classList.toggle('hidden',adItems.length>0);
+  box.innerHTML=adItems.map((item,i)=>`<div class="adItem" data-ad-id="${item.id}">
+    <img class="adThumb" src="${escAttr(item.url||assetUrl(item.path)||'')}" alt="Werbebanner">
+    <div>
+      <div class="adTop"><b title="${escAttr(adDisplayName(item,i))}">${esc(adDisplayName(item,i))}</b><button type="button" class="adRemove" data-ad-remove="${item.id}">Entfernen</button></div>
+      <div class="adControls">
+        <div class="full"><label>Interner Name</label><input data-ad-name="${item.id}" value="${escAttr(item.name||'')}" placeholder="z. B. Nächstes Event"></div>
+        <div class="full"><label>Link beim Antippen (optional)</label><input data-ad-link="${item.id}" value="${escAttr(item.link||'')}" placeholder="https://..."></div>
+        <label class="adActive full"><input type="checkbox" data-ad-active="${item.id}" ${item.active!==false?'checked':''}> Banner aktiv</label>
+      </div>
+    </div>
+  </div>`).join('');
+  box.querySelectorAll('[data-ad-remove]').forEach(b=>b.onclick=()=>removeAd(b.dataset.adRemove));
+  box.querySelectorAll('[data-ad-name]').forEach(i=>i.oninput=()=>updateAd(i.dataset.adName,{name:i.value}));
+  box.querySelectorAll('[data-ad-link]').forEach(i=>i.onchange=()=>updateAd(i.dataset.adLink,{link:safeHttpUrl(i.value)}));
+  box.querySelectorAll('[data-ad-active]').forEach(c=>c.onchange=()=>updateAd(c.dataset.adActive,{active:c.checked}));
+}
+function updateAd(id,patch){const item=adItems.find(x=>x.id===id);if(item)Object.assign(item,patch)}
+function removeAd(id){const item=adItems.find(x=>x.id===id);if(item?.url?.startsWith('blob:'))URL.revokeObjectURL(item.url);adItems=adItems.filter(x=>x.id!==id);renderAdManager()}
+function loadImgFromFile(file){return new Promise((resolve,reject)=>{const img=new Image(),u=URL.createObjectURL(file);img.onload=()=>{URL.revokeObjectURL(u);resolve(img)};img.onerror=e=>{URL.revokeObjectURL(u);reject(e)};img.src=u})}
+async function normalizeAdFile(file){
+  const img=await loadImgFromFile(file),c=document.createElement('canvas');c.width=1200;c.height=300;
+  const x=c.getContext('2d'),scale=Math.max(1200/img.naturalWidth,300/img.naturalHeight),dw=img.naturalWidth*scale,dh=img.naturalHeight*scale;
+  x.drawImage(img,(1200-dw)/2,(300-dh)/2,dw,dh);
+  const blob=await new Promise(r=>c.toBlob(r,'image/webp',.84));
+  if(!blob)throw new Error('Banner konnte nicht verarbeitet werden.');
+  return new File([blob],(file.name.replace(/\.[^.]+$/,'')||'werbung')+'.webp',{type:'image/webp'});
+}
+async function addAdFiles(files){
+  for(const raw of [...files].slice(0,12-adItems.length)){
+    try{const file=await normalizeAdFile(raw);adItems.push({id:crypto.randomUUID(),file,url:URL.createObjectURL(file),path:'',name:raw.name.replace(/\.[^.]+$/,''),link:'',active:true})}
+    catch(e){alert('Werbebanner konnte nicht geladen werden: '+(e.message||e))}
+  }
+  renderAdManager();
+}
+$('#adFiles').addEventListener('change',async e=>{await addAdFiles(e.target.files||[]);e.target.value=''});
+
+async function persistEventAds(eventToken,storageSlug){
+  const persisted=[];
+  for(let i=0;i<adItems.length;i++){
+    const item=adItems[i];let path=item.path||'';
+    if(item.file){
+      path=`${eventToken}/${storageSlug}/assets/ad-${i+1}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.webp`;
+      await uploadAsset(path,item.file);item.path=path;
+    }else if(DUP_TOKEN&&path){
+      const target=`${eventToken}/${storageSlug}/assets/ad-${i+1}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.webp`;
+      const copied=await adminFiles('copy-path',{source_path:path,target_path:target});path=copied.path||target;item.path=path;
+    }
+    if(path)persisted.push({path,name:(item.name||`Werbung ${i+1}`).trim().slice(0,100),link:safeHttpUrl(item.link),active:item.active!==false});
+  }
+  await rpc('fts_admin_set_event_ads_v1',{p_admin_code:authCredential(),p_event_token:eventToken,p_ads_enabled:$('#adsEnabled').checked,p_ad_items:persisted});
+  if(EDIT_TOKEN){
+    const keep=new Set(persisted.map(x=>x.path));const removed=originalAdPaths.filter(p=>p&&!keep.has(p));
+    if(removed.length){try{await adminFiles('delete-paths',{paths:removed})}catch(e){console.warn('Alte Werbebanner konnten nicht sofort gelöscht werden',e)}}
+  }
+  originalAdPaths=persisted.map(x=>x.path);adItems=adItems.map((x,i)=>({...x,file:null,url:x.path?assetUrl(x.path):x.url}));renderAdManager();
+}
+
 function encodePath(path){return path.split('/').map(encodeURIComponent).join('/')}
 async function uploadAsset(path,file){
   const u=`${cfg.supabaseUrl}/storage/v1/object/${encodeURIComponent(cfg.liveBucket)}/${encodePath(path)}`;
@@ -758,9 +840,11 @@ $('#createEvent').onclick=async()=>{
     if(EDIT_TOKEN){
       const args=eventArgs(false);const r=await rpc('fts_admin_update_event_v9',args);eventToken=EDIT_TOKEN;storageSlug=editStorageSlug;alias=$('#shortCode').value;expires=r?.[0]?.expires_at||null;
       await persistEventAssets(eventToken,storageSlug,$('#customerToken').value.trim());
+      await persistEventAds(eventToken,storageSlug);
     }else{
       const args=eventArgs(true);const d=await rpc('fts_admin_create_event_v9',args),r=d[0];eventToken=r.event_token;storageSlug=r.storage_slug;alias=r.short_code;expires=r.expires_at;
       await persistEventAssets(eventToken,storageSlug,args.p_customer_token);
+      await persistEventAds(eventToken,storageSlug);
     }
 
     const guest=cfg.baseUrl+'?e='+encodeURIComponent(alias);const poster=cfg.baseUrl+'poster.html?e='+encodeURIComponent(alias);const customer=cfg.baseUrl+'customer.html?c='+encodeURIComponent($('#customerToken').value.trim());
@@ -783,6 +867,7 @@ async function loadModeEvent(token,duplicate=false){
   decoItems=parseArr(e.decoration_items).map(x=>({id:crypto.randomUUID(),symbol:x.symbol,position:x.position||'bottom-right',size:x.size||'medium',showPoster:x.show_poster!==false,showPhoto:x.show_photo!==false}));renderDecoPicker();renderDecoManager();
   logoItems=parseArr(e.logo_items).map(x=>({id:crypto.randomUUID(),path:x.path||'',url:assetUrl(x.path),name:x.name||'Logo',position:x.position||'top-right',size:x.size||'medium',showPoster:x.show_poster!==false,showPhoto:x.show_photo!==false}));
   existingFlyerPath=e.poster_bg_path||'';originalFlyerPath=existingFlyerPath;if(existingFlyerPath){flyerUrl=assetUrl(existingFlyerPath);$('#previewFlyer').src=flyerUrl;$('#previewFlyer').classList.add('show');$('#flyerThumb').src=flyerUrl;$('#flyerName').textContent='Gespeicherter Flyer';$('#flyerAssetPreview').classList.add('show');$('#removeFlyer').classList.remove('hidden')}
+  adItems=parseArr(e.ad_items).map((x,i)=>({id:crypto.randomUUID(),path:x.path||'',url:assetUrl(x.path||''),name:x.name||`Werbung ${i+1}`,link:x.link||'',active:x.active!==false}));originalAdPaths=adItems.map(x=>x.path).filter(Boolean);$('#adsEnabled').checked=e.ads_enabled===true;renderAdManager();
   editStorageSlug=e.storage_slug||'event';$('#qrDotStyle').value=e.qr_dot_style||'square';$('#qrCornerStyle').value=e.qr_corner_style||'square';$('#qrLogoScale').value=Math.round(Number(e.qr_logo_scale||.18)*100);$('#photoBranding').value=e.photo_branding||'bottom';
   renderLogoManager();const qrMatch=logoItems.find(x=>x.path&&x.path===e.qr_logo_path);if(qrMatch)$('#qrLogoSelect').value=qrMatch.id;updatePreview();
   if(!duplicate){$('#savedCustomers').disabled=true;$('#customerToken').disabled=true;}
@@ -795,7 +880,7 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catc
 renderCustomers();
 addEventDay('');
 $('#fakeQr').innerHTML='<i></i>'.repeat(49)+'<img id="previewQrLogo" class="qrPreviewLogo" alt="">';
-renderLogoManager();renderDecoPicker();renderDecoManager();updatePreview();initAuth();
+renderLogoManager();renderDecoPicker();renderDecoManager();renderAdManager();updatePreview();initAuth();
 </script>
 </body>
 </html>
