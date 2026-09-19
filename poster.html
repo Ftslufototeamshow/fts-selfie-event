@@ -124,10 +124,19 @@ function renderQr(el,data,ev){
     }
   }
 }
+async function loadPosterEvent(){
+  const core=await rpc('fts_get_event',{p_event_token:ref});
+  if(!core?.length)throw new Error('Event nicht aktiv');
+  const ev={...core[0],ads_enabled:false,ad_items:[]};
+  try{
+    const ads=await rpc('fts_get_event_ads_v1',{p_event_token:ref});
+    if(ads?.length){ev.ads_enabled=ads[0].ads_enabled===true;ev.ad_items=ads[0].ad_items||[];}
+  }catch(e){console.warn('Werbung konnte nicht geladen werden',e)}
+  return ev;
+}
 async function boot(){
  try{
-  const data=await rpc('fts_get_event_v10',{p_event_token:ref});if(!data?.length)throw new Error('Event nicht aktiv');
-  const ev=data[0];
+  const ev=await loadPosterEvent();
   document.documentElement.style.setProperty('--accent',ev.accent||'#d9b56d');document.documentElement.style.setProperty('--bg1',ev.bg1||'#071315');document.documentElement.style.setProperty('--bg2',ev.bg2||'#10383a');
   const root=document.getElementById('root');
   root.innerHTML=`<section class="poster${ev.poster_bg_path?' hasFlyer':''}" id="poster">

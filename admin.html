@@ -705,16 +705,25 @@ async function normalizeAdFile(file){
   return new File([blob],(file.name.replace(/\.[^.]+$/,'')||'werbung')+'.webp',{type:'image/webp'});
 }
 async function addAdFiles(files){
+  let added=0;
   for(const raw of [...files].slice(0,12-adItems.length)){
-    try{const file=await normalizeAdFile(raw);adItems.push({id:crypto.randomUUID(),file,url:URL.createObjectURL(file),path:'',name:raw.name.replace(/\.[^.]+$/,''),link:'',active:true})}
-    catch(e){alert('Werbebanner konnte nicht geladen werden: '+(e.message||e))}
+    try{
+      const file=await normalizeAdFile(raw);
+      const cleanName=(raw.name.replace(/\.[^.]+$/,'')||'Werbung').replace(/^file_[0-9a-f_-]+$/i,'Werbung');
+      adItems.push({id:crypto.randomUUID(),file,url:URL.createObjectURL(file),path:'',name:cleanName,link:'',active:true});
+      added++;
+    }catch(e){alert('Werbebanner konnte nicht geladen werden: '+(e.message||e))}
   }
+  if(added)$('#adsEnabled').checked=true;
   renderAdManager();
 }
 $('#adFiles').addEventListener('change',async e=>{await addAdFiles(e.target.files||[]);e.target.value=''});
 
 async function persistEventAds(eventToken,storageSlug){
   const persisted=[];
+  if(adItems.some(x=>x.active!==false) && !$('#adsEnabled').checked){
+    console.warn('Werbebanner vorhanden, aber digitale Werbung ist ausgeschaltet.');
+  }
   for(let i=0;i<adItems.length;i++){
     const item=adItems[i];let path=item.path||'';
     if(item.file){

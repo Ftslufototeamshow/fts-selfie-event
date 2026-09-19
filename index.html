@@ -202,7 +202,14 @@ function asArray(v,fallback){if(Array.isArray(v)&&v.length)return v;try{const p=
 async function boot(){
  lang=detectLang();
  let data=null;
- try{if(navigator.onLine){data=await rpc('fts_get_event_v10',{p_event_token:eventToken});if(data?.length)localStorage.setItem(EVENT_CACHE_KEY,JSON.stringify(data[0]))}}catch(e){console.warn('Event online load',e)}
+ try{if(navigator.onLine){
+   data=await rpc('fts_get_event',{p_event_token:eventToken});
+   if(data?.length){
+     const merged={...data[0],ads_enabled:false,ad_items:[]};
+     try{const ads=await rpc('fts_get_event_ads_v1',{p_event_token:eventToken});if(ads?.length){merged.ads_enabled=ads[0].ads_enabled===true;merged.ad_items=ads[0].ad_items||[]}}catch(adErr){console.warn('Werbung online load',adErr)}
+     data=[merged];localStorage.setItem(EVENT_CACHE_KEY,JSON.stringify(merged));
+   }
+ }}catch(e){console.warn('Event online load',e)}
  if(data?.length)ev=data[0];else{try{ev=JSON.parse(localStorage.getItem(EVENT_CACHE_KEY)||'null')}catch{}}
  if(!ev){document.getElementById('card').innerHTML='<div class="loading"><h2>Dieses Event wurde auf diesem Handy noch nicht geladen.</h2><p>Für den ersten Aufruf ist einmal Internet erforderlich. Danach funktioniert die Selfie-Seite auch bei Netzausfall.</p></div>';return}
  render();processQueue();

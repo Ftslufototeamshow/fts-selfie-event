@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v13-adbanner-20260920';
+const CACHE='fts-selfie-v14-adfix-20260920';
 const CORE=['./','./index.html','./config.js','./manifest.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
@@ -12,6 +12,19 @@ self.addEventListener('activate',event=>{
 self.addEventListener('fetch',event=>{
   const req=event.request;
   if(req.method!=='GET')return;
+  const u=new URL(req.url);
+  if(u.hostname.endsWith('.supabase.co')){
+    event.respondWith((async()=>{
+      try{
+        const fresh=await fetch(req);
+        if(fresh.ok){const cache=await caches.open(CACHE);cache.put(req,fresh.clone()).catch(()=>{});}
+        return fresh;
+      }catch{
+        return (await caches.match(req)) || Response.error();
+      }
+    })());
+    return;
+  }
   if(req.mode==='navigate'){
     event.respondWith((async()=>{
       try{
