@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v24-success-actions-20260920';
+const CACHE='fts-selfie-v25-lumorex-readonly-20260920';
 const CORE=['./','./index.html','./config.js','./manifest.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
