@@ -159,6 +159,27 @@ function guestSessionId(){
   return id;
 }
 async function registerPhoto(item){await rpc('fts_register_photo_v11',{p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath,p_guest_session_id:item.guestSessionId||guestSessionId(),p_captured_at:new Date(item.createdAt||Date.now()).toISOString()})}
+async function reportClientIssue(eventTok,issueType,message,details={},severity='warning',issueKey='default',resolved=false,sessionId=''){
+  if(!navigator.onLine||!eventTok)return;
+  try{
+    await fetch(`${cfg.supabaseUrl}/functions/v1/fts-client-issue`,{
+      method:'POST',keepalive:true,
+      headers:{'apikey':cfg.publishableKey,'Content-Type':'application/json'},
+      body:JSON.stringify({
+        event_token:eventTok,issue_type:issueType,severity,message,details,
+        issue_key:issueKey,resolved,session_id:sessionId||guestSessionId()
+      })
+    });
+  }catch(e){console.warn('FTS Fehlerprotokoll',e)}
+}
+async function syncQueueIssues(itemsBefore=null){
+  if(!navigator.onLine)return;
+  const before=itemsBefore||await queueAll(),after=await queueAll();
+  const group=list=>{const m=new Map();for(const x of list||[]){const k=String(x.eventToken||'');if(!k)continue;const g=m.get(k)||{count:0,sessionId:x.guestSessionId||'',ids:[]};g.count++;g.ids.push(x.id);if(!g.sessionId)g.sessionId=x.guestSessionId||'';m.set(k,g)}return m};
+  const a=group(before),b=group(after);
+  for(const [token,g] of b)await reportClientIssue(token,'offline_queue',`${g.count} Offline-Foto${g.count===1?' wartet':'s warten'} auf Upload.`,{queue_count:g.count},'warning','queue',false,g.sessionId);
+  for(const [token,g] of a)if(!b.has(token))await reportClientIssue(token,'offline_queue','Offline-Warteschlange ist wieder leer.',{queue_count:0},'info','queue',true,g.sessionId);
+}
 function scanSessionId(){
   const key='fts_scan_session_v12';let id=sessionStorage.getItem(key);
   if(!id){id=crypto.randomUUID?crypto.randomUUID():'s_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2);sessionStorage.setItem(key,id)}
@@ -190,7 +211,7 @@ async function recordScan(){
   }catch(e){console.warn('Scan-Statistik',e)}
 }
 async function uploadItem(item){await uploadObject(item.originalPath,item.originalBlob,item.originalType);await uploadObject(item.designedPath,item.designedBlob,'image/jpeg');await registerPhoto(item)}
-async function processQueue(){if(!navigator.onLine)return updateNet();const items=await queueAll();for(const item of items){try{await uploadItem(item);await queueDelete(item.id)}catch(e){console.warn('Queue upload',e);break}}updateNet();updateQueueCount()}
+async function processQueue(){if(!navigator.onLine)return updateNet();const items=await queueAll();await syncQueueIssues(items);for(const item of items){try{await uploadItem(item);await queueDelete(item.id);await reportClientIssue(item.eventToken,'upload_failed','Upload-Problem wurde erfolgreich nachgeholt.',{},'info',item.id,true,item.guestSessionId||'')}catch(e){console.warn('Queue upload',e);await reportClientIssue(item.eventToken,'upload_failed','Foto-Upload konnte nicht abgeschlossen werden.',{error:String(e?.message||e).slice(0,500)},'error',item.id,false,item.guestSessionId||'');break}}await syncQueueIssues(items);updateNet();updateQueueCount()}
 function updateNet(){const el=document.getElementById('net');if(!el)return;el.className='net '+(navigator.onLine?'online':'offline');el.textContent=navigator.onLine?tr('online'):tr('offline')}
 function assetUrl(path){if(!path)return'';return `${cfg.supabaseUrl}/storage/v1/object/public/${encodeURIComponent(cfg.liveBucket)}/${encodePath(path)}`}
 function boolish(v){return v===true||v===1||String(v).toLowerCase()==='true'}
@@ -686,7 +707,7 @@ async function submitPhoto(){
   if(navigator.onLine){
     btn.textContent=tr('uploading');
     try{await uploadItem(item)}
-    catch(e){await queuePut(item);offlineResult=true;registerBackgroundSync()}
+    catch(e){await queuePut(item);offlineResult=true;await reportClientIssue(item.eventToken,'upload_failed','Foto-Upload fehlgeschlagen und wurde für später gespeichert.',{error:String(e?.message||e).slice(0,500)},'error',item.id,false,item.guestSessionId);await syncQueueIssues();registerBackgroundSync()}
   }else{
     btn.textContent=tr('offlineSaving');await queuePut(item);offlineResult=true;registerBackgroundSync()
   }
