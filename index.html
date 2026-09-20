@@ -205,13 +205,33 @@ function adItemsFor(){
   });
 }
 function safeAdLink(v){try{const u=new URL(String(v||''));return ['http:','https:'].includes(u.protocol)?u.href:''}catch{return''}}
+async function trackAdEvent(action,item){
+  if(!navigator.onLine||!item?.path)return;
+  const canonical=String(ev?.event_token||eventToken||'');if(!canonical)return;
+  const viewKey='fts_ad_view_v13_'+canonical+'_'+item.path;
+  if(action==='view'&&sessionStorage.getItem(viewKey))return;
+  try{
+    const r=await fetch(`${cfg.supabaseUrl}/functions/v1/fts-ad-track`,{
+      method:'POST',keepalive:true,
+      headers:{'apikey':cfg.publishableKey,'Content-Type':'application/json'},
+      body:JSON.stringify({event_token:canonical,ad_key:item.path,action,session_id:scanSessionId()})
+    });
+    if(r.ok&&action==='view')sessionStorage.setItem(viewKey,'1');
+  }catch(e){console.warn('Werbe-Statistik',e)}
+}
 function stopAds(){if(adTimer){clearInterval(adTimer);adTimer=null}}
 function showCurrentAd(){
   const slot=document.getElementById('adSlot'),img=document.getElementById('adImage'),link=document.getElementById('adLink'),items=adItemsFor();
   if(!slot||!img||!link||(!selectedFile&&!keepAdsVisible)||!items.length){slot?.classList.remove('show');stopAds();return}
   adIndex=((adIndex%items.length)+items.length)%items.length;const item=items[adIndex];img.src=assetUrl(item.path);img.alt=item.name||'Werbung';
-  const href=safeAdLink(item.link);if(href){link.href=href;link.target='_blank';link.rel='noopener noreferrer'}else{link.removeAttribute('href');link.removeAttribute('target');link.removeAttribute('rel')}
-  slot.classList.add('show');
+  const href=safeAdLink(item.link);
+  if(href){
+    link.href=href;link.target='_blank';link.rel='noopener noreferrer';
+    link.onclick=()=>{trackAdEvent('click',item)}
+  }else{
+    link.removeAttribute('href');link.removeAttribute('target');link.removeAttribute('rel');link.onclick=null
+  }
+  slot.classList.add('show');trackAdEvent('view',item);
 }
 function startAds(){
   stopAds();const items=adItemsFor();if((!selectedFile&&!keepAdsVisible)||!items.length)return showCurrentAd();adIndex=0;showCurrentAd();
