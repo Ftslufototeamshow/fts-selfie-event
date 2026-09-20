@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v19-ad-analytics-20260920';
+const CACHE='fts-selfie-v20-system-check-20260920';
 const CORE=['./','./index.html','./config.js','./manifest.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
@@ -88,6 +88,20 @@ async function register(item){
   });
   if(!r.ok)throw new Error(await r.text());
 }
+async function reportIssue(item,type,message,error,resolved=false){
+  if(!item?.eventToken)return;
+  try{
+    await fetch(`${cfg.supabaseUrl}/functions/v1/fts-client-issue`,{
+      method:'POST',
+      headers:{'apikey':cfg.publishableKey,'Content-Type':'application/json'},
+      body:JSON.stringify({
+        event_token:item.eventToken,issue_type:type,severity:resolved?'info':'error',
+        message,details:error?{error:String(error).slice(0,500)}:{},
+        session_id:item.guestSessionId||'',issue_key:item.id||'background',resolved
+      })
+    });
+  }catch{}
+}
 async function flush(){
   const items=await allItems();
   for(const item of items){
@@ -96,8 +110,10 @@ async function flush(){
       await uploadObject(item.designedPath,item.designedBlob,'image/jpeg');
       await register(item);
       await del(item.id);
+      await reportIssue(item,'background_upload_failed','Hintergrund-Upload wurde erfolgreich nachgeholt.','',true);
     }catch(e){
       console.warn('FTS background upload stopped',e);
+      await reportIssue(item,'background_upload_failed','Hintergrund-Upload konnte nicht abgeschlossen werden.',e,false);
       throw e;
     }
   }
