@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v16-guest-tablet-20260920';
+const CACHE='fts-selfie-v17-lifecycle-20260920';
 const CORE=['./','./index.html','./config.js','./manifest.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
@@ -81,7 +81,7 @@ async function uploadObject(path,blob,type){
   }
 }
 async function register(item){
-  const r=await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/fts_register_photo_v10`,{
+  const r=await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/fts_register_photo_v11`,{
     method:'POST',
     headers:{'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':'application/json'},
     body:JSON.stringify({p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath,p_guest_session_id:item.guestSessionId||null})
