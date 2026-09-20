@@ -1039,7 +1039,8 @@ async function persistEventLifecycle(eventToken){
   const lc=lifecycleDataFromForm();
   await rpc('fts_admin_set_event_lifecycle_v11',{
     p_admin_code:authCredential(),p_event_token:eventToken,p_schedule:lc.schedule,
-    p_gallery_url:lc.galleryUrl||'',p_gallery_available_at:lc.galleryAvailableAt||'',p_link_expires_at:lc.linkExpiresAt||''
+    p_gallery_url:lc.galleryUrl||'',p_gallery_available_at:lc.galleryAvailableAt||'',p_link_expires_at:lc.linkExpiresAt||'',
+    p_test_days_before:Number($('#testDays').value||0)
   });
 }
 async function persistEventExtras(eventToken){
