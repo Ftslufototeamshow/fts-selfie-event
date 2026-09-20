@@ -56,6 +56,7 @@ Deno.serve(async req=>{
     else add("event_active","Event-Status","pass","Das Event ist aktiv.");
 
     const schedule=arr(lifecycle?.schedule).filter((x:any)=>x?.date);
+    let lastEventEnd="";
     if(!schedule.length){
       add("schedule","Eventzeiten","warn","Für dieses Event ist noch kein neuer Tages-Zeitplan gespeichert; es läuft mit der älteren Datumslogik.");
     }else{
@@ -70,6 +71,7 @@ Deno.serve(async req=>{
     if(schedule.length){
       const last=schedule.slice().sort((a:any,b:any)=>String(a.date+a.end).localeCompare(String(b.date+b.end))).at(-1);
       const lastEnd=last?`${last.date}T${last.end||"23:59"}`:"";
+      lastEventEnd=lastEnd;
       const galleryAt=String(lifecycle?.gallery_available_at||"");
       const expiresAt=String(lifecycle?.link_expires_at||"");
       if(galleryAt&&lastEnd&&galleryAt<lastEnd)add("lifecycle","Galerie & Ablauf","fail","Die Galerie-Freigabe liegt vor dem letzten Event-Ende.");
@@ -108,7 +110,7 @@ Deno.serve(async req=>{
       const activeAds=ads.map((a:any,i:number)=>({a:a||{},i})).filter(({a}:any)=>a.active!==false&&(!a.start_date||today>=a.start_date)&&(!a.end_date||today<=a.end_date));
       const adChecks=await Promise.all(activeAds.map(async({a,i}:any)=>{
         const link=safeUrl(a.link),name=clean(a.name,100)||`Werbung ${i+1}`;
-        if(!a.link)return {id:`ad_link_${i}`,label:`Werbelink · ${name}`,status:"warn" as const,detail:"Banner ist aktiv, hat aber keinen Link."};
+        if(!a.link)return {id:`ad_link_${i}`,label:`Werbung · ${name}`,status:"pass" as const,detail:"Banner ist aktiv und als reine Anzeige ohne Link eingestellt."};
         if(!link)return {id:`ad_link_${i}`,label:`Werbelink · ${name}`,status:"fail" as const,detail:"Der gespeicherte Link ist ungültig."};
         const st=await fetchStatus(link,5500);
         return {id:`ad_link_${i}`,label:`Werbelink · ${name}`,status:(st.ok?"pass":"warn") as "pass"|"warn",detail:st.ok?`Link erreichbar (HTTP ${st.status}).`:"Link konnte vom System nicht bestätigt werden; manche Plattformen blockieren automatische Prüfungen."};
@@ -116,11 +118,18 @@ Deno.serve(async req=>{
       for(const x of adChecks)add(x.id,x.label,x.status,x.detail);
     }else add("ads","Werbung","pass","Werbung ist für dieses Event ausgeschaltet.");
 
-    if(lifecycle?.gallery_available_at&&!safeUrl(lifecycle?.gallery_url)){
-      add("gallery_url","Galerie-Link","warn","Eine Galerie-Freigabe ist terminiert, aber noch kein gültiger Galerie-Link hinterlegt.");
-    }else if(safeUrl(lifecycle?.gallery_url)){
-      const gs=await fetchStatus(safeUrl(lifecycle.gallery_url),5500);
+    const galleryUrl=safeUrl(lifecycle?.gallery_url),galleryAt=String(lifecycle?.gallery_available_at||"");
+    const nowParts=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Luxembourg",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date());
+    const part=(t:string)=>nowParts.find(x=>x.type===t)?.value||"00";
+    const luxNow=`${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
+    if(galleryAt&&!galleryUrl){
+      if(luxNow<galleryAt)add("gallery_url","Galerie-Link","pass",`Galerie-Link kann später hinterlegt werden; geplante Freigabe: ${galleryAt}.`);
+      else add("gallery_url","Galerie-Link","warn","Die geplante Galerie-Freigabe ist erreicht, aber noch kein gültiger Galerie-Link hinterlegt.");
+    }else if(galleryUrl){
+      const gs=await fetchStatus(galleryUrl,5500);
       add("gallery_url","Galerie-Link",gs.ok?"pass":"warn",gs.ok?"Galerie-Link erreichbar.":"Galerie-Link konnte nicht bestätigt werden.");
+    }else if(lastEventEnd){
+      add("gallery_url","Galerie-Link","pass","Noch keine Galerie-Freigabe terminiert.");
     }
 
     await admin.from("fts_event_issues_v14").update({resolved_at:new Date().toISOString()})
