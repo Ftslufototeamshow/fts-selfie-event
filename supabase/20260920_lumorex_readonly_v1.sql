@@ -88,7 +88,7 @@ begin
 
   insert into public.fts_lumorex_event_links_v1(event_id,feed_token)
   values(v_event.id,public.fts_lumorex_new_token_v1())
-  on conflict(event_id) do nothing;
+  on conflict on constraint fts_lumorex_event_links_v1_pkey do nothing;
 
   return query
   select v_event.id,v_event.token,v_event.title,l.feed_token
