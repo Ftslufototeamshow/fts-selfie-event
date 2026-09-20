@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#071315">
 <link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>FTS Selfie Event</title>
 <style>
 :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f6f1e8;background:#071315;--accent:#d9b56d;--bg1:#071315;--bg2:#10383a}
@@ -22,7 +25,7 @@ button.main{width:100%;border:0;border-radius:15px;padding:16px;font:inherit;fon
 .langBar{display:flex;gap:6px;justify-content:flex-end;margin:-2px 0 12px}.langBar button{border:1px solid rgba(255,255,255,.1);background:#0a2426;color:#dce5e3;border-radius:999px;padding:7px 10px;font-weight:900;cursor:pointer}.langBar button.active{background:var(--accent);color:#102020}
 .eventStatus{padding:11px 13px;border-radius:13px;margin:0 0 14px;font-size:.84rem;line-height:1.4}.eventStatus.test{background:rgba(225,166,54,.13);border:1px solid rgba(225,166,54,.35)}.eventStatus.closed{background:rgba(210,88,88,.13);border:1px solid rgba(210,88,88,.3)}.eventStatus.day{background:rgba(65,170,113,.12);border:1px solid rgba(65,170,113,.28)}
 .adSlot{display:none;margin:14px 0 4px}.adSlot.show{display:block}.adLabel{font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:#829592;margin:0 0 5px 3px}.adFrame{display:block;width:100%;border-radius:13px;overflow:hidden;background:#02090a;border:1px solid rgba(255,255,255,.09);box-shadow:0 10px 28px rgba(0,0,0,.24)}.adFrame img{display:block;width:100%;aspect-ratio:4/1;object-fit:cover}.adFrame:not([href]){cursor:default}
-.successPanel{display:none;text-align:center;padding:18px 4px 6px}.successPanel.show{display:block}.successIcon{font-size:3.5rem;line-height:1;margin:4px 0 8px;animation:successPop .55s ease both}.successPanel h2{font-size:clamp(1.8rem,7vw,3rem);margin:0 0 8px}.successPanel p{color:#aebbb9;line-height:1.45;margin:0 auto 14px;max-width:620px}.successPreview{width:min(360px,90%);max-height:420px;object-fit:contain;border-radius:16px;border:1px solid rgba(255,255,255,.1);background:#02090a;margin:4px auto 14px;display:none}.successPreview.show{display:block}.successActions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.successActions button{border:0;border-radius:14px;padding:14px 12px;font:inherit;font-weight:950;cursor:pointer}.successActions .primary{background:var(--accent);color:#102020}.successActions .secondary{background:#14383a;color:#fff;border:1px solid rgba(255,255,255,.09)}.keepLinkBox{margin:4px auto 14px;max-width:620px;text-align:left;padding:13px 14px;border-radius:14px;background:rgba(217,181,109,.11);border:1px solid rgba(217,181,109,.3)}.keepLinkBox strong{display:block;color:#f0ce82;margin-bottom:5px;font-size:.95rem}.keepLinkBox span{display:block;color:#d8e0de;font-size:.86rem;line-height:1.45}@keyframes successPop{0%{transform:scale(.4);opacity:0}65%{transform:scale(1.16)}100%{transform:scale(1);opacity:1}}
+.successPanel{display:none;text-align:center;padding:18px 4px 6px}.successPanel.show{display:block}.successIcon{font-size:3.5rem;line-height:1;margin:4px 0 8px;animation:successPop .55s ease both}.successPanel h2{font-size:clamp(1.8rem,7vw,3rem);margin:0 0 8px}.successPanel p{color:#aebbb9;line-height:1.45;margin:0 auto 14px;max-width:620px}.successPreview{width:min(360px,90%);max-height:420px;object-fit:contain;border-radius:16px;border:1px solid rgba(255,255,255,.1);background:#02090a;margin:4px auto 14px;display:none}.successPreview.show{display:block}.successActions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.successActions button{border:0;border-radius:14px;padding:14px 12px;font:inherit;font-weight:950;cursor:pointer}.successActions .primary{background:var(--accent);color:#102020}.successActions .secondary{background:#14383a;color:#fff;border:1px solid rgba(255,255,255,.09)}.keepLinkBox{margin:4px auto 14px;max-width:620px;text-align:left;padding:13px 14px;border-radius:14px;background:rgba(217,181,109,.11);border:1px solid rgba(217,181,109,.3)}.keepLinkBox strong{display:block;color:#f0ce82;margin-bottom:5px;font-size:.95rem}.keepLinkBox span{display:block;color:#d8e0de;font-size:.86rem;line-height:1.45}.rememberEventBtn{width:100%;margin-top:10px;border:0;border-radius:13px;padding:13px 12px;background:var(--accent);color:#102020;font:inherit;font-weight:950;cursor:pointer}.rememberEventBtn.secondaryState{background:#173739;color:#fff;border:1px solid rgba(255,255,255,.1)}.rememberHint{display:none;margin-top:9px;padding:10px 11px;border-radius:11px;background:#0b2527;color:#d6dfdd;font-size:.79rem;line-height:1.45}.rememberHint.show{display:block}@keyframes successPop{0%{transform:scale(.4);opacity:0}65%{transform:scale(1.16)}100%{transform:scale(1);opacity:1}}
 .fireworks{position:relative;height:42px;overflow:hidden;pointer-events:none}.fireworks i{position:absolute;left:50%;top:18px;width:7px;height:7px;border-radius:2px;background:var(--accent);animation:burst 1.1s ease-out both}.fireworks i:nth-child(2){--x:80px;--y:-28px;animation-delay:.04s}.fireworks i:nth-child(3){--x:-84px;--y:-24px;animation-delay:.08s}.fireworks i:nth-child(4){--x:58px;--y:12px;animation-delay:.12s}.fireworks i:nth-child(5){--x:-58px;--y:13px;animation-delay:.16s}.fireworks i:nth-child(6){--x:118px;--y:8px;animation-delay:.2s}.fireworks i:nth-child(7){--x:-118px;--y:8px;animation-delay:.24s}.fireworks i:nth-child(8){--x:25px;--y:-36px;animation-delay:.28s}.fireworks i:nth-child(9){--x:-25px;--y:-36px;animation-delay:.32s}@keyframes burst{0%{transform:translate(0,0) scale(.4);opacity:0}18%{opacity:1}100%{transform:translate(var(--x,0),var(--y,-35px)) rotate(160deg) scale(.7);opacity:0}}
 .mySelfies{display:none;margin-top:14px}.mySelfies.show{display:block}.mySelfiesHead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.mySelfiesHead h3{margin:0}.mySelfiesGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.mySelfieCard{border:1px solid rgba(255,255,255,.08);background:#061012;border-radius:13px;padding:6px}.mySelfieCard img{width:100%;height:auto;max-height:390px;object-fit:contain;border-radius:9px;display:block}.mySelfieCard small{display:block;color:#8ea29e;padding:6px 3px 2px}.ghostBtn{border:1px solid rgba(255,255,255,.1);background:#14383a;color:#fff;border-radius:10px;padding:9px 10px;font-weight:850;cursor:pointer}.emptySelfies{padding:20px;border:1px dashed rgba(255,255,255,.14);border-radius:12px;color:#91a5a1}.captureFlow.hiddenFlow,.sendFlow.hiddenFlow{display:none}
 @media(max-width:560px){.successActions{grid-template-columns:1fr}.mySelfiesGrid{grid-template-columns:1fr}}
@@ -36,12 +39,29 @@ button.main{width:100%;border:0;border-radius:15px;padding:16px;font:inherit;fon
 <script>
 const cfg=window.FTS_CONFIG;
 const params=new URLSearchParams(location.search);
-const eventToken=params.get('e') || cfg.defaultEventToken;
-const EVENT_CACHE_KEY='fts_event_cache_'+eventToken;
 const SAVED_EVENTS_KEY='fts_saved_event_links_v1';
+function initialEventToken(){
+  const direct=params.get('e');if(direct)return direct;
+  const launchedAsApp=params.get('pwa')==='1'||matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+  if(launchedAsApp){
+    try{
+      const rows=JSON.parse(localStorage.getItem(SAVED_EVENTS_KEY)||'[]');
+      if(Array.isArray(rows)&&rows.length){
+        const x=rows[0];
+        if(x?.short_code)return String(x.short_code);
+        if(x?.event_token)return String(x.event_token);
+      }
+    }catch{}
+  }
+  return cfg.defaultEventToken;
+}
+const eventToken=initialEventToken();
+const EVENT_CACHE_KEY='fts_event_cache_'+eventToken;
 const DB_NAME='fts_selfie_offline_v1', STORE='queue';
 let ev=null,selectedFile=null,designedBlob=null,selectedLayout='solo',selectedFilter='natural',redrawTimer=null;
-let lang='de',routeMode='closed',routeDay=null,routeNext=null,adTimer=null,adIndex=0,keepAdsVisible=false,lastSuccessUrl='';
+let lang='de',routeMode='closed',routeDay=null,routeNext=null,adTimer=null,adIndex=0,keepAdsVisible=false,lastSuccessUrl='',deferredInstallPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e});
+window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateRememberButton()});
 const LIFECYCLE_TAG_PREFIX='__FTS_LIFECYCLE_V11__:';
 const DEFAULT_LAYOUTS=['solo','duo','groupwide','grouptall','free'];
 const DEFAULT_FILTERS=['natural','warm','vivid','mono','cool'];
@@ -73,7 +93,7 @@ const I18N={
   tooBig:'Das Original ist größer als 15 MB.',uploading:'Foto wird hochgeladen …',offlineSaving:'Foto wird offline gespeichert …',
   success:'✓ Original und deine Event-Version erfolgreich hochgeladen. Danke!',
   thanksTitle:'Danke für dein Selfie! 🎉',thanksText:'Dein Selfie wurde erfolgreich gesendet.',thanksOffline:'Dein Selfie ist sicher auf diesem Handy gespeichert und wird automatisch hochgeladen, sobald Internet verfügbar ist.',
-  keepLinkTitle:'📌 Event-Link automatisch gespeichert',keepLinkText:'Dieser Event-Link wurde auf diesem Gerät automatisch bis {date} gespeichert. Nach dem Event findest du über denselben Link die freigegebene Selfie-Galerie. Danach wird der gespeicherte Link automatisch entfernt.',
+  keepLinkTitle:'📌 Event-Link automatisch gespeichert',keepLinkText:'Dieser Event-Link wurde auf diesem Gerät automatisch bis {date} gespeichert. Nach dem Event findest du über denselben Link die freigegebene Selfie-Galerie. Danach wird der gespeicherte Link automatisch entfernt.',rememberButton:'Event auf meinem Handy merken',rememberInstalled:'FTS Event ist auf dem Handy gespeichert ✓',rememberIOS:'iPhone/iPad: Tippe unten im Browser auf „Teilen“ und danach auf „Zum Home-Bildschirm“. Der Event-Link ist zusätzlich bereits automatisch gespeichert.',rememberShared:'Der Event-Link wurde über die Teilen-Funktion geöffnet.',rememberCopied:'Event-Link kopiert. Du kannst ihn jetzt z. B. an dich selbst senden.',
   newSelfie:'Neues Selfie erstellen',mySelfies:'Meine Selfies ansehen',mySelfiesTitle:'Meine Selfies',close:'Schließen',noMySelfies:'Auf diesem Gerät sind für dieses Event noch keine fertigen Selfies gespeichert.',pending:'wartet auf Upload',
   queued:'✓ Foto sicher gespeichert. Upload läuft automatisch weiter, sobald die Verbindung stabil ist.',
   queuedOffline:'✓ Foto sicher auf diesem Handy gespeichert. Sobald Internet wieder da ist, wird es automatisch hochgeladen.',
@@ -97,7 +117,7 @@ const I18N={
   tooBig:'The original photo is larger than 15 MB.',uploading:'Uploading photo …',offlineSaving:'Saving photo offline …',
   success:'✓ Original and event version uploaded successfully. Thank you!',
   thanksTitle:'Thanks for your selfie! 🎉',thanksText:'Your selfie was sent successfully.',thanksOffline:'Your selfie is safely stored on this phone and will upload automatically when internet is available.',
-  keepLinkTitle:'📌 Event link saved automatically',keepLinkText:'This event link has been saved automatically on this device until {date}. After the event, the released selfie gallery will be available through the same link. The saved link will then be removed automatically.',
+  keepLinkTitle:'📌 Event link saved automatically',keepLinkText:'This event link has been saved automatically on this device until {date}. After the event, the released selfie gallery will be available through the same link. The saved link will then be removed automatically.',rememberButton:'Remember event on my phone',rememberInstalled:'FTS Event is saved on this phone ✓',rememberIOS:'iPhone/iPad: Tap “Share” in the browser, then “Add to Home Screen”. The event link is already saved automatically as well.',rememberShared:'The event link was opened in the share menu.',rememberCopied:'Event link copied. You can now send it to yourself.',
   newSelfie:'Create another selfie',mySelfies:'View my selfies',mySelfiesTitle:'My selfies',close:'Close',noMySelfies:'No finished selfies for this event are stored on this device yet.',pending:'waiting for upload',
   queued:'✓ Photo saved safely. Upload will continue automatically when the connection is stable.',
   queuedOffline:'✓ Photo saved safely on this phone. It will upload automatically when internet is available.',
@@ -121,7 +141,7 @@ const I18N={
   tooBig:'La photo originale dépasse 15 Mo.',uploading:'Téléversement de la photo …',offlineSaving:'Enregistrement hors ligne …',
   success:'✓ Original et version événement téléversés avec succès. Merci !',
   thanksTitle:'Merci pour votre selfie ! 🎉',thanksText:'Votre selfie a bien été envoyé.',thanksOffline:'Votre selfie est enregistré en sécurité sur ce téléphone et sera envoyé automatiquement dès que la connexion revient.',
-  keepLinkTitle:'📌 Lien de l’événement enregistré automatiquement',keepLinkText:'Ce lien a été enregistré automatiquement sur cet appareil jusqu’au {date}. Après l’événement, la galerie de selfies publiée sera accessible via le même lien. Le lien enregistré sera ensuite supprimé automatiquement.',
+  keepLinkTitle:'📌 Lien de l’événement enregistré automatiquement',keepLinkText:'Ce lien a été enregistré automatiquement sur cet appareil jusqu’au {date}. Après l’événement, la galerie de selfies publiée sera accessible via le même lien. Le lien enregistré sera ensuite supprimé automatiquement.',rememberButton:'Mémoriser l’événement sur mon téléphone',rememberInstalled:'FTS Event est enregistré sur ce téléphone ✓',rememberIOS:'iPhone/iPad : touchez « Partager » dans le navigateur, puis « Sur l’écran d’accueil ». Le lien de l’événement est déjà enregistré automatiquement.',rememberShared:'Le lien de l’événement a été ouvert dans le menu de partage.',rememberCopied:'Lien de l’événement copié. Vous pouvez maintenant vous l’envoyer.',
   newSelfie:'Créer un nouveau selfie',mySelfies:'Voir mes selfies',mySelfiesTitle:'Mes selfies',close:'Fermer',noMySelfies:'Aucun selfie finalisé de cet événement n’est encore enregistré sur cet appareil.',pending:'en attente d’envoi',
   queued:'✓ Photo enregistrée en sécurité. Le téléversement reprendra automatiquement quand la connexion sera stable.',
   queuedOffline:'✓ Photo enregistrée en sécurité sur ce téléphone. Elle sera téléversée automatiquement dès que la connexion reviendra.',
@@ -485,6 +505,8 @@ function render(){
      <div class="keepLinkBox">
        <strong>${tr('keepLinkTitle')}</strong>
        <span id="savedLinkText">${esc(savedLinkMessage())}</span>
+       <button type="button" class="rememberEventBtn" id="rememberEventBtn">${tr('rememberButton')}</button>
+       <div class="rememberHint" id="rememberHint"></div>
      </div>
      <div class="successActions">
        <button type="button" class="primary" id="newSelfieBtn">${tr('newSelfie')}</button>
@@ -504,6 +526,8 @@ function render(){
  document.getElementById('uploadBtn').addEventListener('click',submitPhoto);
  document.getElementById('newSelfieBtn').addEventListener('click',resetForNewSelfie);
  document.getElementById('mySelfiesBtn').addEventListener('click',showMySelfies);
+ document.getElementById('rememberEventBtn').addEventListener('click',rememberEventOnDevice);
+ updateRememberButton();
  document.getElementById('closeSelfiesBtn').addEventListener('click',()=>document.getElementById('mySelfiesPanel').classList.remove('show'));
 }
 function layoutButton(key){const x=layoutInfo[key];return `<button type="button" class="choice ${key===selectedLayout?'active':''}" data-layout="${key}"><div class="frameMini ${x.mini}">${key==='solo'?'1':key==='duo'?'2':key.includes('group')?'3–5':'↔'}</div>${esc(tr(x.label))}<small>${esc(tr(x.desc))}</small></button>`}
@@ -687,6 +711,53 @@ async function makeDesign(file){
  await Promise.resolve(drawEventDecorations(ctx,canvas.width,canvas.height,'photo'));
  designedBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',.91));
 }
+function standaloneMode(){return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}
+function iosDevice(){return /iphone|ipad|ipod/i.test(navigator.userAgent||'')}
+function currentEventUrl(){
+  const alias=String(ev?.short_code||ev?.event_token||eventToken);
+  return cfg.baseUrl+'?e='+encodeURIComponent(alias);
+}
+function updateRememberButton(){
+  const btn=document.getElementById('rememberEventBtn');if(!btn)return;
+  if(standaloneMode()){
+    btn.textContent=tr('rememberInstalled');btn.classList.add('secondaryState');btn.disabled=true;
+  }else{
+    btn.textContent=tr('rememberButton');btn.classList.remove('secondaryState');btn.disabled=false;
+  }
+}
+async function rememberEventOnDevice(){
+  saveCurrentEventLink();
+  const btn=document.getElementById('rememberEventBtn'),hint=document.getElementById('rememberHint');
+  if(standaloneMode()){updateRememberButton();return}
+  if(deferredInstallPrompt){
+    try{
+      deferredInstallPrompt.prompt();
+      const choice=await deferredInstallPrompt.userChoice;
+      if(choice?.outcome==='accepted'){
+        deferredInstallPrompt=null;
+        if(btn){btn.textContent=tr('rememberInstalled');btn.classList.add('secondaryState');btn.disabled=true}
+        return;
+      }
+    }catch(e){console.warn('FTS App-Installation',e)}
+  }
+  if(iosDevice()){
+    if(hint){hint.textContent=tr('rememberIOS');hint.classList.add('show')}
+    return;
+  }
+  try{
+    if(navigator.share){
+      await navigator.share({title:String(ev?.title||'FTS Selfie Event'),text:tr('keepLinkTitle'),url:currentEventUrl()});
+      if(hint){hint.textContent=tr('rememberShared');hint.classList.add('show')}
+      return;
+    }
+    if(navigator.clipboard?.writeText){
+      await navigator.clipboard.writeText(currentEventUrl());
+      if(hint){hint.textContent=tr('rememberCopied');hint.classList.add('show')}
+      return;
+    }
+  }catch(e){if(e?.name==='AbortError')return}
+  window.prompt(tr('rememberButton'),currentEventUrl());
+}
 function resetForNewSelfie(){
   if(lastSuccessUrl){URL.revokeObjectURL(lastSuccessUrl);lastSuccessUrl=''}
   selectedFile=null;designedBlob=null;keepAdsVisible=false;
@@ -711,6 +782,8 @@ function showSuccessPanel(offline=false,previewBlob=null){
   const ad=document.getElementById('adSlot');if(ad&&panel)panel.parentNode.insertBefore(ad,panel.nextSibling);
   const t=document.getElementById('thanksText');if(t)t.textContent=offline?tr('thanksOffline'):tr('thanksText');
   const savedText=document.getElementById('savedLinkText');if(savedText)savedText.textContent=savedLinkMessage();
+  const hint=document.getElementById('rememberHint');if(hint){hint.textContent='';hint.classList.remove('show')}
+  updateRememberButton();
   const img=document.getElementById('successPreview');
   if(lastSuccessUrl){URL.revokeObjectURL(lastSuccessUrl);lastSuccessUrl=''}
   if(img&&previewBlob){lastSuccessUrl=URL.createObjectURL(previewBlob);img.src=lastSuccessUrl;img.classList.add('show')}else img?.classList.remove('show');
