@@ -40,7 +40,7 @@
 @media(max-width:1120px){.layout{grid-template-columns:1fr}.previewSticky{position:static}.previewStage{min-height:500px}}
 @media(min-width:1121px) and (max-width:1320px){.layout{grid-template-columns:minmax(0,1fr) minmax(320px,.82fr)}}@media(max-width:680px){.grid,.moduleGrid{grid-template-columns:1fr}.full{grid-column:auto}.themeCards{grid-template-columns:1fr 1fr}.checkGrid{grid-template-columns:1fr}.previewStage{min-height:440px}.card{padding:14px}}
 
-.dayList{display:grid;gap:8px}.dayRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}.dayRow button{padding:11px 13px}
+.dayList{display:grid;gap:8px}.dayRow{display:grid;grid-template-columns:minmax(150px,1.4fr) minmax(110px,.7fr) minmax(110px,.7fr) auto;gap:8px;align-items:end}.dayRow button{padding:11px 13px}.dayField label{margin-bottom:4px}.lifecycleHint{margin-top:10px;padding:11px 12px;border-radius:12px;background:rgba(217,181,109,.08);border:1px solid rgba(217,181,109,.2);color:#cfd9d7;font-size:.78rem;line-height:1.45}@media(max-width:720px){.dayRow{grid-template-columns:1fr 1fr}.dayRow .dayDate{grid-column:1/-1}.dayRow .removeDay{grid-column:1/-1}}
 .decoManager{display:grid;gap:9px;margin-top:10px}.decoAdd{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;margin-top:11px}
 .decoItem{display:grid;grid-template-columns:62px minmax(0,1fr);gap:10px;padding:10px;border:1px solid rgba(255,255,255,.09);border-radius:14px;background:#081d1f;min-width:0}
 .decoIcon{height:62px;border-radius:12px;background:#0a2426;display:grid;place-items:center;font-size:2.4rem}
@@ -138,10 +138,10 @@
         </div>
 
         <div style="margin-top:14px">
-          <label>Event-Tage</label>
+          <label>Event-Tage mit Uhrzeiten</label>
           <div class="dayList" id="eventDays"></div>
           <div class="actions"><button type="button" class="secondary" id="addEventDay">+ Event-Tag hinzufügen</button></div>
-          <div class="hint">Bei mehreren Tagen bleibt es ein Event mit einem QR-Code. Fotos werden automatisch in getrennte Tagesordner gespeichert.</div>
+          <div class="hint">Jeder Veranstaltungstag bekommt seine eigene Start- und Endzeit. Zwischen zwei Event-Tagen ist der Selfie-Upload automatisch geschlossen und öffnet beim nächsten Termin wieder.</div>
         </div>
 
         <div class="grid" style="margin-top:14px">
@@ -150,12 +150,24 @@
             <input id="testDays" type="number" min="0" max="14" value="2">
             <div class="hint">Beispiel: 2 = du kannst zwei Tage vor dem ersten Event-Tag echte Uploads testen. Testfotos landen getrennt im TEST-Ordner.</div>
           </div>
-          <div>
-            <label>Nach letztem Event-Tag sichtbar (Tage)</label>
-            <input id="days" type="number" min="1" max="30" value="3">
-            <div class="hint">Kundenportal und Links bleiben nach dem letzten Event-Tag noch diese Zeit sichtbar.</div>
+          <div class="full">
+            <label>Selfie-/Galerie-Link nach dem Event (optional)</label>
+            <input id="galleryUrl" type="url" placeholder="https://...">
+            <div class="hint">Kann auch später über „Bearbeiten“ eingetragen werden. Sobald der Freischaltzeitpunkt erreicht ist, erscheint auf demselben QR-Link automatisch „Selfies ansehen“.</div>
           </div>
+          <div>
+            <label>Galerie sichtbar ab</label>
+            <input id="galleryAvailableAt" type="datetime-local">
+            <div class="hint">Vorher sehen die Gäste den Hinweis, den QR-Link noch im Auge zu behalten.</div>
+          </div>
+          <div>
+            <label>QR-Link endgültig abgelaufen ab</label>
+            <input id="linkExpiresAt" type="datetime-local">
+            <div class="hint">Bis zu diesem Zeitpunkt bleibt auch die digitale Werbung sichtbar. Danach zeigt die Seite nur noch die Ablaufmeldung.</div>
+          </div>
+          <input id="days" type="hidden" value="3">
         </div>
+        <div class="lifecycleHint"><b>Automatischer Ablauf:</b> Noch nicht gestartet → Event live → Pause zwischen Event-Tagen → Fotos werden vorbereitet → Galerie-Link sichtbar → QR-Link endgültig abgelaufen.</div>
       </section>
 
       <section class="card">
@@ -357,6 +369,7 @@
 <script>
 const cfg=window.FTS_CONFIG,LS='fts_selfie_customers_v1';
 const DEVICE_KEY='fts_device_token_v1',LEGACY_CODE_KEY='fts_cockpit_admin_code';
+const LIFECYCLE_TAG_PREFIX='__FTS_LIFECYCLE_V11__:';
 const params=new URLSearchParams(location.search),EDIT_TOKEN=params.get('edit'),DUP_TOKEN=params.get('duplicate');
 const $=s=>document.querySelector(s);
 let logoItems=[],decoItems=[],adItems=[],originalAdPaths=[],adLibrary=[],flyerFile=null,flyerUrl='',eventDayCounter=0,serverCustomers=[];
@@ -425,28 +438,82 @@ function saveCustomer(n,t){let a=saved().filter(x=>x.token!==t);a.unshift({name:
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function escAttr(s){return esc(s)}
 function slug(v){return String(v||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/Ä/g,'AE').replace(/Ö/g,'OE').replace(/Ü/g,'UE').replace(/ß/g,'SS').replace(/[^A-Z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,30)}
-function addEventDay(value=''){
+function encodeLifecycleTag(data){
+  const bytes=new TextEncoder().encode(JSON.stringify(data)),chunk=0x8000;
+  let bin='';for(let i=0;i<bytes.length;i+=chunk)bin+=String.fromCharCode(...bytes.subarray(i,i+chunk));
+  return LIFECYCLE_TAG_PREFIX+btoa(bin);
+}
+function decodeLifecycleTag(tag){
+  if(!String(tag||'').startsWith(LIFECYCLE_TAG_PREFIX))return null;
+  try{
+    const bin=atob(String(tag).slice(LIFECYCLE_TAG_PREFIX.length)),bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
+    const v=JSON.parse(new TextDecoder().decode(bytes));return v&&typeof v==='object'?v:null;
+  }catch{return null}
+}
+function lifecycleFromTags(tags){
+  for(const t of parseArr(tags)){const v=decodeLifecycleTag(t);if(v)return v}
+  return null;
+}
+function visibleTags(tags){return parseArr(tags).filter(t=>!String(t).startsWith(LIFECYCLE_TAG_PREFIX))}
+function addCalendarDays(dateStr,delta){
+  if(!dateStr)return'';const d=new Date(dateStr+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+delta);return d.toISOString().slice(0,10);
+}
+function addEventDay(value='',start='10:00',end='23:00'){
   const id='eventDay_'+(++eventDayCounter);
   const row=document.createElement('div');
   row.className='dayRow';
   row.dataset.dayId=id;
-  row.innerHTML=`<div><input type="date" class="eventDayInput" value="${escAttr(value)}"></div><button type="button" class="secondary removeDay">Entfernen</button>`;
+  row.innerHTML=`<div class="dayField dayDate"><label>Datum</label><input type="date" class="eventDayInput" value="${escAttr(value)}"></div><div class="dayField"><label>Start</label><input type="time" class="eventStartInput" value="${escAttr(start||'10:00')}"></div><div class="dayField"><label>Ende</label><input type="time" class="eventEndInput" value="${escAttr(end||'23:00')}"></div><button type="button" class="secondary removeDay">Entfernen</button>`;
+  row.querySelectorAll('input').forEach(x=>x.addEventListener('change',()=>fillLifecycleDefaults(false)));
   row.querySelector('.removeDay').onclick=()=>{
     const rows=[...document.querySelectorAll('.dayRow')];
     if(rows.length<=1){
       row.querySelector('.eventDayInput').value='';
-      return;
+      row.querySelector('.eventStartInput').value='10:00';
+      row.querySelector('.eventEndInput').value='23:00';
+      fillLifecycleDefaults(false);return;
     }
-    row.remove();
+    row.remove();fillLifecycleDefaults(false);
   };
   $('#eventDays').appendChild(row);
+  fillLifecycleDefaults(false);
+}
+function getEventSchedule(){
+  const rows=[...document.querySelectorAll('.dayRow')],out=[];
+  for(const row of rows){
+    const date=row.querySelector('.eventDayInput')?.value||'';
+    if(!date)continue;
+    const start=row.querySelector('.eventStartInput')?.value||'00:00',end=row.querySelector('.eventEndInput')?.value||'23:59';
+    if(end<=start)throw new Error('Bei '+new Date(date+'T12:00:00').toLocaleDateString('de-DE')+' muss die Endzeit nach der Startzeit liegen.');
+    out.push({date,start,end});
+  }
+  return out.sort((a,b)=>(a.date+'T'+a.start).localeCompare(b.date+'T'+b.start));
 }
 function getEventDays(){
-  return [...document.querySelectorAll('.eventDayInput')]
-    .map(x=>x.value)
-    .filter(Boolean)
-    .filter((v,i,a)=>a.indexOf(v)===i)
-    .sort();
+  return [...new Set(getEventSchedule().map(x=>x.date))].sort();
+}
+function fillLifecycleDefaults(force=false){
+  let schedule=[];try{schedule=getEventSchedule()}catch{return}
+  if(!schedule.length)return;
+  const last=schedule[schedule.length-1];
+  if(force||!$('#galleryAvailableAt').value)$('#galleryAvailableAt').value=addCalendarDays(last.date,1)+'T12:00';
+  if(force||!$('#linkExpiresAt').value)$('#linkExpiresAt').value=addCalendarDays(last.date,3)+'T23:59';
+}
+function dateTimeLocalFromTimestamp(v){
+  if(!v)return'';const d=new Date(v);if(Number.isNaN(d.getTime()))return'';
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Luxembourg',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d);
+  const g=t=>parts.find(x=>x.type===t)?.value||'';return `${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`;
+}
+function lifecycleDataFromForm(){
+  let schedule=[];try{schedule=getEventSchedule()}catch(e){throw e}
+  return {v:11,timezone:'Europe/Luxembourg',schedule,galleryUrl:safeHttpUrl($('#galleryUrl').value),galleryAvailableAt:$('#galleryAvailableAt').value||'',linkExpiresAt:$('#linkExpiresAt').value||''};
+}
+function retentionDaysFor(schedule,expiresAt){
+  const fallback=Math.max(1,Math.min(30,Number($('#days').value||3)));
+  if(!schedule.length||!expiresAt)return fallback;
+  const a=new Date(schedule[schedule.length-1].date+'T12:00:00Z'),b=new Date(expiresAt.slice(0,10)+'T12:00:00Z');
+  if(Number.isNaN(a.getTime())||Number.isNaN(b.getTime()))return fallback;
+  return Math.max(1,Math.min(30,Math.ceil((b-a)/86400000)+1));
 }
 async function loadCustomerAssets(){
   const token=$('#customerToken').value.trim(),box=$('#customerLibrary');
@@ -918,7 +985,7 @@ $('#title').addEventListener('input',()=>{
 $('#shortCode').addEventListener('input',()=>{$('#shortCode').dataset.manual='1';$('#shortCode').value=slug($('#shortCode').value)});
 ['subtitle','overlay','accent','bg1','bg2'].forEach(id=>$('#'+id).addEventListener('input',updatePreview));
 document.querySelectorAll('.themeCard').forEach(b=>b.onclick=()=>applyTheme(b.dataset.theme));
-$('#addEventDay').onclick=()=>addEventDay('');
+$('#addEventDay').onclick=()=>addEventDay('','10:00','23:00');
 $('#addDeco').onclick=addDecoration;
 ['qrDotStyle','qrCornerStyle','qrLogoSelect','qrLogoScale','photoBranding'].forEach(id=>$('#'+id).addEventListener('input',updatePreview));
 $('#showPoster').onclick=()=>showPreview('poster');$('#showPhoto').onclick=()=>showPreview('photo');
@@ -968,8 +1035,18 @@ async function persistEventAssets(eventToken,storageSlug,customerToken){
   return {persisted,flyerPath,qrLogoPath};
 }
 
+async function persistEventLifecycle(eventToken){
+  const lc=lifecycleDataFromForm();
+  await rpc('fts_admin_set_event_lifecycle_v11',{
+    p_admin_code:authCredential(),p_event_token:eventToken,p_schedule:lc.schedule,
+    p_gallery_url:lc.galleryUrl||'',p_gallery_available_at:lc.galleryAvailableAt||'',p_link_expires_at:lc.linkExpiresAt||'',
+    p_test_days_before:Number($('#testDays').value||0)
+  });
+}
 async function persistEventExtras(eventToken){
   const tags=$('#eventTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,12);
+  const lifecycle=lifecycleDataFromForm();
+  tags.push(encodeLifecycleTag(lifecycle));
   await rpc('fts_admin_set_event_extras_v10',{
     p_admin_code:authCredential(),
     p_event_token:eventToken,
@@ -981,17 +1058,23 @@ async function persistEventExtras(eventToken){
   });
 }
 function eventArgs(includeShort=true){
-  const layouts=selectedValues('layoutChecks'),filters=selectedValues('filterChecks'),eventDays=getEventDays();
+  fillLifecycleDefaults(false);
+  const layouts=selectedValues('layoutChecks'),filters=selectedValues('filterChecks'),schedule=getEventSchedule(),eventDays=[...new Set(schedule.map(x=>x.date))].sort();
   if(!authCredential())throw new Error('Dieses Gerät ist noch nicht freigeschaltet.');
   if(!layouts.length)throw new Error('Bitte mindestens ein Foto-Layout aktivieren.');
   if(!filters.length)throw new Error('Bitte mindestens einen Filter aktivieren.');
   if(!eventDays.length)throw new Error('Bitte mindestens einen Event-Tag eintragen.');
   if(!$('#title').value.trim())throw new Error('Bitte den Eventnamen eintragen.');
   if(!$('#customerToken').value.trim())throw new Error('Bitte einen Kunden auswählen oder anlegen.');
+  const last=schedule[schedule.length-1],lastEnd=last.date+'T'+last.end,galleryAt=$('#galleryAvailableAt').value||'',expiresAt=$('#linkExpiresAt').value||'',rawGallery=$('#galleryUrl').value.trim();
+  if(rawGallery&&!safeHttpUrl(rawGallery))throw new Error('Bitte einen gültigen Galerie-Link mit https:// oder http:// eintragen.');
+  if(galleryAt&&galleryAt<lastEnd)throw new Error('Die Galerie-Freischaltung muss nach dem Ende des letzten Event-Tages liegen.');
+  if(expiresAt&&expiresAt<=lastEnd)throw new Error('Der endgültige Ablauf muss nach dem Ende des letzten Event-Tages liegen.');
+  if(galleryAt&&expiresAt&&galleryAt>=expiresAt)throw new Error('Der endgültige Ablauf muss nach der Galerie-Freischaltung liegen.');
   const common={
     p_admin_code:authCredential(),p_title:$('#title').value.trim(),p_subtitle:$('#subtitle').value.trim(),p_event_days:eventDays,
     p_location:$('#location').value.trim(),p_overlay_text:$('#overlay').value.trim(),p_accent:$('#accent').value,p_bg1:$('#bg1').value,p_bg2:$('#bg2').value,
-    p_retention_days:Number($('#days').value||3),p_theme:$('#theme').value||'standard',p_available_layouts:layouts,p_available_filters:filters,
+    p_retention_days:retentionDaysFor(schedule,expiresAt),p_theme:$('#theme').value||'standard',p_available_layouts:layouts,p_available_filters:filters,
     p_test_days_before:Number($('#testDays').value||0),p_poster_bilingual:posterLanguages().includes('de')&&posterLanguages().includes('en'),
     p_decoration_items:decoItems.map(x=>({symbol:x.symbol,position:x.position,size:x.size,show_poster:!!x.showPoster,show_photo:!!x.showPhoto})),
     p_qr_dot_style:$('#qrDotStyle').value,p_qr_corner_style:$('#qrCornerStyle').value,p_qr_logo_scale:Number($('#qrLogoScale').value||18)/100,p_photo_branding:$('#photoBranding').value
@@ -1009,11 +1092,13 @@ $('#createEvent').onclick=async()=>{
       await persistEventAssets(eventToken,storageSlug,$('#customerToken').value.trim());
       await persistEventAds(eventToken,storageSlug);
       await persistEventExtras(eventToken);
+      await persistEventLifecycle(eventToken);
     }else{
       const args=eventArgs(true);const d=await rpc('fts_admin_create_event_v9',args),r=d[0];eventToken=r.event_token;storageSlug=r.storage_slug;alias=r.short_code;expires=r.expires_at;
       await persistEventAssets(eventToken,storageSlug,args.p_customer_token);
       await persistEventAds(eventToken,storageSlug);
       await persistEventExtras(eventToken);
+      await persistEventLifecycle(eventToken);
     }
 
     const guest=cfg.baseUrl+'?e='+encodeURIComponent(alias);const poster=cfg.baseUrl+'poster.html?e='+encodeURIComponent(alias);const customer=cfg.baseUrl+'customer.html?c='+encodeURIComponent($('#customerToken').value.trim());
@@ -1037,14 +1122,23 @@ function boolish(v){return v===true||v===1||String(v).toLowerCase()==='true'}
 async function loadModeEvent(token,duplicate=false){
   let e=await rpc('fts_admin_get_event_v9',{p_admin_code:authCredential(),p_event_token:token});if(!e)throw new Error('Event nicht gefunden.');
   try{const ex=await rpc('fts_admin_get_event_extras_v10',{p_admin_code:authCredential(),p_event_token:token});if(ex?.[0])e={...e,...ex[0]}}catch(err){console.warn('Event-Zusatzdaten',err)}
+  try{const lcRows=await rpc('fts_admin_get_event_lifecycle_v11',{p_admin_code:authCredential(),p_event_token:token});if(lcRows?.[0])e.lifecycle_v11=lcRows[0]}catch(err){console.warn('Event-Lifecycle',err)}
   saveCustomer(e.customer_name,e.customer_token);$('#title').value=e.title||'';$('#subtitle').value=e.subtitle||'';$('#location').value=e.location||'';$('#overlay').value=e.overlay_text||'';
   $('#shortCode').value=duplicate?slug(((e.short_code||slug(e.title))+'-2')).slice(0,30):(e.short_code||'');$('#shortCode').disabled=!duplicate;$('#shortCode').dataset.manual='1';$('#days').value=e.retention_days||3;$('#testDays').value=e.test_days_before??2;
-  clearDays();parseArr(e.event_days).forEach(d=>addEventDay(d));if(!document.querySelector('.dayRow'))addEventDay('');
+  const rawTags=parseArr(e.event_tags),tagLc=lifecycleFromTags(rawTags),dbLc=e.lifecycle_v11||null;
+  const lc=dbLc?{schedule:parseArr(dbLc.schedule),galleryUrl:dbLc.gallery_url||'',galleryAvailableAt:dbLc.gallery_available_at||'',linkExpiresAt:dbLc.link_expires_at||''}:tagLc;
+  clearDays();
+  const savedSchedule=Array.isArray(lc?.schedule)&&lc.schedule.length?lc.schedule:parseArr(e.event_days).map(d=>({date:d,start:'00:00',end:'23:59'}));
+  savedSchedule.forEach(x=>addEventDay(x.date,x.start||'00:00',x.end||'23:59'));if(!document.querySelector('.dayRow'))addEventDay('');
+  $('#galleryUrl').value=duplicate?'':(lc?.galleryUrl||'');
+  $('#galleryAvailableAt').value=duplicate?'':(lc?.galleryAvailableAt||'');
+  $('#linkExpiresAt').value=duplicate?'':(lc?.linkExpiresAt||dateTimeLocalFromTimestamp(e.expires_at));
+  if(duplicate)fillLifecycleDefaults(true);
   if(e.theme)applyTheme(e.theme);$('#accent').value=e.accent||'#d9b56d';$('#bg1').value=e.bg1||'#071315';$('#bg2').value=e.bg2||'#10383a';
   setChecks('layoutChecks',parseArr(e.available_layouts));setChecks('filterChecks',parseArr(e.available_filters));
   const pls=parseArr(e.poster_languages);setChecks('posterLanguageChecks',pls.length?pls:(e.poster_bilingual!==false?['de','en']:['de']));
   $('#tabletAttention').checked=e.tablet_attention!==false;
-  $('#eventCategory').value=e.event_category||'';$('#eventCategoryCustom').value=e.event_category_custom||'';$('#eventTags').value=parseArr(e.event_tags).join(', ');syncCategoryCustom();
+  $('#eventCategory').value=e.event_category||'';$('#eventCategoryCustom').value=e.event_category_custom||'';$('#eventTags').value=visibleTags(e.event_tags).join(', ');syncCategoryCustom();
   decoItems=parseArr(e.decoration_items).map(x=>({id:crypto.randomUUID(),symbol:x.symbol,position:x.position||'bottom-right',size:x.size||'medium',showPoster:x.show_poster!==false,showPhoto:x.show_photo!==false}));renderDecoPicker();renderDecoManager();
   logoItems=parseArr(e.logo_items).map(x=>({id:crypto.randomUUID(),path:x.path||'',url:assetUrl(x.path),name:x.name||'Logo',position:x.position||'top-right',size:x.size||'medium',showPoster:x.show_poster!==false,showPhoto:x.show_photo!==false}));
   existingFlyerPath=e.poster_bg_path||'';originalFlyerPath=existingFlyerPath;if(existingFlyerPath){flyerUrl=assetUrl(existingFlyerPath);$('#previewFlyer').src=flyerUrl;$('#previewFlyer').classList.add('show');$('#flyerThumb').src=flyerUrl;$('#flyerName').textContent='Gespeicherter Flyer';$('#flyerAssetPreview').classList.add('show');$('#removeFlyer').classList.remove('hidden')}

@@ -16,7 +16,7 @@
 .upload{display:grid;place-items:center;min-height:165px;border:2px dashed color-mix(in srgb,var(--accent) 50%,transparent);border-radius:20px;text-align:center;padding:22px;cursor:pointer;background:rgba(0,0,0,.12);margin-top:14px}.upload strong{font-size:1.2rem}.upload span{display:block;color:#9cacaa;margin-top:8px}.upload input{display:none}
 .compare{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}.previewBox{min-width:0;background:#061012;border:1px solid rgba(255,255,255,.08);border-radius:17px;padding:7px}.previewBox b{display:block;margin:2px 4px 7px;color:var(--accent);font-size:.78rem}.previewBox img,.previewBox canvas{width:100%;height:auto;max-height:560px;object-fit:contain;border-radius:10px;display:block}
 .privacyInfo{margin:17px 0 10px;padding:13px 14px;border-radius:14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);color:#aebbb9;font-size:.82rem;line-height:1.45}.privacyInfo strong{display:block;color:#f3eee5;margin-bottom:5px}.consent{display:flex;gap:10px;align-items:flex-start;margin:12px 0 17px;color:#c5cfcd;font-size:.9rem}.consent input{margin-top:3px;transform:scale(1.2)}
-button.main{width:100%;border:0;border-radius:15px;padding:16px;font:inherit;font-weight:900;background:var(--accent);color:#102020;cursor:pointer}button:disabled{opacity:.55;cursor:wait}.msg{border-radius:14px;padding:13px 15px;margin:15px 0 0;display:none}.ok{display:block;background:rgba(68,180,117,.16);border:1px solid rgba(68,180,117,.35)}.warn{display:block;background:rgba(225,166,54,.13);border:1px solid rgba(225,166,54,.35)}.err{display:block;background:rgba(220,80,80,.14);border:1px solid rgba(220,80,80,.35)}.foot{text-align:center;color:#7f9692;font-size:.78rem;margin-top:18px}.loading{padding:60px 20px;text-align:center;color:#a8b6b4}
+button.main{width:100%;border:0;border-radius:15px;padding:16px;font:inherit;font-weight:900;background:var(--accent);color:#102020;cursor:pointer}button:disabled{opacity:.55;cursor:wait}.msg{border-radius:14px;padding:13px 15px;margin:15px 0 0;display:none}.ok{display:block;background:rgba(68,180,117,.16);border:1px solid rgba(68,180,117,.35)}.warn{display:block;background:rgba(225,166,54,.13);border:1px solid rgba(225,166,54,.35)}.err{display:block;background:rgba(220,80,80,.14);border:1px solid rgba(220,80,80,.35)}.foot{text-align:center;color:#7f9692;font-size:.78rem;margin-top:18px}.loading{padding:60px 20px;text-align:center;color:#a8b6b4}.galleryMain{display:block;width:100%;border-radius:15px;padding:16px;text-align:center;text-decoration:none;font-weight:900;background:var(--accent);color:#102020;margin-top:10px}
 @media(max-width:680px){.choiceRow{grid-template-columns:repeat(2,1fr)}.card{padding:14px}.compare{gap:5px}.previewBox{padding:4px}.previewBox b{font-size:.68rem}}
 
 .langBar{display:flex;gap:6px;justify-content:flex-end;margin:-2px 0 12px}.langBar button{border:1px solid rgba(255,255,255,.1);background:#0a2426;color:#dce5e3;border-radius:999px;padding:7px 10px;font-weight:900;cursor:pointer}.langBar button.active{background:var(--accent);color:#102020}
@@ -40,7 +40,8 @@ const eventToken=params.get('e') || cfg.defaultEventToken;
 const EVENT_CACHE_KEY='fts_event_cache_'+eventToken;
 const DB_NAME='fts_selfie_offline_v1', STORE='queue';
 let ev=null,selectedFile=null,designedBlob=null,selectedLayout='solo',selectedFilter='natural',redrawTimer=null;
-let lang='de',routeMode='closed',routeDay=null,adTimer=null,adIndex=0,keepAdsVisible=false,lastSuccessUrl='';
+let lang='de',routeMode='closed',routeDay=null,routeNext=null,adTimer=null,adIndex=0,keepAdsVisible=false,lastSuccessUrl='';
+const LIFECYCLE_TAG_PREFIX='__FTS_LIFECYCLE_V11__:';
 const DEFAULT_LAYOUTS=['solo','duo','groupwide','grouptall','free'];
 const DEFAULT_FILTERS=['natural','warm','vivid','mono','cool'];
 
@@ -76,7 +77,8 @@ const I18N={
   queuedOffline:'✓ Foto sicher auf diesem Handy gespeichert. Sobald Internet wieder da ist, wird es automatisch hochgeladen.',
   saveError:'Das Foto konnte nicht sicher gespeichert werden',
   test:'TESTMODUS · Dieses Foto wird getrennt gespeichert und erscheint nicht im Kundenalbum.',
-  eventDay:'Aktiver Event-Tag',tooEarly:'Dieses Event ist noch nicht für Selfie-Uploads freigeschaltet.',ended:'Die Event-Tage sind beendet. Das Kundenportal kann weiterhin sichtbar sein.',
+  eventDay:'Aktiver Event-Tag',tooEarly:'Dieses Event ist noch nicht für Selfie-Uploads freigeschaltet.',ended:'Die Event-Tage sind beendet.',
+  beforeStart:'Dieses Event startet am {date} um {time} Uhr.',betweenDays:'Der Upload ist gerade geschlossen. Der nächste Event-Zeitraum startet am {date} um {time} Uhr.',afterEvent:'Die Veranstaltung ist beendet. Halten Sie diesen Link noch im Auge – die Selfies werden in Kürze hier verfügbar sein.',galleryReady:'Die Selfies sind jetzt online.',galleryButton:'Selfies ansehen',expired:'Dieser Event-Link ist nicht mehr verfügbar.',
   queueOne:'Foto wartet auf Upload',queueMany:'Fotos warten auf Upload',
   solo:'1 Person · Hoch',soloDesc:'Portrait',duo:'2 Personen · Hoch',duoDesc:'Duo',
   groupwide:'Gruppe · Breit',groupwideDesc:'3–5 Personen',grouptall:'Gruppe · Hoch',grouptallDesc:'3–5 Personen',free:'Originalformat',freeDesc:'frei',
@@ -98,7 +100,8 @@ const I18N={
   queuedOffline:'✓ Photo saved safely on this phone. It will upload automatically when internet is available.',
   saveError:'The photo could not be saved safely',
   test:'TEST MODE · This photo is stored separately and will not appear in the customer album.',
-  eventDay:'Active event day',tooEarly:'This event is not yet open for selfie uploads.',ended:'The event days have ended. The customer portal may still remain available.',
+  eventDay:'Active event day',tooEarly:'This event is not yet open for selfie uploads.',ended:'The event days have ended.',
+  beforeStart:'This event starts on {date} at {time}.',betweenDays:'Uploads are closed right now. The next event period starts on {date} at {time}.',afterEvent:'The event has ended. Keep this link handy – the selfies will be available here shortly.',galleryReady:'The selfies are now online.',galleryButton:'View selfies',expired:'This event link is no longer available.',
   queueOne:'photo waiting for upload',queueMany:'photos waiting for upload',
   solo:'1 person · portrait',soloDesc:'portrait',duo:'2 people · portrait',duoDesc:'duo',
   groupwide:'Group · landscape',groupwideDesc:'3–5 people',grouptall:'Group · portrait',grouptallDesc:'3–5 people',free:'Original format',freeDesc:'free',
@@ -120,7 +123,8 @@ const I18N={
   queuedOffline:'✓ Photo enregistrée en sécurité sur ce téléphone. Elle sera téléversée automatiquement dès que la connexion reviendra.',
   saveError:'La photo n’a pas pu être enregistrée en sécurité',
   test:'MODE TEST · Cette photo est enregistrée séparément et n’apparaît pas dans l’album client.',
-  eventDay:'Jour d’événement actif',tooEarly:'Cet événement n’est pas encore ouvert aux selfies.',ended:'Les jours de l’événement sont terminés. Le portail client peut rester disponible.',
+  eventDay:'Jour d’événement actif',tooEarly:'Cet événement n’est pas encore ouvert aux selfies.',ended:'Les jours de l’événement sont terminés.',
+  beforeStart:'Cet événement commence le {date} à {time}.',betweenDays:'Les envois sont fermés pour le moment. La prochaine période commence le {date} à {time}.',afterEvent:'L’événement est terminé. Gardez ce lien – les selfies seront bientôt disponibles ici.',galleryReady:'Les selfies sont maintenant en ligne.',galleryButton:'Voir les selfies',expired:'Ce lien d’événement n’est plus disponible.',
   queueOne:'photo en attente',queueMany:'photos en attente',
   solo:'1 personne · portrait',soloDesc:'portrait',duo:'2 personnes · portrait',duoDesc:'duo',
   groupwide:'Groupe · paysage',groupwideDesc:'3–5 personnes',grouptall:'Groupe · portrait',grouptallDesc:'3–5 personnes',free:'Format original',freeDesc:'libre',
@@ -128,6 +132,7 @@ const I18N={
  }
 };
 function tr(k){return I18N[lang]?.[k]||I18N.de[k]||k}
+function trf(k,vars={}){return Object.entries(vars).reduce((t,[a,b])=>t.replaceAll('{'+a+'}',b),tr(k))}
 function detectLang(){
   const saved=localStorage.getItem('fts_guest_lang');
   if(['de','en','fr'].includes(saved))return saved;
@@ -153,7 +158,13 @@ function guestSessionId(){
   if(!id){id='g_'+crypto.randomUUID().replace(/-/g,'');localStorage.setItem(key,id)}
   return id;
 }
-async function registerPhoto(item){await rpc('fts_register_photo_v10',{p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath,p_guest_session_id:item.guestSessionId||guestSessionId()})}
+async function registerPhoto(item){await rpc('fts_register_photo_v11',{p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath,p_guest_session_id:item.guestSessionId||guestSessionId(),p_captured_at:new Date(item.createdAt||Date.now()).toISOString()})}
+async function recordScan(){
+  const canonical=String(ev?.event_token||'');if(!canonical||!navigator.onLine)return;
+  const key='fts_scan_recorded_'+canonical;
+  if(sessionStorage.getItem(key))return;
+  try{await rpc('fts_record_event_scan_v11',{p_event_token:canonical});sessionStorage.setItem(key,'1')}catch(e){console.warn('Scan-Statistik',e)}
+}
 async function uploadItem(item){await uploadObject(item.originalPath,item.originalBlob,item.originalType);await uploadObject(item.designedPath,item.designedBlob,'image/jpeg');await registerPhoto(item)}
 async function processQueue(){if(!navigator.onLine)return updateNet();const items=await queueAll();for(const item of items){try{await uploadItem(item);await queueDelete(item.id)}catch(e){console.warn('Queue upload',e);break}}updateNet();updateQueueCount()}
 function updateNet(){const el=document.getElementById('net');if(!el)return;el.className='net '+(navigator.onLine?'online':'offline');el.textContent=navigator.onLine?tr('online'):tr('offline')}
@@ -202,23 +213,57 @@ function eventDays(){
   if(!d.length && ev?.event_date)d=[ev.event_date];
   return [...new Set(d.filter(Boolean))].sort();
 }
-function luxDate(){
-  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Luxembourg',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
-  const get=t=>parts.find(x=>x.type===t)?.value;
-  return `${get('year')}-${get('month')}-${get('day')}`;
+function decodeLifecycleTag(tag){
+  if(!String(tag||'').startsWith(LIFECYCLE_TAG_PREFIX))return null;
+  try{
+    const bin=atob(String(tag).slice(LIFECYCLE_TAG_PREFIX.length)),bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
+    const v=JSON.parse(new TextDecoder().decode(bytes));return v&&typeof v==='object'?v:null;
+  }catch{return null}
 }
+function lifecycleConfig(){
+  const db=ev?.lifecycle_v11;
+  if(db){
+    const schedule=asArray(db.schedule,[]);
+    return {v:11,timezone:'Europe/Luxembourg',schedule,galleryUrl:db.gallery_url||'',galleryAvailableAt:db.gallery_available_at||'',linkExpiresAt:db.link_expires_at||''};
+  }
+  let tags=ev?.event_tags;if(!Array.isArray(tags)){try{tags=JSON.parse(tags||'[]')}catch{tags=[]}}
+  for(const t of tags){const v=decodeLifecycleTag(t);if(v)return v}
+  return null;
+}
+function luxParts(now=new Date()){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Luxembourg',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(now);
+  const get=t=>parts.find(x=>x.type===t)?.value||'00';
+  return {date:`${get('year')}-${get('month')}-${get('day')}`,time:`${get('hour')}:${get('minute')}`,stamp:`${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`};
+}
+function luxDate(){return luxParts().date}
 function addDays(dateStr,delta){
   const d=new Date(dateStr+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+delta);
   return d.toISOString().slice(0,10);
 }
+function scheduleForEvent(){
+  const lc=lifecycleConfig(),raw=Array.isArray(lc?.schedule)?lc.schedule:[];
+  if(raw.length)return raw.filter(x=>x?.date).map(x=>({date:String(x.date),start:String(x.start||'00:00'),end:String(x.end||'23:59')})).sort((a,b)=>(a.date+'T'+a.start).localeCompare(b.date+'T'+b.start));
+  return eventDays().map(date=>({date,start:'00:00',end:'23:59'}));
+}
+function formatSchedulePoint(x){
+  const locale=lang==='de'?'de-DE':lang==='fr'?'fr-FR':'en-GB';
+  return {date:new Date(x.date+'T12:00:00').toLocaleDateString(locale),time:x.start};
+}
 function resolveRoute(){
-  const days=eventDays(),today=luxDate();
-  if(days.includes(today)){routeMode='day';routeDay=today;return}
-  const first=days[0],last=days[days.length-1],testDays=Number(ev?.test_days_before||0);
-  if(first && today<first && today>=addDays(first,-testDays)){routeMode='test';routeDay=null;return}
-  if(first && today<addDays(first,-testDays)){routeMode='too-early';routeDay=null;return}
-  if(last && today>last){routeMode='ended';routeDay=null;return}
-  routeMode='closed';routeDay=null;
+  const schedule=scheduleForEvent(),now=luxParts(),lc=lifecycleConfig();routeDay=null;routeNext=null;
+  if(!schedule.length){routeMode='closed';return}
+  const first=schedule[0],last=schedule[schedule.length-1],firstStart=first.date+'T'+first.start,lastEnd=last.date+'T'+last.end;
+  const active=schedule.find(x=>now.stamp>=x.date+'T'+x.start+':00'&&now.stamp<=x.date+'T'+x.end+':59');
+  if(active){routeMode='day';routeDay=active.date;return}
+  const testDays=Number(ev?.test_days_before||0),testStart=addDays(first.date,-testDays)+'T00:00:00';
+  if(testDays>0&&now.stamp>=testStart&&now.stamp<firstStart+':00'){routeMode='test';return}
+  if(now.stamp<firstStart+':00'){routeMode='too-early';routeNext=first;return}
+  const next=schedule.find(x=>now.stamp<x.date+'T'+x.start+':00');
+  if(next&&now.stamp<=lastEnd+':59'){routeMode='between';routeNext=next;return}
+  const galleryAt=String(lc?.galleryAvailableAt||''),expiresAt=String(lc?.linkExpiresAt||'');
+  if(expiresAt&&now.stamp>=expiresAt+':00'){routeMode='expired';return}
+  if(galleryAt&&now.stamp>=galleryAt+':00'&&safeAdLink(lc?.galleryUrl)){routeMode='gallery';return}
+  routeMode='after';
 }
 
 function asArray(v,fallback){if(Array.isArray(v)&&v.length)return v;try{const p=JSON.parse(v);if(Array.isArray(p)&&p.length)return p}catch{}return fallback}
@@ -230,6 +275,14 @@ async function boot(){
    if(data?.length){
      const merged={...data[0],ads_enabled:false,ad_items:[]};
      try{
+       const ex=await rpc('fts_get_event_extras_public_v10',{p_event_token:eventToken});
+       if(ex?.length)Object.assign(merged,ex[0]);
+     }catch(exErr){console.warn('Event extras online load',exErr)}
+     try{
+       const lc=await rpc('fts_get_event_lifecycle_v11',{p_event_token:eventToken});
+       if(lc?.length)merged.lifecycle_v11=lc[0];
+     }catch(lcErr){console.warn('Event lifecycle online load',lcErr)}
+     try{
        let ads;
        try{ads=await rpc('fts_get_event_ads_v2',{p_event_token:eventToken})}
        catch(_e){ads=await rpc('fts_get_event_ads_v1',{p_event_token:eventToken})}
@@ -240,7 +293,7 @@ async function boot(){
  }}catch(e){console.warn('Event online load',e)}
  if(data?.length)ev=data[0];else{try{ev=JSON.parse(localStorage.getItem(EVENT_CACHE_KEY)||'null')}catch{}}
  if(!ev){document.getElementById('card').innerHTML='<div class="loading"><h2>Dieses Event wurde auf diesem Handy noch nicht geladen.</h2><p>Für den ersten Aufruf ist einmal Internet erforderlich. Danach funktioniert die Selfie-Seite auch bei Netzausfall.</p></div>';return}
- render();processQueue();
+ recordScan();render();processQueue();
 }
 function render(){
  document.documentElement.style.setProperty('--accent',ev.accent||'#d9b56d');
@@ -254,13 +307,21 @@ function render(){
  resolveRoute();
 
  const statusClass=routeMode==='test'?'test':routeMode==='day'?'day':'closed';
+ const lc=lifecycleConfig(),nextPoint=routeNext?formatSchedulePoint(routeNext):null;
  const statusText=routeMode==='test'
    ? tr('test')
    : routeMode==='day'
      ? `${tr('eventDay')}: ${new Date(routeDay+'T12:00:00').toLocaleDateString(lang==='de'?'de-DE':lang==='fr'?'fr-FR':'en-GB')}`
-     : routeMode==='too-early'
-       ? tr('tooEarly')
-       : tr('ended');
+     : routeMode==='too-early'&&nextPoint
+       ? trf('beforeStart',nextPoint)
+       : routeMode==='between'&&nextPoint
+         ? trf('betweenDays',nextPoint)
+         : routeMode==='gallery'
+           ? tr('galleryReady')
+           : routeMode==='expired'
+             ? tr('expired')
+             : tr('afterEvent');
+ const uploadOpen=['day','test'].includes(routeMode),galleryHref=routeMode==='gallery'?safeAdLink(lc?.galleryUrl):'';
 
  document.getElementById('card').innerHTML=`
    <div class="langBar">
@@ -276,7 +337,7 @@ function render(){
    <div class="eventStatus ${statusClass}" id="eventStatus">${statusText}</div>
    <div id="net" class="net"></div>
 
-   <div class="captureFlow" id="captureFlow">
+   <div class="captureFlow ${uploadOpen?'':'hiddenFlow'}" id="captureFlow">
    <div class="moduleTitle" id="layoutTitle">${tr('layoutTitle')}</div>
    <div class="choiceRow" id="layoutChoices">${layouts.map(layoutButton).join('')}</div>
 
@@ -285,7 +346,7 @@ function render(){
 
    <label class="upload" id="uploadLabel">
      <div><strong id="photoTitle">${tr('photoTitle')}</strong><span id="photoSub">${tr('photoSub')}</span></div>
-     <input id="photo" type="file" accept="image/*" capture="user" ${['day','test'].includes(routeMode)?'':'disabled'}>
+     <input id="photo" type="file" accept="image/*" capture="user" ${uploadOpen?'':'disabled'}>
    </label>
 
    <section class="compare" id="compare">
@@ -296,10 +357,11 @@ function render(){
 
    <div class="adSlot" id="adSlot"><div class="adLabel">Werbung</div><a class="adFrame" id="adLink"><img id="adImage" alt="Werbung"></a></div>
 
-   <div class="sendFlow" id="sendFlow">
+   <div class="sendFlow ${uploadOpen?'':'hiddenFlow'}" id="sendFlow">
      <div class="privacyInfo"><strong id="privacyTitle">${tr('privacyTitle')}</strong><span id="privacyText">${tr('privacy')}</span></div>
-     <label class="consent"><input id="consent" type="checkbox" ${['day','test'].includes(routeMode)?'':'disabled'}><span id="consentText">${tr('consent')}</span></label>
-     <button class="main" id="uploadBtn" ${['day','test'].includes(routeMode)?'':'disabled'}>${tr('send')}</button>
+     <label class="consent"><input id="consent" type="checkbox" ${uploadOpen?'':'disabled'}><span id="consentText">${tr('consent')}</span></label>
+     <button class="main" id="uploadBtn" ${uploadOpen?'':'disabled'}>${tr('send')}</button>
+     ${galleryHref?`<a class="galleryMain" href="${galleryHref}" target="_blank" rel="noopener noreferrer">${tr('galleryButton')}</a>`:''}
      <div id="message" class="msg"></div>
    </div>
    <section class="successPanel" id="successPanel">
@@ -320,6 +382,7 @@ function render(){
    <div class="foot">FTS.lu · Eventfotografie</div>`;
 
  updateNet();updateQueueCount();bindChoices();bindLanguages();
+ keepAdsVisible=!uploadOpen&&routeMode!=='expired';if(keepAdsVisible)startAds();
 
  document.getElementById('photo').addEventListener('change',onPhoto);
  document.getElementById('uploadBtn').addEventListener('click',submitPhoto);
@@ -556,7 +619,7 @@ async function showMySelfies(){
   panel.scrollIntoView({behavior:'smooth',block:'start'});
 }
 async function submitPhoto(){
- if(!['day','test'].includes(routeMode))return showMessage(routeMode==='too-early'?tr('tooEarly'):tr('ended'));
+ if(!['day','test'].includes(routeMode))return showMessage(routeMode==='too-early'?tr('tooEarly'):routeMode==='expired'?tr('expired'):tr('ended'));
  if(!selectedFile)return showMessage(tr('noPhoto'));
  if(!document.getElementById('consent').checked)return showMessage(tr('noConsent'));
  if(selectedFile.size>15*1024*1024)return showMessage(tr('tooBig'));
