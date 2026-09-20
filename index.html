@@ -45,9 +45,16 @@ function initialEventToken(){
   const launchedAsApp=params.get('pwa')==='1'||matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
   if(launchedAsApp){
     try{
+      const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Luxembourg',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
+      const get=t=>parts.find(x=>x.type===t)?.value||'00';
+      const now=`${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`;
       const rows=JSON.parse(localStorage.getItem(SAVED_EVENTS_KEY)||'[]');
       if(Array.isArray(rows)&&rows.length){
-        const x=rows[0];
+        const x=rows.find(r=>{
+          const e=String(r?.expires_at||'').trim();
+          const stamp=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(e)?e+':00':e;
+          return !stamp||now<stamp;
+        });
         if(x?.short_code)return String(x.short_code);
         if(x?.event_token)return String(x.event_token);
       }
