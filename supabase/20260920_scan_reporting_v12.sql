@@ -317,67 +317,79 @@ begin
       )
     ),
     'daily',coalesce((
-      select jsonb_agg(x order by x->>'day')
+      select jsonb_agg(
+        jsonb_build_object(
+          'day',d.day_date::text,
+          'selfies',(
+            select count(*) from public.fts_selfie_photos p
+            where p.event_id=v_event.id and p.is_test=false and p.trashed_at is null and p.event_day=d.day_date
+          ),
+          'qr_scans',(
+            select count(*) from public.fts_event_scans_v11 s
+            where s.event_token=v_event_token and timezone('Europe/Luxembourg',s.scanned_at)::date=d.day_date
+          ),
+          'unique_sessions',(
+            select count(distinct nullif(s.session_id,'')) from public.fts_event_scans_v11 s
+            where s.event_token=v_event_token and timezone('Europe/Luxembourg',s.scanned_at)::date=d.day_date
+          )
+        ) order by d.day_date
+      )
       from (
-        select jsonb_build_object(
-          'day',d.day::text,
-          'selfies',coalesce(p.selfies,0),
-          'qr_scans',coalesce(s.qr_scans,0),
-          'unique_sessions',coalesce(s.unique_sessions,0)
-        ) x
+        select distinct q.day_date
         from (
-          select distinct day
-          from (
-            select jsonb_array_elements_text(coalesce(v_event.event_days,'[]'::jsonb))::date day
-            union
-            select p.event_day from public.fts_selfie_photos p where p.event_id=v_event.id and p.event_day is not null
-            union
-            select timezone('Europe/Luxembourg',s.scanned_at)::date from public.fts_event_scans_v11 s where s.event_token=v_event_token
-          ) q
-        ) d
-        left join (
-          select p.event_day day,count(*)::bigint selfies
+          select jsonb_array_elements_text(coalesce(v_event.event_days,'[]'::jsonb))::date as day_date
+          union
+          select p.event_day as day_date
           from public.fts_selfie_photos p
-          where p.event_id=v_event.id and p.is_test=false and p.trashed_at is null
-          group by p.event_day
-        ) p using(day)
-        left join (
-          select timezone('Europe/Luxembourg',s.scanned_at)::date day,
-                 count(*)::bigint qr_scans,
-                 count(distinct nullif(s.session_id,''))::bigint unique_sessions
+          where p.event_id=v_event.id and p.event_day is not null
+          union
+          select timezone('Europe/Luxembourg',s.scanned_at)::date as day_date
           from public.fts_event_scans_v11 s
           where s.event_token=v_event_token
-          group by 1
-        ) s using(day)
-      ) q
+        ) q
+        where q.day_date is not null
+      ) d
     ),'[]'::jsonb),
     'hourly',coalesce((
-      select jsonb_agg(jsonb_build_object(
-        'day',q.day::text,'hour',q.hour,'qr_scans',q.qr_scans,'unique_sessions',q.unique_sessions
-      ) order by q.day,q.hour)
+      select jsonb_agg(
+        jsonb_build_object(
+          'day',q.scan_day::text,
+          'hour',q.scan_hour,
+          'qr_scans',q.qr_scans,
+          'unique_sessions',q.unique_sessions
+        ) order by q.scan_day,q.scan_hour
+      )
       from (
-        select timezone('Europe/Luxembourg',s.scanned_at)::date day,
-               extract(hour from timezone('Europe/Luxembourg',s.scanned_at))::integer hour,
-               count(*)::bigint qr_scans,
-               count(distinct nullif(s.session_id,''))::bigint unique_sessions
+        select timezone('Europe/Luxembourg',s.scanned_at)::date as scan_day,
+               extract(hour from timezone('Europe/Luxembourg',s.scanned_at))::integer as scan_hour,
+               count(*)::bigint as qr_scans,
+               count(distinct nullif(s.session_id,''))::bigint as unique_sessions
         from public.fts_event_scans_v11 s
         where s.event_token=v_event_token
         group by 1,2
       ) q
     ),'[]'::jsonb),
     'devices',coalesce((
-      select jsonb_agg(jsonb_build_object('device',q.device_type,'count',q.cnt) order by q.cnt desc)
+      select jsonb_agg(
+        jsonb_build_object('device',q.device_type,'count',q.cnt)
+        order by q.cnt desc,q.device_type
+      )
       from (
-        select coalesce(nullif(s.device_type,''),'Unbekannt') device_type,count(*)::bigint cnt
+        select coalesce(nullif(s.device_type,''),'Unbekannt') as device_type,
+               count(*)::bigint as cnt
         from public.fts_event_scans_v11 s
         where s.event_token=v_event_token
         group by 1
       ) q
     ),'[]'::jsonb),
     'countries',coalesce((
-      select jsonb_agg(jsonb_build_object('country',q.country_code,'count',q.cnt) order by q.cnt desc)
+      select jsonb_agg(
+        jsonb_build_object('country',q.country_code,'count',q.cnt)
+        order by q.cnt desc,q.country_code
+      )
       from (
-        select coalesce(nullif(s.country_code,''),'XX') country_code,count(*)::bigint cnt
+        select coalesce(nullif(s.country_code,''),'XX') as country_code,
+               count(*)::bigint as cnt
         from public.fts_event_scans_v11 s
         where s.event_token=v_event_token
         group by 1
