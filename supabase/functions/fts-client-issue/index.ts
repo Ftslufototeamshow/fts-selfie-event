@@ -31,9 +31,14 @@ Deno.serve(async req => {
 
     if(!eventInput||!allowedTypes.has(issueType)) return json({ok:false,error:"Ungültige Fehlerdaten"},400);
 
-    const {data:eventRows,error:eventError}=await admin.rpc("fts_get_event",{p_event_token:eventInput});
+    let {data:eventRow,error:eventError}=await admin.from("fts_selfie_events").select("token,short_code").eq("token",eventInput).maybeSingle();
     if(eventError) throw eventError;
-    const eventToken=Array.isArray(eventRows)&&eventRows[0]?.event_token?String(eventRows[0].event_token):"";
+    if(!eventRow){
+      const byCode=await admin.from("fts_selfie_events").select("token,short_code").eq("short_code",eventInput.toUpperCase()).maybeSingle();
+      if(byCode.error) throw byCode.error;
+      eventRow=byCode.data;
+    }
+    const eventToken=eventRow?.token?String(eventRow.token):"";
     if(!eventToken) return json({ok:false,error:"Event nicht gefunden"},404);
 
     const fingerprint=[issueType,sessionId||"anonymous",issueKey||"default"].join("|").slice(0,500);
