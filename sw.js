@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v20-system-check-20260920';
+const CACHE='fts-selfie-v21-gallery-reminder-20260920';
 const CORE=['./','./index.html','./config.js','./manifest.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
