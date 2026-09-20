@@ -27,7 +27,6 @@ alter table public.fts_event_scans_v11 enable row level security;
 
 revoke all on public.fts_event_lifecycle_v11 from anon, authenticated;
 revoke all on public.fts_event_scans_v11 from anon, authenticated;
-revoke all on public.fts_event_scans_v11 from anon, authenticated;
 
 create or replace function public.fts_admin_set_event_lifecycle_v11(
   p_admin_code text,
@@ -238,7 +237,7 @@ create or replace function public.fts_register_photo_v11(
   p_designed_path text,
   p_guest_session_id text default null
 )
-returns void
+returns uuid
 language plpgsql
 security definer
 set search_path = public
@@ -250,6 +249,7 @@ declare
   v_first_date date;
   v_first_start time;
   v_allowed boolean := false;
+  v_photo_id uuid;
 begin
   select e.event_token::text into v_token
   from public.fts_get_event(p_event_token) e
@@ -307,7 +307,7 @@ begin
   ) into v_photo_id;
   return v_photo_id;
 end;
-$;
+$$;
 
 revoke all on function public.fts_get_event_lifecycle_v11(text) from public;
 revoke all on function public.fts_record_event_scan_v11(text) from public;
