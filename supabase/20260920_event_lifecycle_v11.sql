@@ -22,7 +22,11 @@ create index if not exists fts_event_scans_v11_event_token_idx
 create index if not exists fts_event_scans_v11_scanned_at_idx
   on public.fts_event_scans_v11(scanned_at);
 
+alter table public.fts_event_lifecycle_v11 enable row level security;
+alter table public.fts_event_scans_v11 enable row level security;
+
 revoke all on public.fts_event_lifecycle_v11 from anon, authenticated;
+revoke all on public.fts_event_scans_v11 from anon, authenticated;
 revoke all on public.fts_event_scans_v11 from anon, authenticated;
 
 create or replace function public.fts_admin_set_event_lifecycle_v11(
@@ -127,7 +131,17 @@ begin
   end if;
 
   return query
-  select l.schedule,l.gallery_url,l.gallery_available_at,l.link_expires_at,l.test_days_before
+  select
+    l.schedule,
+    case
+      when nullif(l.gallery_available_at,'') is not null
+       and timezone('Europe/Luxembourg',now()) >= l.gallery_available_at::timestamp
+      then l.gallery_url
+      else ''
+    end as gallery_url,
+    l.gallery_available_at,
+    l.link_expires_at,
+    l.test_days_before
   from public.fts_event_lifecycle_v11 l
   where l.event_token=v_token;
 end;
@@ -251,10 +265,10 @@ begin
 
   -- Legacy events without lifecycle metadata keep their existing behavior.
   if not found then
-    perform public.fts_register_photo_v10(
+    select public.fts_register_photo_v10(
       p_event_token,p_original_path,p_designed_path,p_guest_session_id
-    );
-    return;
+    ) into v_photo_id;
+    return v_photo_id;
   end if;
 
   select exists(
@@ -266,10 +280,12 @@ begin
   ) into v_allowed;
 
   if not v_allowed and v_lifecycle.test_days_before>0 then
-    select min((x->>'date')::date),
-           min(coalesce(nullif(x->>'start',''),'00:00')::time)
+    select (x->>'date')::date,
+           coalesce(nullif(x->>'start',''),'00:00')::time
       into v_first_date,v_first_start
-    from jsonb_array_elements(coalesce(v_lifecycle.schedule,'[]'::jsonb)) x;
+    from jsonb_array_elements(coalesce(v_lifecycle.schedule,'[]'::jsonb)) x
+    order by (x->>'date')::date, coalesce(nullif(x->>'start',''),'00:00')::time
+    limit 1;
 
     if v_first_date is not null
        and v_now_local::date >= (v_first_date-v_lifecycle.test_days_before)
@@ -286,11 +302,20 @@ begin
     raise exception 'Uploads are closed for this event';
   end if;
 
-  perform public.fts_register_photo_v10(
+  select public.fts_register_photo_v10(
     p_event_token,p_original_path,p_designed_path,p_guest_session_id
-  );
+  ) into v_photo_id;
+  return v_photo_id;
 end;
-$$;
+$;
+
+revoke all on function public.fts_get_event_lifecycle_v11(text) from public;
+revoke all on function public.fts_record_event_scan_v11(text) from public;
+revoke all on function public.fts_register_photo_v11(text,text,text,text) from public;
+revoke all on function public.fts_admin_set_event_lifecycle_v11(text,text,jsonb,text,text,text,integer) from public;
+revoke all on function public.fts_admin_get_event_lifecycle_v11(text,text) from public;
+revoke all on function public.fts_admin_event_scan_stats_v11(text) from public;
+revoke all on function public.fts_admin_event_scan_daily_v11(text,text) from public;
 
 grant execute on function public.fts_get_event_lifecycle_v11(text) to anon, authenticated;
 grant execute on function public.fts_record_event_scan_v11(text) to anon, authenticated;
