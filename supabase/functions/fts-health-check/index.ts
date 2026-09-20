@@ -79,8 +79,8 @@ Deno.serve(async req=>{
     }
 
     const storagePath=`__health/${eventToken}/${crypto.randomUUID()}.txt`;
-    const blob=new Blob(["fts-health"],{type:"text/plain"});
-    const {error:uploadError}=await admin.storage.from(BUCKET).upload(storagePath,blob,{upsert:false,contentType:"text/plain"});
+    const testBytes=new TextEncoder().encode("fts-health");
+    const {error:uploadError}=await admin.storage.from(BUCKET).upload(storagePath,testBytes,{upsert:false,contentType:"text/plain"});
     if(uploadError){
       add("storage","Speicher & Foto-Upload","fail","Testdatei konnte nicht in den FTS-Speicher geschrieben werden: "+uploadError.message);
     }else{
@@ -105,15 +105,15 @@ Deno.serve(async req=>{
       if(!ads.length)add("ads","Werbung","warn","Werbung ist eingeschaltet, aber es ist kein Banner gespeichert.");
       else add("ads","Werbung","pass",`${ads.length} Werbebanner gespeichert.`);
       const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Luxembourg",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
-      for(let i=0;i<ads.length;i++){
-        const a=ads[i]||{},active=a.active!==false&&(!a.start_date||today>=a.start_date)&&(!a.end_date||today<=a.end_date);
-        if(!active)continue;
+      const activeAds=ads.map((a:any,i:number)=>({a:a||{},i})).filter(({a}:any)=>a.active!==false&&(!a.start_date||today>=a.start_date)&&(!a.end_date||today<=a.end_date));
+      const adChecks=await Promise.all(activeAds.map(async({a,i}:any)=>{
         const link=safeUrl(a.link),name=clean(a.name,100)||`Werbung ${i+1}`;
-        if(!a.link){add(`ad_link_${i}`,`Werbelink · ${name}`,"warn","Banner ist aktiv, hat aber keinen Link.");continue}
-        if(!link){add(`ad_link_${i}`,`Werbelink · ${name}`,"fail","Der gespeicherte Link ist ungültig.");continue}
+        if(!a.link)return {id:`ad_link_${i}`,label:`Werbelink · ${name}`,status:"warn" as const,detail:"Banner ist aktiv, hat aber keinen Link."};
+        if(!link)return {id:`ad_link_${i}`,label:`Werbelink · ${name}`,status:"fail" as const,detail:"Der gespeicherte Link ist ungültig."};
         const st=await fetchStatus(link,5500);
-        add(`ad_link_${i}`,`Werbelink · ${name}`,st.ok?"pass":"warn",st.ok?`Link erreichbar (HTTP ${st.status}).`:"Link konnte vom System nicht bestätigt werden; manche Plattformen blockieren automatische Prüfungen.");
-      }
+        return {id:`ad_link_${i}`,label:`Werbelink · ${name}`,status:(st.ok?"pass":"warn") as "pass"|"warn",detail:st.ok?`Link erreichbar (HTTP ${st.status}).`:"Link konnte vom System nicht bestätigt werden; manche Plattformen blockieren automatische Prüfungen."};
+      }));
+      for(const x of adChecks)add(x.id,x.label,x.status,x.detail);
     }else add("ads","Werbung","pass","Werbung ist für dieses Event ausgeschaltet.");
 
     if(lifecycle?.gallery_available_at&&!safeUrl(lifecycle?.gallery_url)){
