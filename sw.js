@@ -84,7 +84,7 @@ async function register(item){
   const r=await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/fts_register_photo_v11`,{
     method:'POST',
     headers:{'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':'application/json'},
-    body:JSON.stringify({p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath,p_guest_session_id:item.guestSessionId||null})
+    body:JSON.stringify({p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath,p_guest_session_id:item.guestSessionId||null,p_captured_at:new Date(item.createdAt||Date.now()).toISOString()})
   });
   if(!r.ok)throw new Error(await r.text());
 }
