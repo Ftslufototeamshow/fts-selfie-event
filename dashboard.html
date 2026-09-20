@@ -123,10 +123,11 @@ async function runSystemCheck(token,button=null){
   }
 }
 function issueSeverityLabel(v){return v==='error'?'Fehler':v==='warning'?'Warnung':'Info'}
+function issueTypeLabel(v){return({system_check:'System-Check',offline_queue:'Offline-Warteschlange',upload_failed:'Foto-Upload',background_upload_failed:'Hintergrund-Upload',client_error:'Browser-Fehler'})[v]||v||'System'}
 function renderIssueResults(){
   const box=$('#issueResults');if(!box)return;
   if(!issues.length){box.innerHTML='<div class="empty">✅ Keine offenen Probleme. Das FTS-System meldet aktuell nichts Kritisches.</div>';return}
-  box.innerHTML=issues.map(x=>`<div class="issueRow"><div><div class="issueTitle"><span class="issueSeverity ${esc(x.severity)}">${issueSeverityLabel(x.severity)}</span>${esc(x.event_title||'Event')}</div><div>${esc(x.message)}</div><div class="issueMeta">${esc(x.issue_type)} · zuletzt ${fmtDateTime(x.last_seen_at)}${Number(x.occurrences||1)>1?' · '+Number(x.occurrences)+'× gemeldet':''}</div></div><button class="secondary" data-resolve-issue="${x.issue_id}">Erledigt</button></div>`).join('');
+  box.innerHTML=issues.map(x=>`<div class="issueRow"><div><div class="issueTitle"><span class="issueSeverity ${esc(x.severity)}">${issueSeverityLabel(x.severity)}</span>${esc(x.event_title||'Event')}</div><div>${esc(x.message)}</div><div class="issueMeta">${esc(issueTypeLabel(x.issue_type))} · zuletzt ${fmtDateTime(x.last_seen_at)}${Number(x.occurrences||1)>1?' · '+Number(x.occurrences)+'× gemeldet':''}</div></div><button class="secondary" data-resolve-issue="${x.issue_id}">Erledigt</button></div>`).join('');
   box.querySelectorAll('[data-resolve-issue]').forEach(b=>b.onclick=()=>resolveIssue(Number(b.dataset.resolveIssue)));
 }
 async function openIssues(){
