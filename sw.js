@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v14-adfix-20260920';
+const CACHE='fts-selfie-v15-ad-savefix-20260920';
 const CORE=['./','./index.html','./config.js','./manifest.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{

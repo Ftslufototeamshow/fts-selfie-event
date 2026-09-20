@@ -721,26 +721,56 @@ $('#adFiles').addEventListener('change',async e=>{await addAdFiles(e.target.file
 
 async function persistEventAds(eventToken,storageSlug){
   const persisted=[];
-  if(adItems.some(x=>x.active!==false) && !$('#adsEnabled').checked){
-    console.warn('Werbebanner vorhanden, aber digitale Werbung ist ausgeschaltet.');
-  }
+  const adsOn=$('#adsEnabled').checked===true;
   for(let i=0;i<adItems.length;i++){
     const item=adItems[i];let path=item.path||'';
     if(item.file){
-      path=`${eventToken}/${storageSlug}/assets/ad-${i+1}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.webp`;
-      await uploadAsset(path,item.file);item.path=path;
+      // Werbung bewusst in einen stabilen Event-Assets-Pfad legen.
+      path=`${eventToken}/assets/ads/ad-${i+1}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.webp`;
+      await uploadAsset(path,item.file);
+      item.path=path;
     }else if(DUP_TOKEN&&path){
-      const target=`${eventToken}/${storageSlug}/assets/ad-${i+1}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.webp`;
-      const copied=await adminFiles('copy-path',{source_path:path,target_path:target});path=copied.path||target;item.path=path;
+      const target=`${eventToken}/assets/ads/ad-${i+1}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.webp`;
+      const copied=await adminFiles('copy-path',{source_path:path,target_path:target});
+      path=copied.path||target;item.path=path;
     }
-    if(path)persisted.push({path,name:(item.name||`Werbung ${i+1}`).trim().slice(0,100),link:safeHttpUrl(item.link),active:item.active!==false});
+    if(path)persisted.push({
+      path,
+      name:(item.name||`Werbung ${i+1}`).trim().slice(0,100),
+      link:safeHttpUrl(item.link),
+      active:item.active!==false
+    });
   }
-  await rpc('fts_admin_set_event_ads_v1',{p_admin_code:authCredential(),p_event_token:eventToken,p_ads_enabled:$('#adsEnabled').checked,p_ad_items:persisted});
+
+  const saved=await rpc('fts_admin_set_event_ads_v2',{
+    p_admin_code:authCredential(),
+    p_event_token:eventToken,
+    p_ads_enabled:adsOn,
+    p_ad_items:persisted
+  });
+  if(saved && saved.ok===false)throw new Error(saved.error||'Werbung konnte nicht gespeichert werden.');
+
+  // Direkt nach dem Speichern prüfen. So kann die Oberfläche keinen Erfolg melden,
+  // wenn die Banner-Metadaten nicht wirklich in Supabase angekommen sind.
+  const verify=await rpc('fts_get_event_ads_v2',{p_event_token:eventToken});
+  const row=verify?.[0]||null;
+  const storedItems=parseArr(row?.ad_items);
+  if(!row)throw new Error('Werbung wurde gespeichert, konnte aber nicht kontrolliert werden.');
+  if(boolish(row.ads_enabled)!==adsOn)throw new Error('Werbeschalter wurde nicht korrekt gespeichert.');
+  if(storedItems.length!==persisted.length)throw new Error('Nicht alle Werbebanner wurden gespeichert.');
+
   if(EDIT_TOKEN){
-    const keep=new Set(persisted.map(x=>x.path));const removed=originalAdPaths.filter(p=>p&&!keep.has(p));
-    if(removed.length){try{await adminFiles('delete-paths',{paths:removed})}catch(e){console.warn('Alte Werbebanner konnten nicht sofort gelöscht werden',e)}}
+    const keep=new Set(persisted.map(x=>x.path));
+    const removed=originalAdPaths.filter(p=>p&&!keep.has(p));
+    if(removed.length){
+      try{await adminFiles('delete-paths',{paths:removed})}
+      catch(e){console.warn('Alte Werbebanner konnten nicht sofort gelöscht werden',e)}
+    }
   }
-  originalAdPaths=persisted.map(x=>x.path);adItems=adItems.map((x,i)=>({...x,file:null,url:x.path?assetUrl(x.path):x.url}));renderAdManager();
+  originalAdPaths=persisted.map(x=>x.path);
+  adItems=adItems.map(x=>({...x,file:null,url:x.path?assetUrl(x.path):x.url}));
+  renderAdManager();
+  return {adsOn,count:persisted.length};
 }
 
 function encodePath(path){return path.split('/').map(encodeURIComponent).join('/')}
@@ -857,8 +887,15 @@ $('#createEvent').onclick=async()=>{
     }
 
     const guest=cfg.baseUrl+'?e='+encodeURIComponent(alias);const poster=cfg.baseUrl+'poster.html?e='+encodeURIComponent(alias);const customer=cfg.baseUrl+'customer.html?c='+encodeURIComponent($('#customerToken').value.trim());
-    const b=$('#eventResult');b.classList.remove('hidden');b.innerHTML=`<b>${EDIT_TOKEN?'Event gespeichert.':'Event erstellt.'}</b><br><span class="small">Kurzcode: ${esc(alias)} · Event-Tage: ${eventDays.map(x=>new Date(x+'T12:00:00').toLocaleDateString('de-DE')).join(' · ')}${expires?' · sichtbar bis '+new Date(expires).toLocaleString('de-DE'):''}</span><div class="resultBtns"><a href="${guest}" target="_blank">Gastseite öffnen</a><a href="${poster}" target="_blank">QR-Poster öffnen</a><a href="${customer}" target="_blank">Kundenportal öffnen</a><a href="./dashboard.html">Zum Cockpit</a></div>`;
+    const b=$('#eventResult');
+    b.classList.remove('hidden');
+    b.innerHTML=`<b>${EDIT_TOKEN?'✓ Änderungen gespeichert.':'✓ Event erstellt.'}</b><br><span class="small">Kurzcode: ${esc(alias)} · Event-Tage: ${eventDays.map(x=>new Date(x+'T12:00:00').toLocaleDateString('de-DE')).join(' · ')}${expires?' · sichtbar bis '+new Date(expires).toLocaleString('de-DE'):''}</span><div class="resultBtns"><a href="${guest}" target="_blank">Gastseite öffnen</a><a href="${poster}" target="_blank">QR-Poster öffnen</a><a href="${customer}" target="_blank">Kundenportal öffnen</a><a href="./dashboard.html">Zum Cockpit</a></div>`;
+    b.scrollIntoView({behavior:'smooth',block:'center'});
     await loadCustomerAssets().catch(()=>{});
+    if(EDIT_TOKEN){
+      btn.textContent='✓ Gespeichert – zurück zum Cockpit';
+      setTimeout(()=>{location.href='./dashboard.html?updated='+Date.now()},1200);
+    }
   }catch(e){alert((EDIT_TOKEN?'Event konnte nicht gespeichert werden: ':'Event konnte nicht erstellt werden: ')+e.message)}
   finally{btn.disabled=false;btn.textContent=EDIT_TOKEN?'Änderungen speichern':'Event jetzt erstellen'}
 };
@@ -866,6 +903,7 @@ $('#createEvent').onclick=async()=>{
 function clearDays(){document.querySelectorAll('.dayRow').forEach(x=>x.remove())}
 function setChecks(container,values){const set=new Set(Array.isArray(values)?values:[]);document.querySelectorAll(`#${container} input[type=checkbox]`).forEach(x=>x.checked=set.has(x.value))}
 function parseArr(v){if(Array.isArray(v))return v;try{return JSON.parse(v||'[]')}catch{return[]}}
+function boolish(v){return v===true||v===1||String(v).toLowerCase()==='true'}
 async function loadModeEvent(token,duplicate=false){
   const e=await rpc('fts_admin_get_event_v9',{p_admin_code:authCredential(),p_event_token:token});if(!e)throw new Error('Event nicht gefunden.');
   saveCustomer(e.customer_name,e.customer_token);$('#title').value=e.title||'';$('#subtitle').value=e.subtitle||'';$('#location').value=e.location||'';$('#overlay').value=e.overlay_text||'';
@@ -876,7 +914,7 @@ async function loadModeEvent(token,duplicate=false){
   decoItems=parseArr(e.decoration_items).map(x=>({id:crypto.randomUUID(),symbol:x.symbol,position:x.position||'bottom-right',size:x.size||'medium',showPoster:x.show_poster!==false,showPhoto:x.show_photo!==false}));renderDecoPicker();renderDecoManager();
   logoItems=parseArr(e.logo_items).map(x=>({id:crypto.randomUUID(),path:x.path||'',url:assetUrl(x.path),name:x.name||'Logo',position:x.position||'top-right',size:x.size||'medium',showPoster:x.show_poster!==false,showPhoto:x.show_photo!==false}));
   existingFlyerPath=e.poster_bg_path||'';originalFlyerPath=existingFlyerPath;if(existingFlyerPath){flyerUrl=assetUrl(existingFlyerPath);$('#previewFlyer').src=flyerUrl;$('#previewFlyer').classList.add('show');$('#flyerThumb').src=flyerUrl;$('#flyerName').textContent='Gespeicherter Flyer';$('#flyerAssetPreview').classList.add('show');$('#removeFlyer').classList.remove('hidden')}
-  adItems=parseArr(e.ad_items).map((x,i)=>({id:crypto.randomUUID(),path:x.path||'',url:assetUrl(x.path||''),name:x.name||`Werbung ${i+1}`,link:x.link||'',active:x.active!==false}));originalAdPaths=adItems.map(x=>x.path).filter(Boolean);$('#adsEnabled').checked=e.ads_enabled===true;renderAdManager();
+  adItems=parseArr(e.ad_items).map((x,i)=>({id:crypto.randomUUID(),path:x.path||'',url:assetUrl(x.path||''),name:x.name||`Werbung ${i+1}`,link:x.link||'',active:x.active!==false}));originalAdPaths=adItems.map(x=>x.path).filter(Boolean);$('#adsEnabled').checked=boolish(e.ads_enabled);renderAdManager();
   editStorageSlug=e.storage_slug||'event';$('#qrDotStyle').value=e.qr_dot_style||'square';$('#qrCornerStyle').value=e.qr_corner_style||'square';$('#qrLogoScale').value=Math.round(Number(e.qr_logo_scale||.18)*100);$('#photoBranding').value=e.photo_branding||'bottom';
   renderLogoManager();const qrMatch=logoItems.find(x=>x.path&&x.path===e.qr_logo_path);if(qrMatch)$('#qrLogoSelect').value=qrMatch.id;updatePreview();
   if(!duplicate){$('#savedCustomers').disabled=true;$('#customerToken').disabled=true;}

@@ -141,8 +141,9 @@ async function uploadItem(item){await uploadObject(item.originalPath,item.origin
 async function processQueue(){if(!navigator.onLine)return updateNet();const items=await queueAll();for(const item of items){try{await uploadItem(item);await queueDelete(item.id)}catch(e){console.warn('Queue upload',e);break}}updateNet();updateQueueCount()}
 function updateNet(){const el=document.getElementById('net');if(!el)return;el.className='net '+(navigator.onLine?'online':'offline');el.textContent=navigator.onLine?tr('online'):tr('offline')}
 function assetUrl(path){if(!path)return'';return `${cfg.supabaseUrl}/storage/v1/object/public/${encodeURIComponent(cfg.liveBucket)}/${encodePath(path)}`}
+function boolish(v){return v===true||v===1||String(v).toLowerCase()==='true'}
 function adItemsFor(){
-  if(ev?.ads_enabled!==true)return[];
+  if(!boolish(ev?.ads_enabled))return[];
   let items=ev?.ad_items;if(!Array.isArray(items)){try{items=JSON.parse(items||'[]')}catch{items=[]}}
   return items.filter(x=>x?.path&&x.active!==false);
 }
@@ -206,7 +207,12 @@ async function boot(){
    data=await rpc('fts_get_event',{p_event_token:eventToken});
    if(data?.length){
      const merged={...data[0],ads_enabled:false,ad_items:[]};
-     try{const ads=await rpc('fts_get_event_ads_v1',{p_event_token:eventToken});if(ads?.length){merged.ads_enabled=ads[0].ads_enabled===true;merged.ad_items=ads[0].ad_items||[]}}catch(adErr){console.warn('Werbung online load',adErr)}
+     try{
+       let ads;
+       try{ads=await rpc('fts_get_event_ads_v2',{p_event_token:eventToken})}
+       catch(_e){ads=await rpc('fts_get_event_ads_v1',{p_event_token:eventToken})}
+       if(ads?.length){merged.ads_enabled=boolish(ads[0].ads_enabled);merged.ad_items=ads[0].ad_items||[]}
+     }catch(adErr){console.warn('Werbung online load',adErr)}
      data=[merged];localStorage.setItem(EVENT_CACHE_KEY,JSON.stringify(merged));
    }
  }}catch(e){console.warn('Event online load',e)}
