@@ -158,7 +158,13 @@ function guestSessionId(){
   if(!id){id='g_'+crypto.randomUUID().replace(/-/g,'');localStorage.setItem(key,id)}
   return id;
 }
-async function registerPhoto(item){await rpc('fts_register_photo_v10',{p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath,p_guest_session_id:item.guestSessionId||guestSessionId()})}
+async function registerPhoto(item){await rpc('fts_register_photo_v11',{p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath,p_guest_session_id:item.guestSessionId||guestSessionId()})}
+async function recordScan(){
+  const canonical=String(ev?.event_token||'');if(!canonical||!navigator.onLine)return;
+  const key='fts_scan_recorded_'+canonical;
+  if(sessionStorage.getItem(key))return;
+  try{await rpc('fts_record_event_scan_v11',{p_event_token:canonical});sessionStorage.setItem(key,'1')}catch(e){console.warn('Scan-Statistik',e)}
+}
 async function uploadItem(item){await uploadObject(item.originalPath,item.originalBlob,item.originalType);await uploadObject(item.designedPath,item.designedBlob,'image/jpeg');await registerPhoto(item)}
 async function processQueue(){if(!navigator.onLine)return updateNet();const items=await queueAll();for(const item of items){try{await uploadItem(item);await queueDelete(item.id)}catch(e){console.warn('Queue upload',e);break}}updateNet();updateQueueCount()}
 function updateNet(){const el=document.getElementById('net');if(!el)return;el.className='net '+(navigator.onLine?'online':'offline');el.textContent=navigator.onLine?tr('online'):tr('offline')}
@@ -215,6 +221,11 @@ function decodeLifecycleTag(tag){
   }catch{return null}
 }
 function lifecycleConfig(){
+  const db=ev?.lifecycle_v11;
+  if(db){
+    const schedule=asArray(db.schedule,[]);
+    return {v:11,timezone:'Europe/Luxembourg',schedule,galleryUrl:db.gallery_url||'',galleryAvailableAt:db.gallery_available_at||'',linkExpiresAt:db.link_expires_at||''};
+  }
   let tags=ev?.event_tags;if(!Array.isArray(tags)){try{tags=JSON.parse(tags||'[]')}catch{tags=[]}}
   for(const t of tags){const v=decodeLifecycleTag(t);if(v)return v}
   return null;
@@ -268,6 +279,10 @@ async function boot(){
        if(ex?.length)Object.assign(merged,ex[0]);
      }catch(exErr){console.warn('Event extras online load',exErr)}
      try{
+       const lc=await rpc('fts_get_event_lifecycle_v11',{p_event_token:eventToken});
+       if(lc?.length)merged.lifecycle_v11=lc[0];
+     }catch(lcErr){console.warn('Event lifecycle online load',lcErr)}
+     try{
        let ads;
        try{ads=await rpc('fts_get_event_ads_v2',{p_event_token:eventToken})}
        catch(_e){ads=await rpc('fts_get_event_ads_v1',{p_event_token:eventToken})}
@@ -278,7 +293,7 @@ async function boot(){
  }}catch(e){console.warn('Event online load',e)}
  if(data?.length)ev=data[0];else{try{ev=JSON.parse(localStorage.getItem(EVENT_CACHE_KEY)||'null')}catch{}}
  if(!ev){document.getElementById('card').innerHTML='<div class="loading"><h2>Dieses Event wurde auf diesem Handy noch nicht geladen.</h2><p>Für den ersten Aufruf ist einmal Internet erforderlich. Danach funktioniert die Selfie-Seite auch bei Netzausfall.</p></div>';return}
- render();processQueue();
+ recordScan();render();processQueue();
 }
 function render(){
  document.documentElement.style.setProperty('--accent',ev.accent||'#d9b56d');
@@ -322,7 +337,7 @@ function render(){
    <div class="eventStatus ${statusClass}" id="eventStatus">${statusText}</div>
    <div id="net" class="net"></div>
 
-   <div class="captureFlow" id="captureFlow">
+   <div class="captureFlow ${uploadOpen?'':'hiddenFlow'}" id="captureFlow">
    <div class="moduleTitle" id="layoutTitle">${tr('layoutTitle')}</div>
    <div class="choiceRow" id="layoutChoices">${layouts.map(layoutButton).join('')}</div>
 
@@ -342,7 +357,7 @@ function render(){
 
    <div class="adSlot" id="adSlot"><div class="adLabel">Werbung</div><a class="adFrame" id="adLink"><img id="adImage" alt="Werbung"></a></div>
 
-   <div class="sendFlow" id="sendFlow">
+   <div class="sendFlow ${uploadOpen?'':'hiddenFlow'}" id="sendFlow">
      <div class="privacyInfo"><strong id="privacyTitle">${tr('privacyTitle')}</strong><span id="privacyText">${tr('privacy')}</span></div>
      <label class="consent"><input id="consent" type="checkbox" ${uploadOpen?'':'disabled'}><span id="consentText">${tr('consent')}</span></label>
      <button class="main" id="uploadBtn" ${uploadOpen?'':'disabled'}>${tr('send')}</button>
