@@ -48,6 +48,8 @@
 .previewDecoLayer{position:absolute!important;z-index:5!important;inset:0;pointer-events:none}.previewDecoSlot{position:absolute;display:flex;gap:7px;align-items:center;flex-wrap:wrap;max-width:72%}.previewDecoSlot span{filter:drop-shadow(0 6px 11px #0008);line-height:1}.previewDecoSlot .small{font-size:2rem}.previewDecoSlot .medium{font-size:3.1rem}.previewDecoSlot .large{font-size:4.5rem}
 .previewEmpty{width:min(100%,440px);aspect-ratio:4/5;border-radius:26px;border:2px dashed rgba(255,255,255,.15);display:grid;place-items:center;text-align:center;color:#819793;padding:28px;background:#061012}.previewEmpty b{display:block;color:#c5d0ce;margin-bottom:7px}
 .langSetting{display:flex;gap:10px;align-items:flex-start;padding:11px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:#0a2426}.langSetting input{width:auto;margin-top:4px}
+.adMaster{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 16px;border-radius:16px;background:#0a2426;border:1px solid rgba(255,255,255,.09);cursor:pointer}.adMasterText b{font-size:1rem;color:#eef4f2}.adMasterState{flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border-radius:999px;background:#263536;color:#cbd6d3;font-weight:950;min-width:132px;justify-content:center}.adMasterState:before{content:"";width:14px;height:14px;border-radius:50%;background:#758684;box-shadow:0 0 0 4px rgba(255,255,255,.04)}.adMaster.on{border-color:rgba(74,205,126,.5);background:rgba(37,112,69,.2)}.adMaster.on .adMasterState{background:#1b6f43;color:#eafff1}.adMaster.on .adMasterState:before{background:#4fdf8b;box-shadow:0 0 0 4px rgba(79,223,139,.15)}.adMaster input{position:absolute;opacity:0;pointer-events:none}.posterLangGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}.posterLangGrid label{display:flex;align-items:center;gap:8px;padding:10px;border-radius:12px;background:#0a2426;border:1px solid rgba(255,255,255,.08);margin:0;color:#dbe4e2;font-weight:850}.posterLangGrid input{width:auto}.adLibrary{display:grid;gap:8px}.adLibraryItem{display:grid;grid-template-columns:120px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:#081d1f}.adLibraryItem img{width:120px;aspect-ratio:4/1;object-fit:cover;border-radius:8px}.adLibraryActions{display:flex;gap:6px;flex-wrap:wrap}.adLibraryActions button{padding:8px 9px}.categoryTags{margin-top:8px}@media(max-width:720px){.adLibraryItem{grid-template-columns:1fr}.adLibraryItem img{width:100%}.posterLangGrid{grid-template-columns:1fr}.adMaster{align-items:flex-start}.adMasterState{min-width:112px}}
+
 
 
 .authOk{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;border-radius:14px;background:rgba(65,170,113,.11);border:1px solid rgba(65,170,113,.28)}
@@ -94,6 +96,45 @@
           <div><label>Untertitel</label><input id="subtitle" placeholder="z. B. Streetfood Festival 2026"></div>
           <div><label>Ort</label><input id="location" placeholder="Ort des Events"></div>
           <div class="full"><label>Text auf Event-Foto</label><input id="overlay" placeholder="z. B. Streetfood Festival 2026"></div>
+          <div>
+            <label>Event-Kategorie</label>
+            <select id="eventCategory">
+              <option value="">— Kategorie auswählen —</option>
+              <option value="kirmes">Kirmes / Volksfest</option>
+              <option value="streetfood">Streetfood / Food Festival</option>
+              <option value="festival">Festival / Open Air</option>
+              <option value="concert">Konzert / Live-Musik</option>
+              <option value="ball">Ball / Gala</option>
+              <option value="party">Party / Club / Disco</option>
+              <option value="wedding">Hochzeit</option>
+              <option value="birthday">Geburtstag / Privatfeier</option>
+              <option value="corporate">Firmenfeier / Corporate Event</option>
+              <option value="fair">Messe / Ausstellung</option>
+              <option value="sport">Sportveranstaltung</option>
+              <option value="dance">Tanzveranstaltung</option>
+              <option value="carnival">Karneval / Fasching</option>
+              <option value="winter">Weihnachtsmarkt / Winterevent</option>
+              <option value="harvest">Herbstfest / Erntedank / Kürbisfest</option>
+              <option value="cityfest">Stadtfest / Dorffest</option>
+              <option value="cinema">Kino / Filmveranstaltung</option>
+              <option value="theater">Theater / Bühne / Show</option>
+              <option value="association">Vereinsveranstaltung</option>
+              <option value="school">Schule / Abschluss / Graduation</option>
+              <option value="charity">Benefiz / Charity</option>
+              <option value="motorsport">Auto / Motorsport</option>
+              <option value="market">Markt / Flohmarkt</option>
+              <option value="family">Kinder- / Familienevent</option>
+              <option value="park">Park- / Freizeitveranstaltung</option>
+              <option value="gastronomy">Gastronomie / Restaurant-Event</option>
+              <option value="fashion">Mode / Fashion</option>
+              <option value="culture">Kunst / Kultur</option>
+              <option value="conference">Konferenz / Tagung</option>
+              <option value="openhouse">Tag der offenen Tür</option>
+              <option value="other">Sonstiges</option>
+            </select>
+          </div>
+          <div id="eventCategoryCustomWrap" class="hidden"><label>Eigene Kategorie</label><input id="eventCategoryCustom" placeholder="z. B. Oldtimer-Treffen"></div>
+          <div class="full categoryTags"><label>Zusätzliche Stichwörter / Tags (optional)</label><input id="eventTags" placeholder="z. B. Familie, Open Air, Musik"></div>
         </div>
 
         <div style="margin-top:14px">
@@ -216,9 +257,10 @@
 
       <section class="card">
         <h2>7. Werbung / Banner</h2>
-        <label class="langSetting" style="margin-top:4px">
+        <label class="adMaster" id="adMaster" style="margin-top:4px">
           <input id="adsEnabled" type="checkbox">
-          <div><b>Digitale Werbung für dieses Event aktivieren</b><div class="hint">Die Banner erscheinen nur digital: auf der Selfie-Seite nach Auswahl eines Fotos und unter dem QR-Poster auf Bildschirm/Vollbild. Der QR-Code selbst bleibt unverändert.</div></div>
+          <div class="adMasterText"><b>Digitale Werbung für dieses Event</b><div class="hint">Banner erscheinen nur digital. QR-Code, PNG, PDF/Druck und Kundenportal bleiben unverändert und werbefrei.</div></div>
+          <span class="adMasterState" id="adMasterState">WERBUNG AUS</span>
         </label>
         <div class="uploadBox" style="margin-top:12px">
           <label>Werbebanner hinzufügen</label>
@@ -227,7 +269,11 @@
         </div>
         <div class="adManager" id="adManager"></div>
         <div class="hint" id="noAdsHint">Noch keine Werbung hinterlegt.</div>
-        <div class="adPreviewNote"><b>Feste Regel:</b> Bei mehreren aktiven Bannern wechselt die Anzeige automatisch alle 3 Sekunden. PNG-Download, PDF/Druck des QR-Posters und Kundenportal bleiben immer komplett werbefrei.</div>
+        <details class="advanced" style="margin-top:12px" open>
+          <summary>Gespeicherte Werbebanner dieses Kunden</summary>
+          <div class="inside"><div id="adLibrary" class="adLibrary"></div><div id="adLibraryHint" class="hint">Kunde auswählen – dann erscheinen hier gespeicherte Banner für spätere Events.</div></div>
+        </details>
+        <div class="adPreviewNote"><b>Feste Regel:</b> Bei mehreren aktiven Bannern wechselt die Anzeige automatisch alle 3 Sekunden. Start-/Enddatum kann pro Banner gesetzt werden. PNG-Download, PDF/Druck des QR-Posters und Kundenportal bleiben immer komplett werbefrei.</div>
       </section>
 
       <section class="card">
@@ -251,9 +297,15 @@
         </div>
 
         <b class="small" style="color:#e7efed;display:block;margin-top:14px">Sprache / QR-Poster</b>
-        <label class="langSetting" style="margin-top:8px">
-          <input id="posterBilingual" type="checkbox" checked>
-          <div><b>QR-Poster zweisprachig DE + EN</b><div class="hint">Unter „Scannen & Selfie hochladen“ erscheint zusätzlich „Scan & upload your selfie“. Die Gastseite selbst kann immer zwischen Deutsch, Englisch und Französisch wechseln.</div></div>
+        <div class="hint">Eventname und Veranstaltertext bleiben so, wie du sie eingibst. Nur die Systemtexte am QR-Poster werden übersetzt.</div>
+        <div class="posterLangGrid" id="posterLanguageChecks">
+          <label><input type="checkbox" value="de" checked> Deutsch</label>
+          <label><input type="checkbox" value="fr"> Français</label>
+          <label><input type="checkbox" value="en" checked> English</label>
+        </div>
+        <label class="langSetting" style="margin-top:10px">
+          <input id="tabletAttention" type="checkbox" checked>
+          <div><b>Tablet-Aufmerksamkeitsmodus aktiv</b><div class="hint">Digital zeigt das QR-Poster eine dezente Scan-Animation, „Jetzt mitmachen“ und den echten Selfie-Zähler. Beim PNG/PDF/Druck wird das immer ausgeblendet.</div></div>
         </label>
       </section>
 
@@ -280,8 +332,8 @@
           <h3 id="pvTitle"></h3>
           <div class="posterSub" id="pvSubtitle"></div>
           <div class="fakeQr" id="fakeQr"><img id="previewQrLogo" class="qrPreviewLogo" alt=""></div>
-          <div class="posterCta">Scannen & Selfie hochladen</div>
-          <div class="posterFoot" id="previewEnglishCta">Scan & upload your selfie<br>FTS.lu · Eventfotografie</div>
+          <div class="posterCta" id="previewPrimaryCta">Scannen & Selfie hochladen</div>
+          <div class="posterFoot" id="previewEnglishCta">Scan & upload your selfie<br>Produktion: FTS.lu</div>
         </div>
 
         <div class="photoMock hidden" id="photoPreview">
@@ -307,7 +359,7 @@ const cfg=window.FTS_CONFIG,LS='fts_selfie_customers_v1';
 const DEVICE_KEY='fts_device_token_v1',LEGACY_CODE_KEY='fts_cockpit_admin_code';
 const params=new URLSearchParams(location.search),EDIT_TOKEN=params.get('edit'),DUP_TOKEN=params.get('duplicate');
 const $=s=>document.querySelector(s);
-let logoItems=[],decoItems=[],adItems=[],originalAdPaths=[],flyerFile=null,flyerUrl='',eventDayCounter=0,serverCustomers=[];
+let logoItems=[],decoItems=[],adItems=[],originalAdPaths=[],adLibrary=[],flyerFile=null,flyerUrl='',eventDayCounter=0,serverCustomers=[];
 let customerAssets=[],existingFlyerPath='',originalFlyerPath='',editStorageSlug='',modeLoaded=false;
 
 const presets={
@@ -396,7 +448,19 @@ function getEventDays(){
     .filter((v,i,a)=>a.indexOf(v)===i)
     .sort();
 }
-async function loadCustomerAssets(){const token=$('#customerToken').value.trim();const box=$('#customerLibrary');if(!token){customerAssets=[];box.innerHTML='';$('#libraryHint').textContent='Kunde auswählen – dann erscheinen hier seine Logos für spätere Events wieder.';return}try{customerAssets=await rpc('fts_admin_get_customer_assets',{p_admin_code:authCredential(),p_customer_token:token})||[];renderCustomerAssets()}catch(e){console.warn(e);customerAssets=[];renderCustomerAssets()}}
+async function loadCustomerAssets(){
+  const token=$('#customerToken').value.trim(),box=$('#customerLibrary');
+  if(!token){
+    customerAssets=[];adLibrary=[];box.innerHTML='';$('#adLibrary').innerHTML='';
+    $('#libraryHint').textContent='Kunde auswählen – dann erscheinen hier seine Logos für spätere Events wieder.';
+    $('#adLibraryHint').textContent='Kunde auswählen – dann erscheinen hier gespeicherte Banner für spätere Events.';
+    return;
+  }
+  try{customerAssets=await rpc('fts_admin_get_customer_assets',{p_admin_code:authCredential(),p_customer_token:token})||[]}catch(e){console.warn(e);customerAssets=[]}
+  renderCustomerAssets();
+  try{adLibrary=await rpc('fts_admin_get_customer_ads_v10',{p_admin_code:authCredential(),p_customer_token:token})||[]}catch(e){console.warn('Werbebibliothek',e);adLibrary=[]}
+  renderAdLibrary();
+}
 function renderCustomerAssets(){const box=$('#customerLibrary');$('#libraryHint').textContent=customerAssets.length?'Gespeicherte Logos können mit einem Klick wieder verwendet werden.':'Für diesen Kunden ist noch kein Logo gespeichert.';box.innerHTML=customerAssets.map(a=>`<div class="libraryItem"><img src="${assetUrl(a.asset_path)}" alt=""><div><b>${esc(a.asset_name)}</b><div class="hint">für zukünftige Events gespeichert</div></div><div class="libraryActions"><button type="button" data-use-asset="${a.asset_id}">Verwenden</button><button type="button" class="danger" data-delete-asset="${a.asset_id}">Löschen</button></div></div>`).join('');box.querySelectorAll('[data-use-asset]').forEach(b=>b.onclick=()=>useCustomerAsset(b.dataset.useAsset));box.querySelectorAll('[data-delete-asset]').forEach(b=>b.onclick=()=>deleteCustomerAsset(b.dataset.deleteAsset))}
 async function useCustomerAsset(id){
   const a=customerAssets.find(x=>x.asset_id===id);if(!a)return;
@@ -411,7 +475,44 @@ async function useCustomerAsset(id){
   }catch(e){alert('Logo konnte nicht geladen werden: '+e.message)}
 }
 async function deleteCustomerAsset(id){const a=customerAssets.find(x=>x.asset_id===id);if(!a)return;if(!confirm(`Logo „${a.asset_name}“ wirklich aus der Kundenbibliothek UND aus Supabase löschen?`))return;try{await adminFiles('delete-customer-asset',{asset_id:id});logoItems=logoItems.filter(x=>x.path!==a.asset_path);await loadCustomerAssets();renderLogoManager()}catch(e){alert('Logo konnte nicht gelöscht werden: '+e.message)}}
+function renderAdLibrary(){
+  const box=$('#adLibrary'),hint=$('#adLibraryHint');if(!box||!hint)return;
+  hint.textContent=adLibrary.length?'Gespeicherte Banner können mit einem Klick bei neuen Events wieder verwendet werden.':'Für diesen Kunden ist noch kein Werbebanner gespeichert.';
+  box.innerHTML=adLibrary.map(a=>`<div class="adLibraryItem"><img src="${assetUrl(a.asset_path)}" alt=""><div><b>${esc(a.asset_name)}</b><div class="hint">dauerhaft in der Kundenbibliothek</div></div><div class="adLibraryActions"><button type="button" data-use-adlib="${a.asset_id}">Verwenden</button><button type="button" class="danger" data-delete-adlib="${a.asset_id}">Löschen</button></div></div>`).join('');
+  box.querySelectorAll('[data-use-adlib]').forEach(b=>b.onclick=()=>useAdLibrary(b.dataset.useAdlib));
+  box.querySelectorAll('[data-delete-adlib]').forEach(b=>b.onclick=()=>deleteAdLibrary(b.dataset.deleteAdlib));
+}
+function useAdLibrary(id){
+  const a=adLibrary.find(x=>x.asset_id===id);if(!a)return;
+  if(adItems.some(x=>x.path===a.asset_path))return;
+  adItems.push({id:crypto.randomUUID(),path:a.asset_path,url:assetUrl(a.asset_path),name:a.asset_name||'Werbung',link:'',active:true,startDate:'',endDate:'',libraryAssetId:a.asset_id});
+  $('#adsEnabled').checked=true;syncAdsToggleUi();renderAdManager();
+}
+async function deleteAdLibrary(id){
+  const a=adLibrary.find(x=>x.asset_id===id);if(!a)return;
+  if(!confirm(`Werbebanner „${a.asset_name}“ wirklich aus der Kundenbibliothek UND aus Supabase löschen?`))return;
+  try{
+    await adminFiles('delete-customer-asset',{asset_id:id});
+    adItems=adItems.filter(x=>x.path!==a.asset_path);
+    await loadCustomerAssets();renderAdManager();
+  }catch(e){alert('Werbebanner konnte nicht gelöscht werden: '+e.message)}
+}
 function selectedValues(container){return [...document.querySelectorAll(`#${container} input[type=checkbox]:checked`)].map(x=>x.value)}
+function syncCategoryCustom(){
+  $('#eventCategoryCustomWrap').classList.toggle('hidden',$('#eventCategory').value!=='other');
+}
+function posterLanguages(){
+  const a=selectedValues('posterLanguageChecks');
+  return a.length?a:['de'];
+}
+function syncAdsToggleUi(){
+  const on=$('#adsEnabled').checked===true,master=$('#adMaster'),state=$('#adMasterState');
+  master?.classList.toggle('on',on);
+  if(state)state.textContent=on?'WERBUNG EIN':'WERBUNG AUS';
+}
+$('#eventCategory').addEventListener('change',syncCategoryCustom);
+$('#adsEnabled').addEventListener('change',syncAdsToggleUi);
+
 function applyTheme(name){
   const p=presets[name]||presets.standard;
   $('#theme').value=name;
@@ -437,9 +538,11 @@ function updatePreview(){
   $('#phSubtitle').textContent=sub;
   $('#phOverlay').textContent=overlay;
 
-  $('#previewEnglishCta').innerHTML=$('#posterBilingual').checked
-    ? 'Scan & upload your selfie<br>FTS.lu · Eventfotografie'
-    : 'FTS.lu · Eventfotografie';
+  const pl=posterLanguages();
+  const labels={de:'Scannen & Selfie hochladen',fr:'Scannez & envoyez votre selfie',en:'Scan & upload your selfie'};
+  const lines=pl.map(x=>labels[x]).filter(Boolean);
+  if($('#previewPrimaryCta'))$('#previewPrimaryCta').textContent=lines[0]||labels.de;
+  $('#previewEnglishCta').innerHTML=lines.slice(1).map(esc).join('<br>')+(lines.length>1?'<br>':'')+'Produktion: FTS.lu';
 
   const hasContent=!!(title || $('#theme').value || flyerFile || logoItems.length || decoItems.length);
   $('#previewEmpty').classList.toggle('hidden',hasContent);
@@ -684,6 +787,8 @@ function renderAdManager(){
       <div class="adControls">
         <div class="full"><label>Interner Name</label><input data-ad-name="${item.id}" value="${escAttr(item.name||'')}" placeholder="z. B. Nächstes Event"></div>
         <div class="full"><label>Link beim Antippen (optional)</label><input data-ad-link="${item.id}" value="${escAttr(item.link||'')}" placeholder="https://..."></div>
+        <div><label>Startdatum (optional)</label><input type="date" data-ad-start="${item.id}" value="${escAttr(item.startDate||'')}"></div>
+        <div><label>Enddatum (optional)</label><input type="date" data-ad-end="${item.id}" value="${escAttr(item.endDate||'')}"></div>
         <label class="adActive full"><input type="checkbox" data-ad-active="${item.id}" ${item.active!==false?'checked':''}> Banner aktiv</label>
       </div>
     </div>
@@ -691,6 +796,8 @@ function renderAdManager(){
   box.querySelectorAll('[data-ad-remove]').forEach(b=>b.onclick=()=>removeAd(b.dataset.adRemove));
   box.querySelectorAll('[data-ad-name]').forEach(i=>i.oninput=()=>updateAd(i.dataset.adName,{name:i.value}));
   box.querySelectorAll('[data-ad-link]').forEach(i=>i.onchange=()=>updateAd(i.dataset.adLink,{link:safeHttpUrl(i.value)}));
+  box.querySelectorAll('[data-ad-start]').forEach(i=>i.onchange=()=>updateAd(i.dataset.adStart,{startDate:i.value||''}));
+  box.querySelectorAll('[data-ad-end]').forEach(i=>i.onchange=()=>updateAd(i.dataset.adEnd,{endDate:i.value||''}));
   box.querySelectorAll('[data-ad-active]').forEach(c=>c.onchange=()=>updateAd(c.dataset.adActive,{active:c.checked}));
 }
 function updateAd(id,patch){const item=adItems.find(x=>x.id===id);if(item)Object.assign(item,patch)}
@@ -710,26 +817,43 @@ async function addAdFiles(files){
     try{
       const file=await normalizeAdFile(raw);
       const cleanName=(raw.name.replace(/\.[^.]+$/,'')||'Werbung').replace(/^file_[0-9a-f_-]+$/i,'Werbung');
-      adItems.push({id:crypto.randomUUID(),file,url:URL.createObjectURL(file),path:'',name:cleanName,link:'',active:true});
+      adItems.push({id:crypto.randomUUID(),file,url:URL.createObjectURL(file),path:'',name:cleanName,link:'',active:true,startDate:'',endDate:'',libraryAssetId:null});
       added++;
     }catch(e){alert('Werbebanner konnte nicht geladen werden: '+(e.message||e))}
   }
-  if(added)$('#adsEnabled').checked=true;
+  if(added){$('#adsEnabled').checked=true;syncAdsToggleUi()}
   renderAdManager();
 }
 $('#adFiles').addEventListener('change',async e=>{await addAdFiles(e.target.files||[]);e.target.value=''});
 
 async function persistEventAds(eventToken,storageSlug){
-  const persisted=[];
+  const persisted=[],customerToken=$('#customerToken').value.trim();
   const adsOn=$('#adsEnabled').checked===true;
   for(let i=0;i<adItems.length;i++){
     const item=adItems[i];let path=item.path||'';
     if(item.file){
-      // Werbung bewusst in einen stabilen Event-Assets-Pfad legen.
-      path=`${eventToken}/assets/ads/ad-${i+1}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.webp`;
-      await uploadAsset(path,item.file);
-      item.path=path;
-    }else if(DUP_TOKEN&&path){
+      const tempPath=`${eventToken}/assets/ads/ad-${i+1}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.webp`;
+      await uploadAsset(tempPath,item.file);
+      path=tempPath;item.path=tempPath;
+      // Neue Banner automatisch dauerhaft beim Kunden ablegen, damit sie wiederverwendet werden können.
+      if(customerToken){
+        try{
+          const promoted=await adminFiles('promote-customer-asset',{customer_token:customerToken,name:item.name||`Werbung ${i+1}`,source_path:tempPath});
+          if(promoted?.path){
+            path=promoted.path;item.path=path;item.libraryAssetId=promoted.asset_id||null;
+            if(item.libraryAssetId)await rpc('fts_admin_set_customer_asset_kind_v10',{p_admin_code:authCredential(),p_asset_id:item.libraryAssetId,p_kind:'ad'});
+          }
+        }catch(e){console.warn('Werbebanner konnte nicht in die Kundenbibliothek verschoben werden',e)}
+      }
+    }else if(EDIT_TOKEN&&path&&!String(path).startsWith('library/')&&customerToken){
+      try{
+        const promoted=await adminFiles('promote-customer-asset',{customer_token:customerToken,name:item.name||`Werbung ${i+1}`,source_path:path});
+        if(promoted?.path){
+          path=promoted.path;item.path=path;item.libraryAssetId=promoted.asset_id||null;
+          if(item.libraryAssetId)await rpc('fts_admin_set_customer_asset_kind_v10',{p_admin_code:authCredential(),p_asset_id:item.libraryAssetId,p_kind:'ad'});
+        }
+      }catch(e){console.warn('Bestehender Werbebanner konnte nicht in die Kundenbibliothek verschoben werden',e)}
+    }else if(DUP_TOKEN&&path&&!String(path).startsWith('library/')){
       const target=`${eventToken}/assets/ads/ad-${i+1}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.webp`;
       const copied=await adminFiles('copy-path',{source_path:path,target_path:target});
       path=copied.path||target;item.path=path;
@@ -738,38 +862,31 @@ async function persistEventAds(eventToken,storageSlug){
       path,
       name:(item.name||`Werbung ${i+1}`).trim().slice(0,100),
       link:safeHttpUrl(item.link),
-      active:item.active!==false
+      active:item.active!==false,
+      start_date:item.startDate||'',
+      end_date:item.endDate||''
     });
   }
 
   const saved=await rpc('fts_admin_set_event_ads_v2',{
-    p_admin_code:authCredential(),
-    p_event_token:eventToken,
-    p_ads_enabled:adsOn,
-    p_ad_items:persisted
+    p_admin_code:authCredential(),p_event_token:eventToken,p_ads_enabled:adsOn,p_ad_items:persisted
   });
-  if(saved && saved.ok===false)throw new Error(saved.error||'Werbung konnte nicht gespeichert werden.');
+  if(saved&&saved.ok===false)throw new Error(saved.error||'Werbung konnte nicht gespeichert werden.');
 
-  // Direkt nach dem Speichern prüfen. So kann die Oberfläche keinen Erfolg melden,
-  // wenn die Banner-Metadaten nicht wirklich in Supabase angekommen sind.
   const verify=await rpc('fts_get_event_ads_v2',{p_event_token:eventToken});
-  const row=verify?.[0]||null;
-  const storedItems=parseArr(row?.ad_items);
+  const row=verify?.[0]||null,storedItems=parseArr(row?.ad_items);
   if(!row)throw new Error('Werbung wurde gespeichert, konnte aber nicht kontrolliert werden.');
   if(boolish(row.ads_enabled)!==adsOn)throw new Error('Werbeschalter wurde nicht korrekt gespeichert.');
   if(storedItems.length!==persisted.length)throw new Error('Nicht alle Werbebanner wurden gespeichert.');
 
   if(EDIT_TOKEN){
     const keep=new Set(persisted.map(x=>x.path));
-    const removed=originalAdPaths.filter(p=>p&&!keep.has(p));
-    if(removed.length){
-      try{await adminFiles('delete-paths',{paths:removed})}
-      catch(e){console.warn('Alte Werbebanner konnten nicht sofort gelöscht werden',e)}
-    }
+    const removed=originalAdPaths.filter(p=>p&&!keep.has(p)&&!String(p).startsWith('library/'));
+    if(removed.length){try{await adminFiles('delete-paths',{paths:removed})}catch(e){console.warn('Alte Event-Werbebanner konnten nicht sofort gelöscht werden',e)}}
   }
   originalAdPaths=persisted.map(x=>x.path);
   adItems=adItems.map(x=>({...x,file:null,url:x.path?assetUrl(x.path):x.url}));
-  renderAdManager();
+  renderAdManager();await loadCustomerAssets().catch(()=>{});
   return {adsOn,count:persisted.length};
 }
 
@@ -803,7 +920,6 @@ $('#shortCode').addEventListener('input',()=>{$('#shortCode').dataset.manual='1'
 document.querySelectorAll('.themeCard').forEach(b=>b.onclick=()=>applyTheme(b.dataset.theme));
 $('#addEventDay').onclick=()=>addEventDay('');
 $('#addDeco').onclick=addDecoration;
-$('#posterBilingual').addEventListener('change',updatePreview);
 ['qrDotStyle','qrCornerStyle','qrLogoSelect','qrLogoScale','photoBranding'].forEach(id=>$('#'+id).addEventListener('input',updatePreview));
 $('#showPoster').onclick=()=>showPreview('poster');$('#showPhoto').onclick=()=>showPreview('photo');
 $('#logoFiles').addEventListener('change',e=>{addLogoFiles(e.target.files||[]);e.target.value=''});
@@ -852,6 +968,18 @@ async function persistEventAssets(eventToken,storageSlug,customerToken){
   return {persisted,flyerPath,qrLogoPath};
 }
 
+async function persistEventExtras(eventToken){
+  const tags=$('#eventTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,12);
+  await rpc('fts_admin_set_event_extras_v10',{
+    p_admin_code:authCredential(),
+    p_event_token:eventToken,
+    p_event_category:$('#eventCategory').value||'',
+    p_event_category_custom:$('#eventCategory').value==='other'?$('#eventCategoryCustom').value.trim():'',
+    p_event_tags:tags,
+    p_poster_languages:posterLanguages(),
+    p_tablet_attention:$('#tabletAttention').checked===true
+  });
+}
 function eventArgs(includeShort=true){
   const layouts=selectedValues('layoutChecks'),filters=selectedValues('filterChecks'),eventDays=getEventDays();
   if(!authCredential())throw new Error('Dieses Gerät ist noch nicht freigeschaltet.');
@@ -864,7 +992,7 @@ function eventArgs(includeShort=true){
     p_admin_code:authCredential(),p_title:$('#title').value.trim(),p_subtitle:$('#subtitle').value.trim(),p_event_days:eventDays,
     p_location:$('#location').value.trim(),p_overlay_text:$('#overlay').value.trim(),p_accent:$('#accent').value,p_bg1:$('#bg1').value,p_bg2:$('#bg2').value,
     p_retention_days:Number($('#days').value||3),p_theme:$('#theme').value||'standard',p_available_layouts:layouts,p_available_filters:filters,
-    p_test_days_before:Number($('#testDays').value||0),p_poster_bilingual:$('#posterBilingual').checked,
+    p_test_days_before:Number($('#testDays').value||0),p_poster_bilingual:posterLanguages().includes('de')&&posterLanguages().includes('en'),
     p_decoration_items:decoItems.map(x=>({symbol:x.symbol,position:x.position,size:x.size,show_poster:!!x.showPoster,show_photo:!!x.showPhoto})),
     p_qr_dot_style:$('#qrDotStyle').value,p_qr_corner_style:$('#qrCornerStyle').value,p_qr_logo_scale:Number($('#qrLogoScale').value||18)/100,p_photo_branding:$('#photoBranding').value
   };
@@ -880,10 +1008,12 @@ $('#createEvent').onclick=async()=>{
       const args=eventArgs(false);const r=await rpc('fts_admin_update_event_v9',args);eventToken=EDIT_TOKEN;storageSlug=editStorageSlug;alias=$('#shortCode').value;expires=r?.[0]?.expires_at||null;
       await persistEventAssets(eventToken,storageSlug,$('#customerToken').value.trim());
       await persistEventAds(eventToken,storageSlug);
+      await persistEventExtras(eventToken);
     }else{
       const args=eventArgs(true);const d=await rpc('fts_admin_create_event_v9',args),r=d[0];eventToken=r.event_token;storageSlug=r.storage_slug;alias=r.short_code;expires=r.expires_at;
       await persistEventAssets(eventToken,storageSlug,args.p_customer_token);
       await persistEventAds(eventToken,storageSlug);
+      await persistEventExtras(eventToken);
     }
 
     const guest=cfg.baseUrl+'?e='+encodeURIComponent(alias);const poster=cfg.baseUrl+'poster.html?e='+encodeURIComponent(alias);const customer=cfg.baseUrl+'customer.html?c='+encodeURIComponent($('#customerToken').value.trim());
@@ -905,16 +1035,20 @@ function setChecks(container,values){const set=new Set(Array.isArray(values)?val
 function parseArr(v){if(Array.isArray(v))return v;try{return JSON.parse(v||'[]')}catch{return[]}}
 function boolish(v){return v===true||v===1||String(v).toLowerCase()==='true'}
 async function loadModeEvent(token,duplicate=false){
-  const e=await rpc('fts_admin_get_event_v9',{p_admin_code:authCredential(),p_event_token:token});if(!e)throw new Error('Event nicht gefunden.');
+  let e=await rpc('fts_admin_get_event_v9',{p_admin_code:authCredential(),p_event_token:token});if(!e)throw new Error('Event nicht gefunden.');
+  try{const ex=await rpc('fts_admin_get_event_extras_v10',{p_admin_code:authCredential(),p_event_token:token});if(ex?.[0])e={...e,...ex[0]}}catch(err){console.warn('Event-Zusatzdaten',err)}
   saveCustomer(e.customer_name,e.customer_token);$('#title').value=e.title||'';$('#subtitle').value=e.subtitle||'';$('#location').value=e.location||'';$('#overlay').value=e.overlay_text||'';
   $('#shortCode').value=duplicate?slug(((e.short_code||slug(e.title))+'-2')).slice(0,30):(e.short_code||'');$('#shortCode').disabled=!duplicate;$('#shortCode').dataset.manual='1';$('#days').value=e.retention_days||3;$('#testDays').value=e.test_days_before??2;
   clearDays();parseArr(e.event_days).forEach(d=>addEventDay(d));if(!document.querySelector('.dayRow'))addEventDay('');
   if(e.theme)applyTheme(e.theme);$('#accent').value=e.accent||'#d9b56d';$('#bg1').value=e.bg1||'#071315';$('#bg2').value=e.bg2||'#10383a';
-  setChecks('layoutChecks',parseArr(e.available_layouts));setChecks('filterChecks',parseArr(e.available_filters));$('#posterBilingual').checked=e.poster_bilingual!==false;
+  setChecks('layoutChecks',parseArr(e.available_layouts));setChecks('filterChecks',parseArr(e.available_filters));
+  const pls=parseArr(e.poster_languages);setChecks('posterLanguageChecks',pls.length?pls:(e.poster_bilingual!==false?['de','en']:['de']));
+  $('#tabletAttention').checked=e.tablet_attention!==false;
+  $('#eventCategory').value=e.event_category||'';$('#eventCategoryCustom').value=e.event_category_custom||'';$('#eventTags').value=parseArr(e.event_tags).join(', ');syncCategoryCustom();
   decoItems=parseArr(e.decoration_items).map(x=>({id:crypto.randomUUID(),symbol:x.symbol,position:x.position||'bottom-right',size:x.size||'medium',showPoster:x.show_poster!==false,showPhoto:x.show_photo!==false}));renderDecoPicker();renderDecoManager();
   logoItems=parseArr(e.logo_items).map(x=>({id:crypto.randomUUID(),path:x.path||'',url:assetUrl(x.path),name:x.name||'Logo',position:x.position||'top-right',size:x.size||'medium',showPoster:x.show_poster!==false,showPhoto:x.show_photo!==false}));
   existingFlyerPath=e.poster_bg_path||'';originalFlyerPath=existingFlyerPath;if(existingFlyerPath){flyerUrl=assetUrl(existingFlyerPath);$('#previewFlyer').src=flyerUrl;$('#previewFlyer').classList.add('show');$('#flyerThumb').src=flyerUrl;$('#flyerName').textContent='Gespeicherter Flyer';$('#flyerAssetPreview').classList.add('show');$('#removeFlyer').classList.remove('hidden')}
-  adItems=parseArr(e.ad_items).map((x,i)=>({id:crypto.randomUUID(),path:x.path||'',url:assetUrl(x.path||''),name:x.name||`Werbung ${i+1}`,link:x.link||'',active:x.active!==false}));originalAdPaths=adItems.map(x=>x.path).filter(Boolean);$('#adsEnabled').checked=boolish(e.ads_enabled);renderAdManager();
+  adItems=parseArr(e.ad_items).map((x,i)=>({id:crypto.randomUUID(),path:x.path||'',url:assetUrl(x.path||''),name:x.name||`Werbung ${i+1}`,link:x.link||'',active:x.active!==false,startDate:x.start_date||'',endDate:x.end_date||'',libraryAssetId:null}));originalAdPaths=adItems.map(x=>x.path).filter(Boolean);$('#adsEnabled').checked=boolish(e.ads_enabled);syncAdsToggleUi();renderAdManager();
   editStorageSlug=e.storage_slug||'event';$('#qrDotStyle').value=e.qr_dot_style||'square';$('#qrCornerStyle').value=e.qr_corner_style||'square';$('#qrLogoScale').value=Math.round(Number(e.qr_logo_scale||.18)*100);$('#photoBranding').value=e.photo_branding||'bottom';
   renderLogoManager();const qrMatch=logoItems.find(x=>x.path&&x.path===e.qr_logo_path);if(qrMatch)$('#qrLogoSelect').value=qrMatch.id;updatePreview();
   if(!duplicate){$('#savedCustomers').disabled=true;$('#customerToken').disabled=true;}
@@ -927,7 +1061,10 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catc
 renderCustomers();
 addEventDay('');
 $('#fakeQr').innerHTML='<i></i>'.repeat(49)+'<img id="previewQrLogo" class="qrPreviewLogo" alt="">';
-renderLogoManager();renderDecoPicker();renderDecoManager();renderAdManager();updatePreview();initAuth();
+renderLogoManager();renderDecoPicker();renderDecoManager();renderAdManager();updatePreview();document.querySelectorAll('#posterLanguageChecks input').forEach(x=>x.onchange=updatePreview);
+$('#tabletAttention').onchange=updatePreview;
+syncAdsToggleUi();syncCategoryCustom();
+initAuth();
 </script>
 </body>
 </html>

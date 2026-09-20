@@ -22,6 +22,11 @@ button.main{width:100%;border:0;border-radius:15px;padding:16px;font:inherit;fon
 .langBar{display:flex;gap:6px;justify-content:flex-end;margin:-2px 0 12px}.langBar button{border:1px solid rgba(255,255,255,.1);background:#0a2426;color:#dce5e3;border-radius:999px;padding:7px 10px;font-weight:900;cursor:pointer}.langBar button.active{background:var(--accent);color:#102020}
 .eventStatus{padding:11px 13px;border-radius:13px;margin:0 0 14px;font-size:.84rem;line-height:1.4}.eventStatus.test{background:rgba(225,166,54,.13);border:1px solid rgba(225,166,54,.35)}.eventStatus.closed{background:rgba(210,88,88,.13);border:1px solid rgba(210,88,88,.3)}.eventStatus.day{background:rgba(65,170,113,.12);border:1px solid rgba(65,170,113,.28)}
 .adSlot{display:none;margin:14px 0 4px}.adSlot.show{display:block}.adLabel{font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:#829592;margin:0 0 5px 3px}.adFrame{display:block;width:100%;border-radius:13px;overflow:hidden;background:#02090a;border:1px solid rgba(255,255,255,.09);box-shadow:0 10px 28px rgba(0,0,0,.24)}.adFrame img{display:block;width:100%;aspect-ratio:4/1;object-fit:cover}.adFrame:not([href]){cursor:default}
+.successPanel{display:none;text-align:center;padding:18px 4px 6px}.successPanel.show{display:block}.successIcon{font-size:3.5rem;line-height:1;margin:4px 0 8px;animation:successPop .55s ease both}.successPanel h2{font-size:clamp(1.8rem,7vw,3rem);margin:0 0 8px}.successPanel p{color:#aebbb9;line-height:1.45;margin:0 auto 14px;max-width:620px}.successPreview{width:min(360px,90%);max-height:420px;object-fit:contain;border-radius:16px;border:1px solid rgba(255,255,255,.1);background:#02090a;margin:4px auto 14px;display:none}.successPreview.show{display:block}.successActions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.successActions button{border:0;border-radius:14px;padding:14px 12px;font:inherit;font-weight:950;cursor:pointer}.successActions .primary{background:var(--accent);color:#102020}.successActions .secondary{background:#14383a;color:#fff;border:1px solid rgba(255,255,255,.09)}@keyframes successPop{0%{transform:scale(.4);opacity:0}65%{transform:scale(1.16)}100%{transform:scale(1);opacity:1}}
+.fireworks{position:relative;height:42px;overflow:hidden;pointer-events:none}.fireworks i{position:absolute;left:50%;top:18px;width:7px;height:7px;border-radius:2px;background:var(--accent);animation:burst 1.1s ease-out both}.fireworks i:nth-child(2){--x:80px;--y:-28px;animation-delay:.04s}.fireworks i:nth-child(3){--x:-84px;--y:-24px;animation-delay:.08s}.fireworks i:nth-child(4){--x:58px;--y:12px;animation-delay:.12s}.fireworks i:nth-child(5){--x:-58px;--y:13px;animation-delay:.16s}.fireworks i:nth-child(6){--x:118px;--y:8px;animation-delay:.2s}.fireworks i:nth-child(7){--x:-118px;--y:8px;animation-delay:.24s}.fireworks i:nth-child(8){--x:25px;--y:-36px;animation-delay:.28s}.fireworks i:nth-child(9){--x:-25px;--y:-36px;animation-delay:.32s}@keyframes burst{0%{transform:translate(0,0) scale(.4);opacity:0}18%{opacity:1}100%{transform:translate(var(--x,0),var(--y,-35px)) rotate(160deg) scale(.7);opacity:0}}
+.mySelfies{display:none;margin-top:14px}.mySelfies.show{display:block}.mySelfiesHead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.mySelfiesHead h3{margin:0}.mySelfiesGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.mySelfieCard{border:1px solid rgba(255,255,255,.08);background:#061012;border-radius:13px;padding:6px}.mySelfieCard img{width:100%;height:auto;max-height:390px;object-fit:contain;border-radius:9px;display:block}.mySelfieCard small{display:block;color:#8ea29e;padding:6px 3px 2px}.ghostBtn{border:1px solid rgba(255,255,255,.1);background:#14383a;color:#fff;border-radius:10px;padding:9px 10px;font-weight:850;cursor:pointer}.emptySelfies{padding:20px;border:1px dashed rgba(255,255,255,.14);border-radius:12px;color:#91a5a1}.captureFlow.hiddenFlow,.sendFlow.hiddenFlow{display:none}
+@media(max-width:560px){.successActions{grid-template-columns:1fr}.mySelfiesGrid{grid-template-columns:1fr}}
+
 
 </style>
 </head>
@@ -35,7 +40,7 @@ const eventToken=params.get('e') || cfg.defaultEventToken;
 const EVENT_CACHE_KEY='fts_event_cache_'+eventToken;
 const DB_NAME='fts_selfie_offline_v1', STORE='queue';
 let ev=null,selectedFile=null,designedBlob=null,selectedLayout='solo',selectedFilter='natural',redrawTimer=null;
-let lang='de',routeMode='closed',routeDay=null,adTimer=null,adIndex=0;
+let lang='de',routeMode='closed',routeDay=null,adTimer=null,adIndex=0,keepAdsVisible=false,lastSuccessUrl='';
 const DEFAULT_LAYOUTS=['solo','duo','groupwide','grouptall','free'];
 const DEFAULT_FILTERS=['natural','warm','vivid','mono','cool'];
 
@@ -65,6 +70,8 @@ const I18N={
   noPhoto:'Bitte zuerst ein Foto aufnehmen oder auswählen.',noConsent:'Bitte zuerst der Übermittlung zustimmen.',
   tooBig:'Das Original ist größer als 15 MB.',uploading:'Foto wird hochgeladen …',offlineSaving:'Foto wird offline gespeichert …',
   success:'✓ Original und deine Event-Version erfolgreich hochgeladen. Danke!',
+  thanksTitle:'Danke für dein Selfie! 🎉',thanksText:'Dein Selfie wurde erfolgreich gesendet.',thanksOffline:'Dein Selfie ist sicher auf diesem Handy gespeichert und wird automatisch hochgeladen, sobald Internet verfügbar ist.',
+  newSelfie:'Neues Selfie erstellen',mySelfies:'Meine Selfies ansehen',mySelfiesTitle:'Meine Selfies',close:'Schließen',noMySelfies:'Auf diesem Gerät sind für dieses Event noch keine fertigen Selfies gespeichert.',pending:'wartet auf Upload',
   queued:'✓ Foto sicher gespeichert. Upload läuft automatisch weiter, sobald die Verbindung stabil ist.',
   queuedOffline:'✓ Foto sicher auf diesem Handy gespeichert. Sobald Internet wieder da ist, wird es automatisch hochgeladen.',
   saveError:'Das Foto konnte nicht sicher gespeichert werden',
@@ -85,6 +92,8 @@ const I18N={
   noPhoto:'Please take or choose a photo first.',noConsent:'Please agree to the photo transfer first.',
   tooBig:'The original photo is larger than 15 MB.',uploading:'Uploading photo …',offlineSaving:'Saving photo offline …',
   success:'✓ Original and event version uploaded successfully. Thank you!',
+  thanksTitle:'Thanks for your selfie! 🎉',thanksText:'Your selfie was sent successfully.',thanksOffline:'Your selfie is safely stored on this phone and will upload automatically when internet is available.',
+  newSelfie:'Create another selfie',mySelfies:'View my selfies',mySelfiesTitle:'My selfies',close:'Close',noMySelfies:'No finished selfies for this event are stored on this device yet.',pending:'waiting for upload',
   queued:'✓ Photo saved safely. Upload will continue automatically when the connection is stable.',
   queuedOffline:'✓ Photo saved safely on this phone. It will upload automatically when internet is available.',
   saveError:'The photo could not be saved safely',
@@ -105,6 +114,8 @@ const I18N={
   noPhoto:'Veuillez d’abord prendre ou choisir une photo.',noConsent:'Veuillez d’abord accepter le transfert de la photo.',
   tooBig:'La photo originale dépasse 15 Mo.',uploading:'Téléversement de la photo …',offlineSaving:'Enregistrement hors ligne …',
   success:'✓ Original et version événement téléversés avec succès. Merci !',
+  thanksTitle:'Merci pour votre selfie ! 🎉',thanksText:'Votre selfie a bien été envoyé.',thanksOffline:'Votre selfie est enregistré en sécurité sur ce téléphone et sera envoyé automatiquement dès que la connexion revient.',
+  newSelfie:'Créer un nouveau selfie',mySelfies:'Voir mes selfies',mySelfiesTitle:'Mes selfies',close:'Fermer',noMySelfies:'Aucun selfie finalisé de cet événement n’est encore enregistré sur cet appareil.',pending:'en attente d’envoi',
   queued:'✓ Photo enregistrée en sécurité. Le téléversement reprendra automatiquement quand la connexion sera stable.',
   queuedOffline:'✓ Photo enregistrée en sécurité sur ce téléphone. Elle sera téléversée automatiquement dès que la connexion reviendra.',
   saveError:'La photo n’a pas pu être enregistrée en sécurité',
@@ -136,7 +147,13 @@ async function queueAll(){const db=await openDB();return new Promise((resolve,re
 async function updateQueueCount(){try{const n=(await queueAll()).length;const el=document.getElementById('net');if(!el)return;if(n>0)el.innerHTML=`⏳ ${n} ${n===1?tr('queueOne'):tr('queueMany')}`}catch{}}
 function encodePath(path){return path.split('/').map(encodeURIComponent).join('/')}
 async function uploadObject(path,blob,type){const u=`${cfg.supabaseUrl}/storage/v1/object/${encodeURIComponent(cfg.liveBucket)}/${encodePath(path)}`;const r=await fetch(u,{method:'POST',headers:{'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':type||'application/octet-stream','x-upsert':'false'},body:blob});if(!r.ok){const txt=await r.text();if(r.status===409||/already exists/i.test(txt))return;throw new Error(txt||`Storage ${r.status}`)}}
-async function registerPhoto(item){await rpc('fts_register_photo',{p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath})}
+function guestSessionId(){
+  const key='fts_guest_session_'+String(ev?.event_token||eventToken);
+  let id=localStorage.getItem(key);
+  if(!id){id='g_'+crypto.randomUUID().replace(/-/g,'');localStorage.setItem(key,id)}
+  return id;
+}
+async function registerPhoto(item){await rpc('fts_register_photo_v10',{p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath,p_guest_session_id:item.guestSessionId||guestSessionId()})}
 async function uploadItem(item){await uploadObject(item.originalPath,item.originalBlob,item.originalType);await uploadObject(item.designedPath,item.designedBlob,'image/jpeg');await registerPhoto(item)}
 async function processQueue(){if(!navigator.onLine)return updateNet();const items=await queueAll();for(const item of items){try{await uploadItem(item);await queueDelete(item.id)}catch(e){console.warn('Queue upload',e);break}}updateNet();updateQueueCount()}
 function updateNet(){const el=document.getElementById('net');if(!el)return;el.className='net '+(navigator.onLine?'online':'offline');el.textContent=navigator.onLine?tr('online'):tr('offline')}
@@ -145,19 +162,24 @@ function boolish(v){return v===true||v===1||String(v).toLowerCase()==='true'}
 function adItemsFor(){
   if(!boolish(ev?.ads_enabled))return[];
   let items=ev?.ad_items;if(!Array.isArray(items)){try{items=JSON.parse(items||'[]')}catch{items=[]}}
-  return items.filter(x=>x?.path&&x.active!==false);
+  const today=luxDate();
+  return items.filter(x=>{
+    if(!x?.path||x.active===false)return false;
+    const start=String(x.start_date||''),end=String(x.end_date||'');
+    return (!start||today>=start)&&(!end||today<=end);
+  });
 }
 function safeAdLink(v){try{const u=new URL(String(v||''));return ['http:','https:'].includes(u.protocol)?u.href:''}catch{return''}}
 function stopAds(){if(adTimer){clearInterval(adTimer);adTimer=null}}
 function showCurrentAd(){
   const slot=document.getElementById('adSlot'),img=document.getElementById('adImage'),link=document.getElementById('adLink'),items=adItemsFor();
-  if(!slot||!img||!link||!selectedFile||!items.length){slot?.classList.remove('show');stopAds();return}
+  if(!slot||!img||!link||(!selectedFile&&!keepAdsVisible)||!items.length){slot?.classList.remove('show');stopAds();return}
   adIndex=((adIndex%items.length)+items.length)%items.length;const item=items[adIndex];img.src=assetUrl(item.path);img.alt=item.name||'Werbung';
   const href=safeAdLink(item.link);if(href){link.href=href;link.target='_blank';link.rel='noopener noreferrer'}else{link.removeAttribute('href');link.removeAttribute('target');link.removeAttribute('rel')}
   slot.classList.add('show');
 }
 function startAds(){
-  stopAds();const items=adItemsFor();if(!selectedFile||!items.length)return showCurrentAd();adIndex=0;showCurrentAd();
+  stopAds();const items=adItemsFor();if((!selectedFile&&!keepAdsVisible)||!items.length)return showCurrentAd();adIndex=0;showCurrentAd();
   if(items.length>1)adTimer=setInterval(()=>{adIndex=(adIndex+1)%items.length;showCurrentAd()},3000);
 }
 function logoItemsFor(target){
@@ -254,6 +276,7 @@ function render(){
    <div class="eventStatus ${statusClass}" id="eventStatus">${statusText}</div>
    <div id="net" class="net"></div>
 
+   <div class="captureFlow" id="captureFlow">
    <div class="moduleTitle" id="layoutTitle">${tr('layoutTitle')}</div>
    <div class="choiceRow" id="layoutChoices">${layouts.map(layoutButton).join('')}</div>
 
@@ -269,18 +292,40 @@ function render(){
      <div class="previewBox"><b id="originalLabel">${tr('original')}</b><img id="originalPreview"></div>
      <div class="previewBox"><b id="designLabel">${tr('design')}</b><canvas id="designCanvas"></canvas></div>
    </section>
+   </div>
 
    <div class="adSlot" id="adSlot"><div class="adLabel">Werbung</div><a class="adFrame" id="adLink"><img id="adImage" alt="Werbung"></a></div>
 
-   <div class="privacyInfo"><strong id="privacyTitle">${tr('privacyTitle')}</strong><span id="privacyText">${tr('privacy')}</span></div>
-   <label class="consent"><input id="consent" type="checkbox" ${['day','test'].includes(routeMode)?'':'disabled'}><span id="consentText">${tr('consent')}</span></label>
-   <button class="main" id="uploadBtn" ${['day','test'].includes(routeMode)?'':'disabled'}>${tr('send')}</button>
-   <div id="message" class="msg"></div><div class="foot">FTS.lu · Eventfotografie</div>`;
+   <div class="sendFlow" id="sendFlow">
+     <div class="privacyInfo"><strong id="privacyTitle">${tr('privacyTitle')}</strong><span id="privacyText">${tr('privacy')}</span></div>
+     <label class="consent"><input id="consent" type="checkbox" ${['day','test'].includes(routeMode)?'':'disabled'}><span id="consentText">${tr('consent')}</span></label>
+     <button class="main" id="uploadBtn" ${['day','test'].includes(routeMode)?'':'disabled'}>${tr('send')}</button>
+     <div id="message" class="msg"></div>
+   </div>
+   <section class="successPanel" id="successPanel">
+     <div class="fireworks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+     <div class="successIcon">📸</div>
+     <h2 id="thanksTitle">${tr('thanksTitle')}</h2>
+     <p id="thanksText">${tr('thanksText')}</p>
+     <img id="successPreview" class="successPreview" alt="">
+     <div class="successActions">
+       <button type="button" class="primary" id="newSelfieBtn">${tr('newSelfie')}</button>
+       <button type="button" class="secondary" id="mySelfiesBtn">${tr('mySelfies')}</button>
+     </div>
+   </section>
+   <section class="mySelfies" id="mySelfiesPanel">
+     <div class="mySelfiesHead"><h3>${tr('mySelfiesTitle')}</h3><button type="button" class="ghostBtn" id="closeSelfiesBtn">${tr('close')}</button></div>
+     <div class="mySelfiesGrid" id="mySelfiesGrid"></div>
+   </section>
+   <div class="foot">FTS.lu · Eventfotografie</div>`;
 
  updateNet();updateQueueCount();bindChoices();bindLanguages();
 
  document.getElementById('photo').addEventListener('change',onPhoto);
  document.getElementById('uploadBtn').addEventListener('click',submitPhoto);
+ document.getElementById('newSelfieBtn').addEventListener('click',resetForNewSelfie);
+ document.getElementById('mySelfiesBtn').addEventListener('click',showMySelfies);
+ document.getElementById('closeSelfiesBtn').addEventListener('click',()=>document.getElementById('mySelfiesPanel').classList.remove('show'));
 }
 function layoutButton(key){const x=layoutInfo[key];return `<button type="button" class="choice ${key===selectedLayout?'active':''}" data-layout="${key}"><div class="frameMini ${x.mini}">${key==='solo'?'1':key==='duo'?'2':key.includes('group')?'3–5':'↔'}</div>${esc(tr(x.label))}<small>${esc(tr(x.desc))}</small></button>`}
 function filterButton(key){const x=filterInfo[key];return `<button type="button" class="choice ${key===selectedFilter?'active':''}" data-filter="${key}">${esc(tr(x.label))}<small>${esc(tr(x.desc))}</small></button>`}
@@ -308,7 +353,7 @@ function showMessage(text,kind='err'){const x=document.getElementById('message')
 function loadImageFile(file){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=URL.createObjectURL(file)})}
 function loadRemoteImage(url){return new Promise((resolve,reject)=>{if(!url)return resolve(null);const img=new Image();img.crossOrigin='anonymous';img.onload=()=>resolve(img);img.onerror=()=>resolve(null);img.src=url})}
 function roundRect(c,x,y,w,h,r){const rr=Math.min(r,w/2,h/2);c.beginPath();c.moveTo(x+rr,y);c.arcTo(x+w,y,x+w,y+h,rr);c.arcTo(x+w,y+h,x,y+h,rr);c.arcTo(x,y+h,x,y,rr);c.arcTo(x,y,x+w,y,rr);c.closePath()}
-async function onPhoto(){const file=document.getElementById('photo').files?.[0];if(!file)return;selectedFile=file;document.getElementById('originalPreview').src=URL.createObjectURL(file);await makeDesign(file);document.getElementById('compare').style.display='grid';document.getElementById('message').className='msg';startAds()}
+async function onPhoto(){const file=document.getElementById('photo').files?.[0];if(!file)return;keepAdsVisible=false;selectedFile=file;document.getElementById('originalPreview').src=URL.createObjectURL(file);await makeDesign(file);document.getElementById('compare').style.display='grid';document.getElementById('message').className='msg';startAds()}
 function themeLabel(){return ({standard:'FTS Standard',autumn:'Kürbis / Herbst',halloween:'Halloween',streetfood:'Streetfood',cars:'Auto / Motorsport',neon:'Party / Neon',winter:'Winter / Weihnachten',spring:'Frühling',summer:'Sommer',wedding:'Hochzeit',sports:'Sport',business:'Firmen / Business',festival:'Festival',carnival:'Karneval'})[ev?.theme||'standard']||'FTS Event'}
 function eventMotif(){return ev?.motif||({standard:'✦',autumn:'🎃',halloween:'👻',streetfood:'🍔',cars:'🏎️',neon:'✦',winter:'❄',spring:'🌸',summer:'☀️',wedding:'♥',sports:'⚽',business:'◆',festival:'🎪',carnival:'🎭'})[ev?.theme||'standard']||'✦'}
 function filterCss(key){return ({natural:'none',warm:'saturate(1.08) sepia(.14) contrast(1.03)',vivid:'saturate(1.38) contrast(1.10)',mono:'grayscale(1) contrast(1.09)',cool:'saturate(.96) hue-rotate(10deg) brightness(1.03)'})[key]||'none'}
@@ -463,6 +508,53 @@ async function makeDesign(file){
  await Promise.resolve(drawEventDecorations(ctx,canvas.width,canvas.height,'photo'));
  designedBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',.91));
 }
+function resetForNewSelfie(){
+  if(lastSuccessUrl){URL.revokeObjectURL(lastSuccessUrl);lastSuccessUrl=''}
+  selectedFile=null;designedBlob=null;keepAdsVisible=false;
+  document.getElementById('successPanel')?.classList.remove('show');
+  document.getElementById('mySelfiesPanel')?.classList.remove('show');
+  document.getElementById('captureFlow')?.classList.remove('hiddenFlow');
+  document.getElementById('sendFlow')?.classList.remove('hiddenFlow');
+  const p=document.getElementById('photo');if(p)p.value='';
+  const c=document.getElementById('consent');if(c)c.checked=false;
+  const cmp=document.getElementById('compare');if(cmp)cmp.style.display='none';
+  const msg=document.getElementById('message');if(msg)msg.className='msg';
+  stopAds();const ad=document.getElementById('adSlot'),send=document.getElementById('sendFlow');if(ad&&send)send.parentNode.insertBefore(ad,send);ad?.classList.remove('show');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function showSuccessPanel(offline=false,previewBlob=null){
+  keepAdsVisible=true;
+  document.getElementById('captureFlow')?.classList.add('hiddenFlow');
+  document.getElementById('sendFlow')?.classList.add('hiddenFlow');
+  document.getElementById('mySelfiesPanel')?.classList.remove('show');
+  const panel=document.getElementById('successPanel');panel?.classList.add('show');
+  const ad=document.getElementById('adSlot');if(ad&&panel)panel.parentNode.insertBefore(ad,panel.nextSibling);
+  const t=document.getElementById('thanksText');if(t)t.textContent=offline?tr('thanksOffline'):tr('thanksText');
+  const img=document.getElementById('successPreview');
+  if(lastSuccessUrl){URL.revokeObjectURL(lastSuccessUrl);lastSuccessUrl=''}
+  if(img&&previewBlob){lastSuccessUrl=URL.createObjectURL(previewBlob);img.src=lastSuccessUrl;img.classList.add('show')}else img?.classList.remove('show');
+  startAds();
+  panel?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function showMySelfies(){
+  const panel=document.getElementById('mySelfiesPanel'),grid=document.getElementById('mySelfiesGrid');if(!panel||!grid)return;
+  panel.classList.add('show');grid.innerHTML='<div class="emptySelfies">…</div>';
+  const rows=[];
+  if(navigator.onLine){
+    try{
+      const online=await rpc('fts_get_guest_selfies_v10',{p_event_token:ev.event_token,p_guest_session_id:guestSessionId()})||[];
+      for(const p of online)rows.push({url:assetUrl(p.designed_path),created_at:p.created_at,pending:false});
+    }catch(e){console.warn('Meine Selfies online',e)}
+  }
+  try{
+    const queued=await queueAll();
+    queued.filter(q=>q.eventToken===ev.event_token&&q.guestSessionId===guestSessionId()&&q.designedBlob).forEach(q=>rows.push({url:URL.createObjectURL(q.designedBlob),created_at:new Date(q.createdAt).toISOString(),pending:true,temp:true}));
+  }catch{}
+  rows.sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
+  if(!rows.length){grid.innerHTML=`<div class="emptySelfies">${esc(tr('noMySelfies'))}</div>`;return}
+  grid.innerHTML=rows.map(r=>`<div class="mySelfieCard"><img src="${r.url}" alt=""><small>${new Date(r.created_at).toLocaleString(lang==='de'?'de-DE':lang==='fr'?'fr-FR':'en-GB')}${r.pending?' · '+esc(tr('pending')):''}</small></div>`).join('');
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+}
 async function submitPhoto(){
  if(!['day','test'].includes(routeMode))return showMessage(routeMode==='too-early'?tr('tooEarly'):tr('ended'));
  if(!selectedFile)return showMessage(tr('noPhoto'));
@@ -479,17 +571,25 @@ async function submitPhoto(){
    id:queueId,createdAt:Date.now(),eventToken:ev.event_token,
    originalPath:`${routeBase}/original/${originalId}.${ext}`,
    designedPath:`${routeBase}/designed/${designId}.jpg`,
-   originalBlob:selectedFile,designedBlob,originalType:selectedFile.type||'image/jpeg'
+   originalBlob:selectedFile,designedBlob,originalType:selectedFile.type||'image/jpeg',
+   guestSessionId:guestSessionId()
  };
  try{
-  if(navigator.onLine){btn.textContent=tr('uploading');try{await uploadItem(item);showMessage(tr('success'),'ok')}catch(e){await queuePut(item);showMessage(tr('queued'),'warn');registerBackgroundSync()}}
-  else{btn.textContent=tr('offlineSaving');await queuePut(item);showMessage(tr('queuedOffline'),'warn');registerBackgroundSync()}
-  selectedFile=null;designedBlob=null;stopAds();document.getElementById('adSlot')?.classList.remove('show');document.getElementById('photo').value='';document.getElementById('consent').checked=false;await updateQueueCount();
+  const previewBlob=designedBlob;let offlineResult=false;
+  if(navigator.onLine){
+    btn.textContent=tr('uploading');
+    try{await uploadItem(item)}
+    catch(e){await queuePut(item);offlineResult=true;registerBackgroundSync()}
+  }else{
+    btn.textContent=tr('offlineSaving');await queuePut(item);offlineResult=true;registerBackgroundSync()
+  }
+  showSuccessPanel(offlineResult,previewBlob);
+  selectedFile=null;designedBlob=null;document.getElementById('photo').value='';document.getElementById('consent').checked=false;await updateQueueCount();
  }catch(e){console.error(e);showMessage(tr('saveError')+': '+(e?.message||'Error'),'err')}
  finally{btn.disabled=false;btn.textContent=tr('send')}
 }
 async function registerBackgroundSync(){try{const reg=await navigator.serviceWorker.ready;if('sync'in reg)await reg.sync.register('fts-upload-queue')}catch(e){console.warn('Background Sync nicht verfügbar',e)}}
-window.addEventListener('online',()=>{updateNet();processQueue()});window.addEventListener('offline',updateNet);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)processQueue()});
+window.addEventListener('online',()=>{updateNet();processQueue()});navigator.serviceWorker?.addEventListener?.('message',e=>{if(e.data?.type==='FTS_QUEUE_FLUSHED'&&document.getElementById('mySelfiesPanel')?.classList.contains('show'))showMySelfies()});window.addEventListener('offline',updateNet);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)processQueue()});
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);boot();
 </script>
 </body>

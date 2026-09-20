@@ -40,6 +40,11 @@
 .decoStack.pos-bottom-left{left:5%;bottom:5%}.decoStack.pos-bottom-center{left:50%;bottom:5%;transform:translateX(-50%);justify-content:center}.decoStack.pos-bottom-right{right:5%;bottom:5%;justify-content:flex-end}
 .ctaEn{font-size:clamp(.8rem,2.2vw,1.1rem);font-weight:800;margin-top:5px;color:#e6ecea;text-align:center;text-shadow:0 2px 8px #000}
 
+.digitalOnly{display:none}.attentionBar{width:min(720px,calc(100vw - 28px));margin-top:9px;padding:10px 13px;border-radius:14px;background:linear-gradient(90deg,rgba(217,181,109,.18),rgba(18,59,62,.92));border:1px solid rgba(217,181,109,.32);align-items:center;justify-content:center;gap:11px;text-align:center;font-weight:900;box-shadow:0 12px 30px #0005}.attentionBar.show{display:flex}.attentionIcon{font-size:1.45rem;animation:phoneNudge 2.4s ease-in-out infinite}.attentionMain{font-size:.95rem}.attentionSub{font-size:.7rem;color:#b9c8c5;margin-top:2px}.selfieCount{display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;background:rgba(0,0,0,.3);color:#fff;font-size:.72rem;white-space:nowrap}@keyframes phoneNudge{0%,70%,100%{transform:translateX(0) rotate(0)}82%{transform:translateX(6px) rotate(4deg)}90%{transform:translateX(-3px) rotate(-2deg)}}@keyframes qrPulse{0%,100%{box-shadow:0 16px 38px #0007,0 0 0 0 rgba(217,181,109,.32)}50%{box-shadow:0 16px 38px #0007,0 0 0 14px rgba(217,181,109,0)}}.attentionMode .poster .qrbox{animation:qrPulse 2s ease-in-out infinite}.exporting .poster .qrbox{animation:none!important}.exporting .digitalOnly{display:none!important}
+.displayMode .attentionBar,:fullscreen .attentionBar{width:min(100vw,60svh);margin-top:4px;border-radius:0;padding:7px 10px}.displayMode.hasAttention.hasScreenAds .poster,.hasAttention.hasScreenAds:fullscreen .poster{width:min(100vw,60svh)!important}.displayMode.hasAttention:not(.hasScreenAds) .poster,.hasAttention:not(.hasScreenAds):fullscreen .poster{width:min(100vw,73svh)!important}
+@media print{.digitalOnly{display:none!important}}
+@media(max-width:540px){.attentionBar{width:calc(100% - 16px)}.attentionMain{font-size:.85rem}.selfieCount{font-size:.64rem}}
+
 </style>
 </head>
 <body>
@@ -56,9 +61,18 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 function encodePath(path){return path.split('/').map(encodeURIComponent).join('/')}
 function assetUrl(path){if(!path)return'';return `${cfg.supabaseUrl}/storage/v1/object/public/${encodeURIComponent(cfg.liveBucket)}/${encodePath(path)}`}
 function boolish(v){return v===true||v===1||String(v).toLowerCase()==='true'}
+function luxDate(){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Luxembourg',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),get=t=>parts.find(x=>x.type===t)?.value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
 function adItemsFor(ev){
   if(!boolish(ev?.ads_enabled))return[];let items=ev?.ad_items;if(!Array.isArray(items)){try{items=JSON.parse(items||'[]')}catch{items=[]}}
-  return items.filter(x=>x?.path&&x.active!==false);
+  const today=luxDate();
+  return items.filter(x=>{
+    if(!x?.path||x.active===false)return false;
+    const start=String(x.start_date||''),end=String(x.end_date||'');
+    return (!start||today>=start)&&(!end||today<=end);
+  });
 }
 function safeAdLink(v){try{const u=new URL(String(v||''));return ['http:','https:'].includes(u.protocol)?u.href:''}catch{return''}}
 let screenAds=[],screenAdIndex=0,screenAdTimer=null;
@@ -96,6 +110,19 @@ function decoStacksHtml(ev){
   return Object.entries(groups).map(([pos,items])=>
     `<div class="decoStack pos-${pos}">${items.map(x=>`<span class="${esc(x.size||'medium')}">${esc(x.symbol)}</span>`).join('')}</div>`
   ).join('');
+}
+function parseArr(v){if(Array.isArray(v))return v;try{return JSON.parse(v||'[]')}catch{return[]}}
+function posterLanguages(ev){
+  const v=parseArr(ev?.poster_languages).filter(x=>['de','fr','en'].includes(x));
+  return v.length?v:(ev?.poster_bilingual!==false?['de','en']:['de']);
+}
+function ctaLabel(lang){return ({de:'Scannen & Selfie hochladen',fr:'Scannez & envoyez votre selfie',en:'Scan & upload your selfie'})[lang]||'Scannen & Selfie hochladen'}
+function attentionText(lang){
+  return ({
+    de:{main:'📸 Mach dein Event-Selfie',sub:'QR scannen · Selfie wählen · senden',count:n=>`Heute schon ${n} Selfies`},
+    fr:{main:'📸 Faites votre selfie événement',sub:'Scanner · choisir le selfie · envoyer',count:n=>`Déjà ${n} selfies aujourd’hui`},
+    en:{main:'📸 Make your event selfie',sub:'Scan · choose your selfie · send',count:n=>`${n} selfies already today`}
+  })[lang]||null;
 }
 function qrDotType(v){return v==='dots'?'dots':v==='rounded'?'rounded':'square'}
 function qrCornerType(v){return v==='dot'?'dot':v==='rounded'?'extra-rounded':'square'}
@@ -135,7 +162,31 @@ async function loadPosterEvent(){
     catch(_e){ads=await rpc('fts_get_event_ads_v1',{p_event_token:ref})}
     if(ads?.length){ev.ads_enabled=boolish(ads[0].ads_enabled);ev.ad_items=ads[0].ad_items||[];}
   }catch(e){console.warn('Werbung konnte nicht geladen werden',e)}
+  try{
+    const ex=await rpc('fts_get_event_extras_public_v10',{p_event_token:ref});
+    if(ex?.length)Object.assign(ev,ex[0]);
+  }catch(e){console.warn('Poster-Zusatzdaten konnten nicht geladen werden',e)}
   return ev;
+}
+let selfieCountTimer=null;
+async function refreshSelfieCount(ev,lang){
+  const el=document.getElementById('selfieCount');if(!el)return;
+  try{
+    const n=await rpc('fts_get_event_selfie_count_v10',{p_event_token:ev.event_token||ref});
+    const count=Number(n||0),txt=attentionText(lang)||attentionText('de');el.textContent=txt.count(count);
+  }catch(e){el.textContent='📸'}
+}
+function setupAttention(ev){
+  const enabled=ev.tablet_attention!==false,bar=document.getElementById('attentionBar');
+  document.documentElement.classList.toggle('attentionMode',enabled);
+  document.documentElement.classList.toggle('hasAttention',enabled);
+  if(!enabled||!bar){bar?.classList.remove('show');return}
+  const lang=posterLanguages(ev)[0]||'de',txt=attentionText(lang)||attentionText('de');
+  document.getElementById('attentionMain').textContent=txt.main;
+  document.getElementById('attentionSub').textContent=txt.sub;
+  bar.classList.add('show');refreshSelfieCount(ev,lang);
+  if(selfieCountTimer)clearInterval(selfieCountTimer);
+  selfieCountTimer=setInterval(()=>refreshSelfieCount(ev,lang),10000);
 }
 async function boot(){
  try{
@@ -148,14 +199,18 @@ async function boot(){
     ${logoStacksHtml(ev)}
     ${decoStacksHtml(ev)}
     <div class="brand">FTS.LU · SELFIE EVENT</div><h1>${esc(ev.title)}</h1><div class="sub">${esc(ev.subtitle||'')}</div>
-    <div class="qrbox"><div id="qr"></div></div><div class="cta">Scannen & Selfie hochladen</div>${ev.poster_bilingual!==false?`<div class="ctaEn">Scan & upload your selfie</div>`:''}<div class="foot">FTS.lu · Eventfotografie</div>
+    <div class="qrbox"><div id="qr"></div></div>
+    ${(()=>{const ls=posterLanguages(ev);return `<div class="cta">${esc(ctaLabel(ls[0]))}</div>${ls.slice(1).map(x=>`<div class="ctaEn">${esc(ctaLabel(x))}</div>`).join('')}`})()}
+    <div class="foot">Produktion: FTS.lu</div>
     ${ev.short_code?`<div class="code">${esc(ev.short_code)}</div>`:''}
   </section>
+  <div class="attentionBar digitalOnly" id="attentionBar"><span class="attentionIcon">📱</span><div><div class="attentionMain" id="attentionMain"></div><div class="attentionSub" id="attentionSub"></div></div><span class="selfieCount" id="selfieCount">…</span></div>
   <div class="screenAd" id="screenAd"><div class="screenAdLabel">Werbung</div><a id="screenAdLink"><img id="screenAdImg" alt="Werbung"></a></div>
   <div class="controls" id="controls"><button id="full">Vollbild / Anzeige</button><button id="png">PNG herunterladen</button><button id="print" class="secondary">A4 drucken</button></div>`;
   const guest=cfg.baseUrl+'?e='+encodeURIComponent(ev.short_code||ref);
   renderQr(document.getElementById('qr'),guest,ev);
   startScreenAds(ev);
+  setupAttention(ev);
   document.getElementById('full').onclick=enterDisplay;document.getElementById('png').onclick=downloadPng;document.getElementById('print').onclick=printPoster;
   if(display){document.documentElement.classList.add('displayMode');setTimeout(()=>document.documentElement.requestFullscreen?.().catch(()=>{}),250)}
  }catch(e){console.error(e);document.getElementById('root').innerHTML='<div class="loading"><h2>Event konnte nicht geladen werden.</h2><p>Bitte prüfe den Event-Link.</p></div>'}
