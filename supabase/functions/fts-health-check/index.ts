@@ -80,9 +80,11 @@ Deno.serve(async req=>{
       else add("lifecycle","Galerie & Ablauf","pass",`Galerie: ${galleryAt||"nicht terminiert"} · Link-Ende: ${expiresAt||"über Retention geregelt"}`);
     }
 
-    const storagePath=`__health/${eventToken}/${crypto.randomUUID()}.txt`;
-    const testBytes=new TextEncoder().encode("fts-health");
-    const {error:uploadError}=await admin.storage.from(BUCKET).upload(storagePath,testBytes,{upsert:false,contentType:"text/plain"});
+    const storagePath=`__health/${eventToken}/${crypto.randomUUID()}.jpg`;
+    // Use an image MIME type because the FTS live bucket intentionally only accepts image uploads.
+    // The health check tests storage write/delete, not image decoding.
+    const testBytes=new Uint8Array([0xff,0xd8,0xff,0xd9]);
+    const {error:uploadError}=await admin.storage.from(BUCKET).upload(storagePath,testBytes,{upsert:false,contentType:"image/jpeg"});
     if(uploadError){
       add("storage","Speicher & Foto-Upload","fail","Testdatei konnte nicht in den FTS-Speicher geschrieben werden: "+uploadError.message);
     }else{
