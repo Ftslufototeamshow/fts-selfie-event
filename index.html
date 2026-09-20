@@ -159,11 +159,35 @@ function guestSessionId(){
   return id;
 }
 async function registerPhoto(item){await rpc('fts_register_photo_v11',{p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath,p_guest_session_id:item.guestSessionId||guestSessionId(),p_captured_at:new Date(item.createdAt||Date.now()).toISOString()})}
+function scanSessionId(){
+  const key='fts_scan_session_v12';let id=sessionStorage.getItem(key);
+  if(!id){id=crypto.randomUUID?crypto.randomUUID():'s_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2);sessionStorage.setItem(key,id)}
+  return id;
+}
+function scanDeviceType(){
+  const ua=navigator.userAgent||'',touch=navigator.maxTouchPoints||0,w=Math.min(screen.width||innerWidth,screen.height||innerHeight);
+  if(/iPad|Tablet|SM-T|Tab/i.test(ua)||(touch>1&&w>=600))return'tablet';
+  if(/Mobi|Android|iPhone|Phone/i.test(ua)||w<600)return'mobile';
+  return'desktop';
+}
 async function recordScan(){
   const canonical=String(ev?.event_token||'');if(!canonical||!navigator.onLine)return;
-  const key='fts_scan_recorded_'+canonical;
-  if(sessionStorage.getItem(key))return;
-  try{await rpc('fts_record_event_scan_v11',{p_event_token:canonical});sessionStorage.setItem(key,'1')}catch(e){console.warn('Scan-Statistik',e)}
+  const key='fts_scan_recorded_v12_'+canonical;if(sessionStorage.getItem(key))return;
+  try{
+    const r=await fetch(`${cfg.supabaseUrl}/functions/v1/fts-scan`,{
+      method:'POST',
+      headers:{'apikey':cfg.publishableKey,'Content-Type':'application/json'},
+      body:JSON.stringify({
+        event_token:canonical,
+        session_id:scanSessionId(),
+        device_type:scanDeviceType(),
+        browser_language:navigator.language||'',
+        browser_timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||''
+      })
+    });
+    if(!r.ok)throw new Error((await r.text())||`HTTP ${r.status}`);
+    sessionStorage.setItem(key,'1');
+  }catch(e){console.warn('Scan-Statistik',e)}
 }
 async function uploadItem(item){await uploadObject(item.originalPath,item.originalBlob,item.originalType);await uploadObject(item.designedPath,item.designedBlob,'image/jpeg');await registerPhoto(item)}
 async function processQueue(){if(!navigator.onLine)return updateNet();const items=await queueAll();for(const item of items){try{await uploadItem(item);await queueDelete(item.id)}catch(e){console.warn('Queue upload',e);break}}updateNet();updateQueueCount()}
