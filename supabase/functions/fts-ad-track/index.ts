@@ -58,7 +58,16 @@ Deno.serve(async (req) => {
     const row = Array.isArray(adRows) ? adRows[0] : null;
     const items = Array.isArray(row?.ad_items) ? row.ad_items : [];
     const ad = items.find((x: any) => String(x?.path || "") === adKey && x?.active !== false);
-    if (!row?.ads_enabled || !ad) {
+    const luxDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Luxembourg",
+      year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date());
+    const inDateWindow = !!ad &&
+      (!ad.start_date || luxDate >= String(ad.start_date)) &&
+      (!ad.end_date || luxDate <= String(ad.end_date));
+    const hasLink = !!ad && /^https?:\/\//i.test(String(ad.link || ""));
+
+    if (!row?.ads_enabled || !ad || !inDateWindow || (action === "click" && !hasLink)) {
       return json({ ok: false, error: "Werbung nicht aktiv" }, 404);
     }
 
