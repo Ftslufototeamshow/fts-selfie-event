@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#071315">
+<title>FTS Eventbericht</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#071315;color:#f5f1e8;--accent:#d9b56d}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 85% 5%,rgba(25,112,116,.25),transparent 34%),linear-gradient(145deg,#061012,#10383a)}.wrap{width:min(980px,calc(100% - 24px));margin:auto;padding:28px 0 60px}.brand{font-size:.74rem;letter-spacing:.2em;color:var(--accent);font-weight:900}h1{font-size:clamp(2rem,7vw,4rem);line-height:1;margin:8px 0}.sub{color:#a4b4b1;font-size:1.05rem}.meta{color:#839895;margin-top:6px}.actions{display:flex;gap:9px;flex-wrap:wrap;margin:22px 0}button{border:0;border-radius:11px;padding:12px 15px;background:var(--accent);color:#102020;font-weight:900;font:inherit;cursor:pointer}.secondary{background:#15383a;color:#f4f1e8;border:1px solid rgba(255,255,255,.09)}button:disabled{opacity:.5}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}.card,.panel{background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:16px}.n{font-size:2.1rem;font-weight:900;color:var(--accent)}.l{color:#91a5a1;font-size:.8rem}.panel{margin-top:14px}.panel h2{font-size:1.05rem;color:var(--accent);margin:0 0 12px}.row{display:grid;grid-template-columns:1.5fr .8fr .8fr .8fr;gap:8px;padding:10px;border-radius:10px;background:#0a2426;margin-top:6px}.row.head{font-weight:900;color:var(--accent)}.hour{display:grid;grid-template-columns:120px 1fr 55px;gap:9px;align-items:center;margin:8px 0}.bar{height:12px;background:#0a2426;border-radius:999px;overflow:hidden;border:1px solid rgba(255,255,255,.07)}.fill{height:100%;background:var(--accent)}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.item{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}.item:last-child{border-bottom:0}.note{color:#8da09c;font-size:.8rem;line-height:1.5}.empty{padding:28px;text-align:center;background:#071719;border-radius:18px;color:#8da09c}.footer{text-align:center;color:#758b87;font-size:.78rem;margin-top:28px}@media(max-width:700px){.cards{grid-template-columns:1fr}.two{grid-template-columns:1fr}.row{grid-template-columns:1.3fr .7fr .7fr}.row span:last-child{display:none}.hour{grid-template-columns:95px 1fr 45px}}
+</style>
+</head>
+<body>
+<main class="wrap" id="report"><div class="empty">Eventbericht wird geladen …</div></main>
+<script src="./config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+<script>
+const cfg=window.FTS_CONFIG,shareToken=new URLSearchParams(location.search).get('r'),autoPdf=new URLSearchParams(location.search).get('pdf')==='1';
+let reportData=null;
+const $=s=>document.querySelector(s);
+function headers(){return {'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':'application/json'}}
+async function rpc(name,body){const r=await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/${name}`,{method:'POST',headers:headers(),body:JSON.stringify(body)});if(!r.ok)throw new Error((await r.text())||`HTTP ${r.status}`);const t=await r.text();return t?JSON.parse(t):null}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function fmtDate(d){return d?new Date(d+'T12:00:00').toLocaleDateString('de-DE'):'—'}
+function fmtDateTime(d){return d?new Date(d).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'}):'—'}
+function deviceLabel(v){return({mobile:'Handy',tablet:'Tablet',desktop:'Computer',unknown:'Unbekannt',Unbekannt:'Unbekannt'})[v]||v||'Unbekannt'}
+function countryLabel(code){if(!code||code==='XX')return'Unbekannt';try{return new Intl.DisplayNames(['de'],{type:'region'}).of(code)||code}catch{return code}}
+function scanDayText(day,count,start){const sd=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Luxembourg',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(start));if(day<sd)return'nicht erfasst';return String(count)}
+function render(d){
+  reportData=d;const summary=d.summary||{},daily=d.daily||[],hourly=d.hourly||[],devices=d.devices||[],countries=d.countries||[];
+  const days=(d.event_days||[]).map(fmtDate).join(' · ');
+  const startLabel=fmtDateTime(d.scan_tracking_started_at);
+  const maxHour=Math.max(1,...hourly.map(x=>Number(x.qr_scans||0)));
+  document.getElementById('report').innerHTML=`
+    <div class="brand">FTS.LU · EVENTBERICHT</div>
+    <h1>${esc(d.title||'Eventbericht')}</h1>
+    <div class="sub">${esc(d.subtitle||'')}</div>
+    <div class="meta">${esc(d.location||'')}${days?' · '+esc(days):''}</div>
+    <div class="actions"><button id="pdfBtn">PDF herunterladen</button><button class="secondary" id="copyBtn">Bericht-Link kopieren</button></div>
+    <div class="cards">
+      <div class="card"><div class="n">${Number(summary.selfies||0)}</div><div class="l">Selfies</div></div>
+      <div class="card"><div class="n">${Number(summary.qr_scans||0)}</div><div class="l">QR-Aufrufe seit ${esc(startLabel)}</div></div>
+      <div class="card"><div class="n">${Number(summary.unique_sessions||0)}</div><div class="l">anonyme Browser-Sitzungen</div></div>
+    </div>
+    <section class="panel"><h2>Tagesauswertung</h2><div class="row head"><span>Tag</span><span>Selfies</span><span>QR-Aufrufe</span><span>Sitzungen</span></div>${daily.map(x=>`<div class="row"><span>${fmtDate(x.day)}</span><span>${Number(x.selfies||0)}</span><span>${esc(scanDayText(x.day,Number(x.qr_scans||0),d.scan_tracking_started_at))}</span><span>${Number(x.unique_sessions||0)}</span></div>`).join('')}</section>
+    <section class="panel"><h2>QR-Aufrufe nach Uhrzeit</h2>${hourly.length?hourly.map(x=>{const c=Number(x.qr_scans||0),w=Math.max(2,Math.round(c/maxHour*100));return `<div class="hour"><span>${fmtDate(x.day)} · ${String(x.hour).padStart(2,'0')}:00</span><div class="bar"><div class="fill" style="width:${w}%"></div></div><b>${c}</b></div>`}).join(''):'<div class="note">Noch keine QR-Aufrufe im neuen Statistikzeitraum.</div>'}</section>
+    <div class="two">
+      <section class="panel"><h2>Geräte</h2>${devices.length?devices.map(x=>`<div class="item"><span>${esc(deviceLabel(x.device))}</span><b>${Number(x.count||0)}</b></div>`).join(''):'<div class="note">Noch keine Gerätedaten.</div>'}</section>
+      <section class="panel"><h2>Verbindungsland (ungefähr)</h2>${countries.length?countries.map(x=>`<div class="item"><span>${esc(countryLabel(x.country))} (${esc(x.country)})</span><b>${Number(x.count||0)}</b></div>`).join(''):'<div class="note">Noch keine Länderdaten.</div>'}<div class="note" style="margin-top:10px">Das Verbindungsland ist anonym und kann bei Roaming oder VPN abweichen. Es ist weder SIM-Land noch Nationalität.</div></section>
+    </div>
+    <section class="panel"><div class="note">QR-Statistiken werden erst seit ${esc(startLabel)} erfasst. Frühere QR-Aufrufe können nicht rückwirkend rekonstruiert werden. Der Bericht enthält ausschließlich aggregierte Daten und keine IP-Adressen, Telefonnummern oder einzelnen Scan-Zeitpunkte.</div></section>
+    <div class="footer">FTS.lu · Eventfotografie · Bericht erstellt ${esc(fmtDateTime(d.generated_at))}</div>`;
+  $('#pdfBtn').onclick=downloadPdf;$('#copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText(location.href.replace(/&pdf=1/g,''));$('#copyBtn').textContent='Link kopiert ✓';setTimeout(()=>$('#copyBtn').textContent='Bericht-Link kopieren',1800)}catch{}};
+}
+function pdfRowsDaily(d){return (d.daily||[]).map(x=>[fmtDate(x.day),String(x.selfies||0),scanDayText(x.day,Number(x.qr_scans||0),d.scan_tracking_started_at),String(x.unique_sessions||0)])}
+function downloadPdf(){
+  if(!reportData||!window.jspdf)return;
+  const {jsPDF}=window.jspdf,d=reportData,summary=d.summary||{},doc=new jsPDF({unit:'mm',format:'a4'});
+  const startLabel=fmtDateTime(d.scan_tracking_started_at);
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text('FTS.LU · EVENTBERICHT',14,16);
+  doc.setFontSize(22);doc.text(String(d.title||'Eventbericht'),14,28,{maxWidth:180});
+  doc.setFont('helvetica','normal');doc.setFontSize(10);
+  let y=38;if(d.subtitle){doc.text(String(d.subtitle),14,y,{maxWidth:180});y+=6}
+  doc.text([d.location,(d.event_days||[]).map(fmtDate).join(' · ')].filter(Boolean).join(' · '),14,y,{maxWidth:180});y+=10;
+  doc.setFont('helvetica','bold');doc.setFontSize(14);doc.text(String(summary.selfies||0)+' Selfies',14,y);doc.text(String(summary.qr_scans||0)+' QR-Aufrufe',75,y);doc.text(String(summary.unique_sessions||0)+' Sitzungen',140,y);y+=8;
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text('QR-Aufrufe seit '+startLabel,75,y-3);
+  doc.autoTable({startY:y+2,head:[['Tag','Selfies','QR-Aufrufe','Sitzungen']],body:pdfRowsDaily(d),theme:'grid',styles:{fontSize:9},headStyles:{fillColor:[40,70,70]}});
+  y=doc.lastAutoTable.finalY+8;
+  if((d.hourly||[]).length){
+    doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text('QR-Aufrufe nach Uhrzeit',14,y);y+=4;
+    const rows=(d.hourly||[]).map(x=>[fmtDate(x.day)+' · '+String(x.hour).padStart(2,'0')+':00',String(x.qr_scans||0),String(x.unique_sessions||0)]);
+    doc.autoTable({startY:y,head:[['Zeitfenster','QR-Aufrufe','Sitzungen']],body:rows,theme:'grid',styles:{fontSize:8},headStyles:{fillColor:[40,70,70]}});
+    y=doc.lastAutoTable.finalY+8;
+  }
+  if(y>245){doc.addPage();y=18}
+  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text('Geräte',14,y);doc.text('Verbindungsland (ungefähr)',105,y);y+=5;
+  doc.setFont('helvetica','normal');doc.setFontSize(9);
+  const devices=(d.devices||[]),countries=(d.countries||[]),n=Math.max(devices.length,countries.length);
+  for(let i=0;i<n;i++){if(y>275){doc.addPage();y=18}const a=devices[i],b=countries[i];if(a)doc.text(deviceLabel(a.device)+': '+a.count,14,y);if(b)doc.text(countryLabel(b.country)+' ('+b.country+'): '+b.count,105,y);y+=5}
+  if(y>250){doc.addPage();y=18}
+  y+=4;doc.setFontSize(8);doc.text('Hinweis: Das Verbindungsland ist anonym und kann bei Roaming/VPN abweichen. Es ist weder SIM-Land noch Nationalität.',14,y,{maxWidth:180});y+=8;
+  doc.text('QR-Statistiken werden erst seit '+startLabel+' erfasst. Frühere Aufrufe sind nicht rekonstruierbar. Keine IP-Adressen oder Telefonnummern im Bericht.',14,y,{maxWidth:180});
+  const name=String(d.title||'eventbericht').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').replace(/^-|-$/g,'').toLowerCase()||'eventbericht';
+  doc.save('FTS-'+name+'-statistik.pdf');
+}
+async function boot(){
+  if(!shareToken){document.getElementById('report').innerHTML='<div class="empty">Bericht-Link ist unvollständig.</div>';return}
+  try{const d=await rpc('fts_get_shared_event_report_v12',{p_share_token:shareToken});if(!d){document.getElementById('report').innerHTML='<div class="empty">Dieser Bericht-Link ist ungültig oder abgelaufen.</div>';return}render(d);if(autoPdf)setTimeout(downloadPdf,700)}catch(e){document.getElementById('report').innerHTML='<div class="empty">Bericht konnte nicht geladen werden.</div>'}
+}
+boot();
+</script>
+</body>
+</html>
