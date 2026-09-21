@@ -307,6 +307,7 @@ async function openGallery(token,photoId=null){
 async function loadGallery(view){currentGalleryView=view;currentGalleryRows=[];$('#activePhotosBtn').classList.toggle('secondary',view!=='active');$('#trashPhotosBtn').classList.toggle('secondary',view!=='trash');$('#emptyTrashBtn').classList.toggle('hidden',view!=='trash');$('#bulkDownloadWrap').classList.toggle('hidden',view!=='active');$('#bulkDownloadBtn').disabled=true;$('#zipStatus').textContent='';$('#photoGrid').innerHTML='<div class="empty">Fotos werden geladen …</div>';try{let rows=await rpc('fts_admin_get_event_photos',{p_admin_code:credential(),p_event_token:currentGalleryEvent,p_view:view})||[];const ev=events.find(x=>x.event_token===currentGalleryEvent);if(view==='active'&&!rows.length&&ev?.legacy_prefix)rows=await loadLegacyAdmin(ev);currentGalleryRows=rows;$('#bulkDownloadBtn').disabled=view!=='active'||!rows.length;$('#galleryInfo').textContent=view==='trash'?'Papierkorb: Bilder sind bereits aus dem Kundenportal entfernt. Erst „Papierkorb leeren“ löscht die Dateien endgültig aus Supabase.':ev?.legacy_prefix?'FTS intern · nach Event-Tag sortiert. Originale oben, Designs darunter.':'Nach Event-Tag sortiert · Originale oben · fertige Designs darunter · horizontal wischen. Testfotos sind markiert.';renderPhotos(rows)}catch(e){$('#photoGrid').innerHTML='<div class="empty">Galerie konnte nicht geladen werden: '+esc(e.message)+'</div>'}}
 async function loadLegacyAdmin(ev){if(!storageClient)return[];const bucket=ev.legacy_bucket||cfg.legacyBucket;const [or,de]=await Promise.all([storageClient.storage.from(bucket).list(`${ev.legacy_prefix}/original`,{limit:1000}),storageClient.storage.from(bucket).list(`${ev.legacy_prefix}/designed`,{limit:1000})]);const O=(or.data||[]).filter(x=>x.name&&x.name!=='.emptyFolderPlaceholder'),D=(de.data||[]).filter(x=>x.name&&x.name!=='.emptyFolderPlaceholder');const rows=[];for(let i=0;i<Math.max(O.length,D.length);i++){const o=O[i],d=D[i];let ou=null,du=null;if(o){const r=await storageClient.storage.from(bucket).createSignedUrl(`${ev.legacy_prefix}/original/${o.name}`,21600);ou=r.data?.signedUrl||null}if(d){const r=await storageClient.storage.from(bucket).createSignedUrl(`${ev.legacy_prefix}/designed/${d.name}`,21600);du=r.data?.signedUrl||null}rows.push({legacy:true,photo_id:`legacy-${i}`,event_day:ev.event_date,is_test:false,original_path:ou,designed_path:du,created_at:o?.created_at||d?.created_at||null,original_exists:!!ou,design_exists:!!du})}return rows}
 function galleryDayLabel(day){
+  if(day==='__test__')return'Testfotos · vor Event';
   if(!day)return'Ohne Datum';
   const d=new Date(String(day).slice(0,10)+'T12:00:00');
   if(Number.isNaN(d.getTime()))return String(day);
@@ -339,11 +340,11 @@ function renderPhotos(rows){
   const fallbackDay=String(ev?.event_date||'').slice(0,10);
   const groups=new Map();
   for(const p of rows){
-    const day=String(p.event_day||fallbackDay||'ohne-datum').slice(0,10);
+    const day=p.is_test&&!p.event_day?'__test__':String(p.event_day||fallbackDay||'ohne-datum').slice(0,10);
     if(!groups.has(day))groups.set(day,[]);
     groups.get(day).push(p);
   }
-  const days=[...groups.keys()].sort();
+  const days=[...groups.keys()].sort((a,b)=>a==='__test__'?1:b==='__test__'?-1:String(a).localeCompare(String(b)));
   root.innerHTML=days.map(day=>{
     const dayRows=groups.get(day).slice().sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
     const originals=dayRows.filter(p=>p.original_exists).map(p=>galleryThumbHtml(p,'original')).join('');
@@ -379,7 +380,7 @@ async function bulkDownloadZip(){
     if(!window.JSZip)throw new Error('ZIP-Modul konnte nicht geladen werden.');
     const zip=new JSZip();let items=[];
     for(const p of currentGalleryRows){
-      const day=String(p.event_day||ev?.event_date||'ohne-datum').slice(0,10);
+      const day=p.is_test&&!p.event_day?'TEST':String(p.event_day||ev?.event_date||'ohne-datum').slice(0,10);
       if((type==='original'||type==='both')&&p.original_exists&&p.original_path)items.push({kind:'Originale',day,path:p.original_path,legacy:!!p.legacy});
       if((type==='design'||type==='both')&&p.design_exists&&p.designed_path)items.push({kind:'Event-Designs',day,path:p.designed_path,legacy:!!p.legacy});
     }
