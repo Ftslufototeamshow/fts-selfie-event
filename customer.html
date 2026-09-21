@@ -22,7 +22,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script>
 const cfg=window.FTS_CONFIG,client=supabase.createClient(cfg.supabaseUrl,cfg.publishableKey),customerToken=new URLSearchParams(location.search).get('c');
-const liveBase=`${cfg.supabaseUrl}/storage/v1/object/public/${cfg.liveBucket}/`;
+const liveBase=`${cfg.supabaseUrl}/storage/v1/object/public/${cfg.liveBucket}/`,directDownloadUrl=`${cfg.supabaseUrl}/functions/v1/fts-direct-download-v39`;
 const $=s=>document.querySelector(s);$('#refreshBtn').onclick=()=>location.reload();
 const customerAdTimers=new Map(),customerSocialState=new Map();
 function luxToday(){
@@ -64,6 +64,21 @@ async function attachEventAds(ev,section){
       customerAdTimers.set(ev.event_token,setInterval(()=>{index=(index+1)%items.length;show()},3000));
     }
   }catch(e){console.warn('Kundenportal Werbung',e)}
+}
+function submitDirectDownload(fields,button,label='Download wird gestartet …'){
+  const old=button?.textContent||'Herunterladen';
+  if(button){button.disabled=true;button.textContent=label}
+  const form=document.createElement('form');form.method='POST';form.action=directDownloadUrl;form.style.display='none';
+  for(const [name,value] of Object.entries(fields||{})){const input=document.createElement('input');input.type='hidden';input.name=name;input.value=String(value??'');form.appendChild(input)}
+  document.body.appendChild(form);form.submit();setTimeout(()=>{form.remove();if(button){button.disabled=false;button.textContent=old}},1400);
+}
+function downloadCustomerZip(ev,day,filename,button){
+  submitDirectDownload({action:'zip',mode:'customer',customer_token:customerToken,event_token:ev.event_token,day,title:ev.title||'event',filename},button,'ZIP wird geladen …');
+  setStatus('✓ ZIP-Download wurde gestartet.');
+}
+function downloadCustomerFile(eventToken,photoId,button){
+  submitDirectDownload({action:'file',mode:'customer',customer_token:customerToken,event_token:eventToken,photo_id:photoId,file_kind:'design'},button,'Foto wird geladen …');
+  setStatus('✓ Foto-Download wurde gestartet.');
 }
 function socialDataFor(ev,socialMap){return socialMap.get(ev.event_token)||{event_token:ev.event_token,event_title:ev.title,organizer_name:ev.title,location:ev.location||'',fts_can_post:false}}
 function socialFilename(zipPath){return (String(zipPath||'').split('/').pop()||'FTS-Selfie.jpg').replace(/[^a-zA-Z0-9._-]+/g,'-')}
@@ -165,7 +180,7 @@ async function boot(){if(!customerToken){$('#events').innerHTML='<div class="emp
       for(const p of dayMap.get(day)||[]){const url=liveBase+enc(p.designed_path),base=fileStem(p.designed_path),zipPath=`${slug(ev.title)}/${day}/Event-Designs/${base}${fileExt(p.designed_path)}`;addDesignCard(grid,url,zipPath,state,p.photo_id,p.social_selected!==false,day,p.privacy_masks||[]);dayItems.push({url,zipPath});count++}
       if(ev.legacy_prefix&&day===ev.event_date)count+=await addLegacyDesigns(ev,grid,dayItems,day,state);
       dayCount.textContent=count+' Foto'+(count===1?'':'s');
-      if(!count)grid.innerHTML='<div class="empty">Noch keine fertigen Event-Designs an diesem Tag.</div>';else{dayZip.disabled=dayItems.length===0;dayZip.onclick=()=>downloadZip(dayItems,`FTS-${slug(ev.title)}-${day}-event-designs.zip`,dayZip);dayShare.disabled=false;dayShare.onclick=()=>shareCustomerDay(ev,state,day,dayShare)}
+      if(!count)grid.innerHTML='<div class="empty">Noch keine fertigen Event-Designs an diesem Tag.</div>';else{dayZip.disabled=dayItems.length===0;dayZip.onclick=()=>{const filename=`FTS-${slug(ev.title)}-${day}-event-designs.zip`;if(ev.legacy_prefix&&day===ev.event_date)downloadZip(dayItems,filename,dayZip);else downloadCustomerZip(ev,day,filename,dayZip)};dayShare.disabled=false;dayShare.onclick=()=>shareCustomerDay(ev,state,day,dayShare)}
     }
     await attachSocialPanel(ev,section,state);
     albumShareBtn.onclick=()=>shareCustomerAlbum(ev,state,albumShareBtn);
@@ -177,7 +192,7 @@ function addDesignCard(grid,url,zipPath,state,photoId=null,initialSelected=true,
   el.innerHTML=`<div class="label">Event-Design</div><img src="${url}" loading="lazy" alt="Event-Design · groß prüfen"><div class="links"><button class="downloadBtn">Event-Design herunterladen</button><a class="btn secondary" href="${url}" target="_blank" rel="noopener">Design öffnen</a></div><details class="postTools"><summary>Posten / Datenschutz</summary><div class="postToolsBody"><button class="postSelect" data-post-select>Für Posting ✓</button><div class="postPrivacyInfo">🔒 Beim Teilen automatisch aktiv · Bild antippen = groß prüfen</div><button class="postPrivacy" data-post-privacy>Hintergrundschutz groß prüfen</button><button class="postShare" data-post-share>Facebook / Instagram / TikTok / Story teilen</button></div></details>`;
   const key=String(photoId||url),img=el.querySelector('img');
   img.addEventListener('error',()=>{el.remove();state?.items?.delete(key);updateSocialCount(state);if(!grid.querySelector('.card'))grid.innerHTML='<div class="empty">Keine verfügbaren Designs.</div>'});
-  el.querySelector('.links button').onclick=()=>downloadOne(url,zipPath.split('/').pop(),el.querySelector('.links button'));
+  el.querySelector('.links button').onclick=()=>{const b=el.querySelector('.links button');if(photoId)downloadCustomerFile(state?.social?.event_token||'',photoId,b);else downloadOne(url,zipPath.split('/').pop(),b)};
   grid.appendChild(el);if(state)bindCardSocial(el,url,zipPath,state,photoId,initialSelected,day,privacyMasks);
 }
 async function addLegacyDesigns(ev,grid,items,day,state){let count=0;try{const b=ev.legacy_bucket||cfg.legacyBucket,{data,error}=await client.storage.from(b).list(`${ev.legacy_prefix}/designed`,{limit:1000});if(error)throw error;for(const d of (data||[]).filter(x=>x.name&&x.name!=='.emptyFolderPlaceholder')){const path=`${ev.legacy_prefix}/designed/${d.name}`,url=await signed(b,path),zipPath=`${slug(ev.title)}/${day}/Event-Designs/${d.name}`;addDesignCard(grid,url,zipPath,state,null,true,day,[]);items.push({url,zipPath});count++}}catch(e){console.warn('Legacy designs',e)}return count}
