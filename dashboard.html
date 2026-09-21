@@ -302,9 +302,16 @@ async function openStats(token){
 }
 async function toggleArchive(token,state){const text=state==='archive'?'Event archivieren? Es verschwindet sofort aus dem Kundenportal.':'Event wieder aktivieren?';if(!confirm(text))return;try{await rpc(state==='archive'?'fts_admin_archive_event':'fts_admin_unarchive_event',{p_admin_code:credential(),p_event_token:token});await loadEvents(true)}catch(e){alert(e.message)}}
 function ftsSocialFilename(path){return (String(path||'').split('/').pop()||'FTS-Selfie.jpg').replace(/[^a-zA-Z0-9._-]+/g,'-')}
-function ftsSocialText(){
-  const x=currentSocialStatus||{},ev=events.find(e=>String(e.event_token)===String(currentGalleryEvent));
-  return window.FTS_SOCIAL?.shareText?.('fts',{eventTitle:x.event_title||ev?.title||'Event',organizer:x.organizer_name||ev?.subtitle||ev?.title||'Event',location:x.location||ev?.location||''},'de')||'';
+function ftsSocialText(day=''){
+  const x=currentSocialStatus||{},ev=events.find(e=>String(e.event_token)===String(currentGalleryEvent)),days=ev?eventDays(ev):[];
+  const dayIndex=day?Math.max(0,days.indexOf(String(day))):0;
+  return window.FTS_SOCIAL?.shareText?.('fts',{
+    eventTitle:x.event_title||ev?.title||'Event',
+    organizer:x.organizer_name||ev?.subtitle||ev?.title||'Event',
+    location:x.location||ev?.location||'',
+    eventDay:day||'',
+    eventDayIndex:dayIndex
+  },'de')||'';
 }
 async function loadFtsSocialStatus(token){
   currentSocialStatus=null;currentSocialApproved=new Map();currentSocialPrivacy=new Map();ftsSocialItems=new Map();
@@ -327,7 +334,7 @@ async function shareFtsDay(day,button){
   const items=selectedFtsDayItems(day);if(!items.length)return showToast('Für diesen Event-Tag ist kein freigegebenes Foto ausgewählt.');
   const panel=$('#gallerySocial'),old=button?.textContent||'Tag teilen';if(button){button.disabled=true;button.textContent='Fotos werden vorbereitet …'}
   try{
-    const r=await FTS_SOCIAL.shareMany({items:items.map(x=>({url:x.url,name:ftsSocialFilename(x.path),privacy:true})),text:panel?.querySelector('[data-fts-social-text]')?.value||ftsSocialText(),title:(currentSocialStatus?.event_title||'MySelfie Event')+' · '+day});
+    const r=await FTS_SOCIAL.shareMany({items:items.map(x=>({url:x.url,name:ftsSocialFilename(x.path),privacy:true})),text:ftsSocialText(day),title:(currentSocialStatus?.event_title||'MySelfie Event')+' · '+galleryDayLabel(day)});
     showToast(r.shared?'Tagesalbum zum Teilen geöffnet · Bilddateien werden übergeben.':'Mehrere Bilddateien werden von diesem Handy bzw. der App nicht gemeinsam angenommen. Es wurde kein Galerie-Link geteilt; bitte die Einzelbilder nutzen.');
   }catch(e){if(e?.name!=='AbortError')showToast('Tagesalbum konnte nicht zum Teilen vorbereitet werden.')}
   finally{if(button){button.disabled=false;button.textContent=old}}
@@ -378,7 +385,7 @@ async function toggleFtsPrivacy(photoId,button){
 }
 async function shareFtsPhoto(photoId,button){
   const item=ftsSocialItems.get(String(photoId));if(!item)return;const panel=$('#gallerySocial'),old=button.textContent;button.disabled=true;button.textContent='Wird vorbereitet …';
-  try{const r=await FTS_SOCIAL.shareOne({url:item.url,name:ftsSocialFilename(item.path),text:panel?.querySelector('[data-fts-social-text]')?.value||ftsSocialText(),privacy:true});showToast(r.shared?'Teilen geöffnet · Text wurde mitkopiert.':'Foto wurde vorbereitet/heruntergeladen · Text wurde kopiert.')}catch(e){if(e?.name!=='AbortError')showToast('Teilen konnte nicht gestartet werden.')}finally{button.disabled=false;button.textContent=old}
+  try{const r=await FTS_SOCIAL.shareOne({url:item.url,name:ftsSocialFilename(item.path),text:item.day?ftsSocialText(item.day):(panel?.querySelector('[data-fts-social-text]')?.value||ftsSocialText()),privacy:true});showToast(r.shared?'Teilen geöffnet · Text wurde mitkopiert.':'Foto wurde vorbereitet/heruntergeladen · Text wurde kopiert.')}catch(e){if(e?.name!=='AbortError')showToast('Teilen konnte nicht gestartet werden.')}finally{button.disabled=false;button.textContent=old}
 }
 async function openGallery(token,photoId=null){
   currentGalleryEvent=token;currentGalleryView='active';pendingGalleryPhoto=photoId||null;
