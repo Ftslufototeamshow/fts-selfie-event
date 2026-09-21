@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v25-lumorex-readonly-20260920';
+const CACHE='fts-selfie-v26-push-photo-studio-20260921';
 const CORE=['./','./index.html','./config.js','./manifest.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
@@ -125,6 +125,9 @@ self.addEventListener('sync',event=>{
 });
 self.addEventListener('message',event=>{
   if(event.data?.type==='FTS_FLUSH_QUEUE')event.waitUntil(flush());
+  if(event.data?.type==='FTS_CLEAR_PHOTO_NOTIFICATIONS'){
+    event.waitUntil(clearPhotoNotifications(String(event.data?.eventToken||'')));
+  }
 });
 
 
@@ -145,17 +148,34 @@ self.addEventListener('push', event => {
     tag: data.tag || ('fts-photo-' + Date.now()),
     renotify: true,
     data: {
-      url: data.url || './dashboard.html'
-    }
+      url: data.url || './dashboard.html',
+      event_token: data.event_token || '',
+      photo_id: data.photo_id || ''
+    },
+    actions: data.test ? [] : [{ action: 'open-photo', title: 'Foto ansehen' }]
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+async function clearPhotoNotifications(eventToken=''){
+  try{
+    const notes=await self.registration.getNotifications();
+    for(const n of notes){
+      const isPhoto=String(n.tag||'').startsWith('fts-photo-')||String(n.tag||'').startsWith('fts-event-');
+      const sameEvent=!eventToken||String(n.data?.event_token||'')===String(eventToken)||String(n.tag||'')==='fts-event-'+eventToken;
+      if(isPhoto&&sameEvent)n.close();
+    }
+  }catch{}
+  try{if(self.navigator?.clearAppBadge)await self.navigator.clearAppBadge()}catch{}
+}
+
 self.addEventListener('notificationclick', event => {
+  const eventToken=String(event.notification?.data?.event_token||'');
   event.notification.close();
 
   event.waitUntil((async () => {
+    await clearPhotoNotifications(eventToken);
     const target = new URL(
       event.notification?.data?.url || './dashboard.html',
       self.registration.scope
