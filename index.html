@@ -479,6 +479,7 @@ function render(){
    <div class="meta">${esc(ev.location||'')} · ${eventDays().map(d=>new Date(d+'T12:00:00').toLocaleDateString(lang==='de'?'de-DE':lang==='fr'?'fr-FR':'en-GB')).join(' · ')}</div>
    <div class="eventStatus ${statusClass}" id="eventStatus">${statusText}</div>
    <div id="net" class="net"></div>
+   ${galleryHref?`<a class="galleryMain" href="${galleryHref}" target="_blank" rel="noopener noreferrer">${tr('galleryButton')}</a>`:''}
    <button type="button" class="mySelfiesAccess" id="mySelfiesAccessBtn"><strong id="mySelfiesAccessText">${tr('mySelfies')}</strong><span>→</span></button>
 
    <div class="captureFlow ${uploadOpen?'':'hiddenFlow'}" id="captureFlow">
@@ -505,7 +506,6 @@ function render(){
      <div class="privacyInfo"><strong id="privacyTitle">${tr('privacyTitle')}</strong><span id="privacyText">${tr('privacy')}</span></div>
      <label class="consent"><input id="consent" type="checkbox" ${uploadOpen?'':'disabled'}><span id="consentText">${tr('consent')}</span></label>
      <button class="main" id="uploadBtn" ${uploadOpen?'':'disabled'}>${tr('send')}</button>
-     ${galleryHref?`<a class="galleryMain" href="${galleryHref}" target="_blank" rel="noopener noreferrer">${tr('galleryButton')}</a>`:''}
      <div id="message" class="msg"></div>
    </div>
    <section class="successPanel" id="successPanel">
