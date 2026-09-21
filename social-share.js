@@ -44,9 +44,9 @@ async function ensureMediaPipe(){
   if(window.FaceDetection&&mpDetector)return mpDetector;
   if(mpLoader)return mpLoader;
   mpLoader=(async()=>{
-    await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js');
+    await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/face_detection.js');
     if(!window.FaceDetection)throw new Error('Gesichtserkennung konnte nicht geladen werden.');
-    mpDetector=new window.FaceDetection({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`});
+    mpDetector=new window.FaceDetection({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/${file}`});
     mpDetector.setOptions({model:'short',minDetectionConfidence:0.55});
     mpDetector.onResults(results=>{const fn=mpResolve;mpResolve=null;if(fn)fn(results)});
     return mpDetector;
