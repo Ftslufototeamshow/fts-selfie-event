@@ -94,6 +94,15 @@ Optional:
 
 Erlaubter Bereich: 1–1000.
 
+## Event-Freigabe
+
+Im MySelfie-Event-Editor gibt es pro Veranstaltung den Schalter **„LUMOREX / VIMA Show freigeben“**.
+
+- **AN**: Der bestehende Read-only-Feed dieses Events ist erreichbar.
+- **AUS**: Der Feed dieses Events wird sofort gesperrt und liefert keinen Fotobestand an die Live-Show-Software.
+- Der Schalter kann jederzeit über **Bearbeiten** geändert werden.
+- Andere MySelfie-Funktionen wie Upload, Kundenportal, Gastseite und interne Galerie bleiben davon unberührt.
+
 ## Sicherheit
 
 - Nur GET ist erlaubt.
