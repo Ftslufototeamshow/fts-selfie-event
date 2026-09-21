@@ -26,9 +26,9 @@ function shareText(mode,data={},lang='de'){
     if(mode==='fts')return `Great moments at ${eventTitle}. 📸 MySelfie by FTS.lu captured plenty of personal event memories. Thank you to ${organizer} for the collaboration and to everyone who joined in. Here are a few impressions from the event.\n\n${tags}`;
     return `My selfie from ${eventTitle} 📸 Thanks to ${organizer} for a great event and a memory to take home.\n\n${tags}`;
   }
-  if(mode==='organizer')return `${organizer} bedankt sich bei allen Gästen für die tollen Momente beim ${eventTitle}. 📸 Es war großartig mit euch! Hier sind einige Eindrücke aus den Selfies des Events. Danke fürs Mitmachen und Teilen.\n\n${tags}`;
-  if(mode==='fts')return `Ein großartiges Event bei ${eventTitle}. 📸 Mit MySelfie von FTS.lu sind viele persönliche Eventmomente entstanden. Danke an ${organizer} für die Zusammenarbeit und an alle Gäste fürs Mitmachen. Hier zeigen wir einige Eindrücke aus den Selfies des Events.\n\n${tags}`;
-  return `Mein Selfie vom ${eventTitle} 📸 Danke an ${organizer} für das tolle Event – ein schöner Moment zum Mitnehmen.\n\n${tags}`;
+  if(mode==='organizer')return `${organizer} bedankt sich bei allen Gästen für die tollen Momente bei „${eventTitle}“. 📸 Es war großartig mit euch! Hier zeigen wir einige Eindrücke aus den Selfies des Events. Danke fürs Mitmachen und Teilen.\n\n${tags}`;
+  if(mode==='fts')return `Viele echte Eventmomente bei „${eventTitle}“. 📸 Mit MySelfie von FTS.lu sind persönliche Erinnerungen direkt vor Ort entstanden. Danke an ${organizer} für die Zusammenarbeit und an alle Gäste fürs Mitmachen. Hier zeigen wir einige ausgewählte Selfies vom Event.\n\n${tags}`;
+  return `Mein Selfie von „${eventTitle}“ 📸 Danke an ${organizer} für das tolle Event – ein schöner Moment zum Mitnehmen.\n\n${tags}`;
 }
 async function copyText(text){
   try{if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(text);return true}}catch{}
@@ -46,7 +46,7 @@ async function ensureMediaPipe(){
   mpLoader=(async()=>{
     await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js');
     if(!window.FaceDetection)throw new Error('Gesichtserkennung konnte nicht geladen werden.');
-    mpDetector=new FaceDetection({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`});
+    mpDetector=new window.FaceDetection({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`});
     mpDetector.setOptions({model:'short',minDetectionConfidence:0.55});
     mpDetector.onResults(results=>{const fn=mpResolve;mpResolve=null;if(fn)fn(results)});
     return mpDetector;
@@ -71,7 +71,7 @@ async function detectFaces(img){
   const w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;
   if('FaceDetector'in window){
     try{
-      const d=new FaceDetector({fastMode:true,maxDetectedFaces:20});
+      const d=new window.FaceDetector({fastMode:true,maxDetectedFaces:20});
       const rows=await d.detect(img);
       const boxes=rows.map(x=>normBox(x.boundingBox,w,h)).filter(Boolean);
       if(boxes.length)return boxes;
@@ -131,10 +131,11 @@ function saveBlob(blob,name){
   const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=filename(name);document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2500);
 }
 async function download(url,name,privacy=false){const blob=await blobFor(url,privacy);saveBlob(blob,name);return true}
+function canShareFiles(files){try{return !!navigator.share&&(!navigator.canShare||navigator.canShare({files}))}catch{return false}}
 async function shareOne({url,name='FTS-Selfie.jpg',text='',privacy=false}){
   const copied=await copyText(text);
   const blob=await blobFor(url,privacy),file=new File([blob],filename(name),{type:blob.type||'image/jpeg'});
-  if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
+  if(canShareFiles([file])){
     await navigator.share({files:[file],title:'MySelfie',text});
     return{shared:true,copied};
   }
@@ -146,7 +147,7 @@ async function shareMany({items,text='',title='MySelfie Event'}){
     const blob=await blobFor(item.url,!!item.privacy);
     files.push(new File([blob],filename(item.name||'FTS-Selfie.jpg'),{type:blob.type||'image/jpeg'}));
   }
-  if(navigator.share&&(!navigator.canShare||navigator.canShare({files}))){
+  if(canShareFiles(files)){
     await navigator.share({files,title,text});return{shared:true,copied,count:files.length};
   }
   return{shared:false,copied,count:files.length,unsupported:true};
