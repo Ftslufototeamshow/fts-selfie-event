@@ -39,10 +39,66 @@ function hashtags(data){
   const out=[hashtag(data?.eventTitle),hashtag(data?.organizer),'#MySelfie','#FTSlu'].filter(Boolean);
   return [...new Set(out)].join(' ');
 }
+function eventDayInfo(data={},lang='de'){
+  const raw=clean(data?.eventDay);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return null;
+  const d=new Date(raw+'T12:00:00');
+  if(Number.isNaN(d.getTime()))return null;
+  const locale=lang==='fr'?'fr-FR':lang==='en'?'en-GB':'de-DE';
+  const weekday=d.toLocaleDateString(locale,{weekday:'long'});
+  const date=d.toLocaleDateString(locale,{day:'2-digit',month:'2-digit',year:'numeric'});
+  const index=Math.max(0,Number(data?.eventDayIndex)||0);
+  return {raw,weekday,date,label:lang==='fr'?weekday+' '+date:weekday+', '+date,index};
+}
 function shareText(mode,data={},lang='de'){
   const eventTitle=clean(data.eventTitle)||'Event';
   const organizer=clean(data.organizer)||eventTitle;
   const tags=hashtags({eventTitle,organizer});
+  const day=eventDayInfo(data,lang);
+  const variant=day?day.index%3:0;
+
+  if(day&&lang==='fr'){
+    if(mode==='organizer'){
+      if(variant===1)return `${day.label} · Encore une belle journée à « ${eventTitle} ». 📸 Merci à toutes les personnes présentes ce ${day.weekday}. Voici les selfies de cette journée.\n\n${tags}`;
+      if(variant===2)return `${day.label} · Les selfies du ${day.weekday} à « ${eventTitle} ». 📸 ${organizer} vous remercie d’avoir participé. Voici les moments de cette journée.\n\n${tags}`;
+      return `${day.label} · Les moments selfie de « ${eventTitle} ». 📸 ${organizer} remercie toutes les personnes présentes ce jour-là. Voici quelques souvenirs du ${day.weekday}.\n\n${tags}`;
+    }
+    if(mode==='fts'){
+      if(variant===1)return `${day.label} · Deuxième série de moments MySelfie à « ${eventTitle} ». 📸 Merci à ${organizer} et à tous les participants de cette journée.\n\n${tags}`;
+      if(variant===2)return `${day.label} · Retour sur le ${day.weekday} à « ${eventTitle} ». 📸 MySelfie by FTS.lu a créé de nouveaux souvenirs avec les visiteurs de cette journée.\n\n${tags}`;
+      return `${day.label} · Souvenirs MySelfie de « ${eventTitle} ». 📸 Merci à ${organizer} et à toutes les personnes présentes ce ${day.weekday}.\n\n${tags}`;
+    }
+    return `${day.label} · Mon selfie de « ${eventTitle} ». 📸 Un souvenir du ${day.weekday} à partager.\n\n${tags}`;
+  }
+
+  if(day&&lang==='en'){
+    if(mode==='organizer'){
+      if(variant===1)return `${day.label} · Another great day at “${eventTitle}”. 📸 Thanks to everyone who joined us on ${day.weekday}. Here are the selfies from this day.\n\n${tags}`;
+      if(variant===2)return `${day.label} · Our ${day.weekday} selfies from “${eventTitle}”. 📸 ${organizer} says thank you for joining in. Here are the moments from this event day.\n\n${tags}`;
+      return `${day.label} · Selfie moments from “${eventTitle}”. 📸 ${organizer} thanks everyone who was there that day. Here are a few memories from ${day.weekday}.\n\n${tags}`;
+    }
+    if(mode==='fts'){
+      if(variant===1)return `${day.label} · Another set of MySelfie moments from “${eventTitle}”. 📸 Thanks to ${organizer} and everyone who took part that day.\n\n${tags}`;
+      if(variant===2)return `${day.label} · Looking back at ${day.weekday} at “${eventTitle}”. 📸 MySelfie by FTS.lu created more personal memories with the visitors of that day.\n\n${tags}`;
+      return `${day.label} · MySelfie memories from “${eventTitle}”. 📸 Thanks to ${organizer} and everyone who joined us on ${day.weekday}.\n\n${tags}`;
+    }
+    return `${day.label} · My selfie from “${eventTitle}”. 📸 A ${day.weekday} memory to share.\n\n${tags}`;
+  }
+
+  if(day){
+    if(mode==='organizer'){
+      if(variant===1)return `${day.label} · Ein weiterer schöner Event-Tag bei „${eventTitle}“. 📸 Danke an alle Gäste, die am ${day.weekday} mitgemacht haben. Hier kommen die Selfies dieses Tages.\n\n${tags}`;
+      if(variant===2)return `${day.label} · Unsere Selfies vom ${day.weekday} bei „${eventTitle}“. 📸 ${organizer} sagt Danke fürs Mitmachen – hier sind die Momente dieses Event-Tages.\n\n${tags}`;
+      return `${day.label} · Selfie-Momente bei „${eventTitle}“. 📸 ${organizer} bedankt sich bei allen, die an diesem Tag dabei waren. Hier sind einige Eindrücke vom ${day.weekday}.\n\n${tags}`;
+    }
+    if(mode==='fts'){
+      if(variant===1)return `${day.label} · Noch mehr MySelfie-Momente von „${eventTitle}“. 📸 Danke an ${organizer} und alle Gäste, die an diesem Event-Tag mitgemacht haben.\n\n${tags}`;
+      if(variant===2)return `${day.label} · Rückblick auf den ${day.weekday} bei „${eventTitle}“. 📸 MySelfie von FTS.lu hat auch an diesem Tag persönliche Erinnerungen mit den Gästen festgehalten.\n\n${tags}`;
+      return `${day.label} · MySelfie-Erinnerungen von „${eventTitle}“. 📸 Danke an ${organizer} und alle Gäste, die am ${day.weekday} dabei waren.\n\n${tags}`;
+    }
+    return `${day.label} · Mein Selfie von „${eventTitle}“. 📸 Eine schöne Erinnerung vom ${day.weekday} zum Teilen.\n\n${tags}`;
+  }
+
   if(lang==='fr'){
     if(mode==='organizer')return `${organizer} remercie tous les visiteurs pour ces beaux moments lors de ${eventTitle}. 📸 C’était un plaisir de les partager avec vous ! Voici quelques selfies de l’événement. Merci d’avoir participé.\n\n${tags}`;
     if(mode==='fts')return `De beaux moments lors de ${eventTitle}. 📸 Avec MySelfie by FTS.lu, de nombreux souvenirs personnels ont été créés. Merci à ${organizer} pour la collaboration et à tous les visiteurs pour leur participation. Voici quelques impressions de l’événement.\n\n${tags}`;
