@@ -41,6 +41,7 @@
 const cfg=window.FTS_CONFIG;
 const VAPID_PUBLIC_KEY='BA4ooYZBIcpChVCyvDWS-ovJF6I6VFJ5UVOrDdv0EoDHJ7hCUOQXxShbV9VJ-KPKAKVXdiYDaZ4bLOwidSUSgtA';
 const DEVICE_KEY='fts_device_token_v1',LEGACY_CODE_KEY='fts_cockpit_admin_code',STUDIO_KEY='fts_cockpit_studio_mode_v1',POLL_MS=8000;
+const directDownloadUrl=`${cfg.supabaseUrl}/functions/v1/fts-direct-download-v39`;
 const launchParams=new URLSearchParams(location.search);
 const launchEventToken=launchParams.get('event')||'';
 const launchPhotoId=launchParams.get('photo')||'';
@@ -418,7 +419,7 @@ function galleryThumbHtml(p,kind){
   const dlLabel=kind==='original'?'Original laden':'Design laden';
   const approved=p.legacy?true:(currentSocialApproved.get(String(p.photo_id))!==false);
   const social=kind==='design'&&currentGalleryView==='active'&&!p.is_test&&currentSocialStatus?.fts_can_post?(approved?`<details class="galleryPostTools"><summary>Posten / Datenschutz</summary><div class="galleryPostBody"><button class="galleryPostSelect" data-social-select="${esc(p.photo_id)}">Für Posting ✓</button><button class="galleryPrivacyBtn" data-social-privacy="${esc(p.photo_id)}">Hintergrundschutz groß prüfen</button><button class="galleryShareBtn" data-social-share="${esc(p.photo_id)}">Facebook / Instagram / TikTok / Story teilen</button></div></details>`:`<div class="galleryPostLocked">Vom Veranstalter nicht fürs Posting ausgewählt</div>`):'';
-  return `<article class="galleryThumb ${target?'pushTarget':''}" data-photo-id="${esc(p.photo_id)}"><img src="${esc(url)}" loading="lazy" alt="${kind==='original'?'Originalfoto':'Event-Design'}"><div class="galleryThumbMeta"><span>${esc(time)}</span>${p.is_test?'<span class="galleryTest">TEST</span>':''}</div><div class="galleryMiniActions"><button data-dl="${esc(path)}" data-legacy="${p.legacy?'1':'0'}">${dlLabel}</button>${manage}</div>${social}</article>`;
+  return `<article class="galleryThumb ${target?'pushTarget':''}" data-photo-id="${esc(p.photo_id)}"><img src="${esc(url)}" loading="lazy" alt="${kind==='original'?'Originalfoto':'Event-Design'}"><div class="galleryThumbMeta"><span>${esc(time)}</span>${p.is_test?'<span class="galleryTest">TEST</span>':''}</div><div class="galleryMiniActions"><button data-dl="${esc(path)}" data-kind="${kind}" data-legacy="${p.legacy?'1':'0'}">${dlLabel}</button>${manage}</div>${social}</article>`;
 }
 function renderPhotos(rows){
   const root=$('#photoGrid');
@@ -438,7 +439,7 @@ function renderPhotos(rows){
     const designs=dayRows.filter(p=>p.design_exists).map(p=>galleryThumbHtml(p,'design')).join('');
     return `<section class="galleryDay"><div class="galleryDayHead"><div class="galleryDayTitle">${esc(galleryDayLabel(day))}</div><div class="galleryDayCount">${dayRows.length} Foto${dayRows.length===1?'':'s'}</div></div>${currentGalleryView==='active'?`<details class="galleryDayDownloads"><summary>Download & Social Media für diesen Tag</summary><div class="galleryDayDownloadBody"><select data-day-zip-type="${esc(day)}"><option value="design">Event-Designs</option><option value="original">Originale</option><option value="both">Originale + Designs</option></select><button data-day-zip="${esc(day)}">Tag herunterladen</button>${day!=='__test__'&&currentSocialStatus?.fts_can_post?`<button class="galleryDaySocial" data-day-social="${esc(day)}">${esc(galleryDayLabel(day).split(' · ')[0])} auf Social Media teilen</button>`:''}</div></details>`:''}${originals?`<div class="galleryLane"><div class="galleryLaneHead"><div class="galleryLaneTitle">Originale · FTS intern</div><div class="gallerySwipeHint">← wischen →</div></div><div class="galleryStrip">${originals}</div></div>`:''}${designs?`<div class="galleryLane"><div class="galleryLaneHead"><div class="galleryLaneTitle">Fertige Event-Designs</div><div class="gallerySwipeHint">← wischen →</div></div><div class="galleryStrip">${designs}</div></div>`:''}</section>`
   }).join('');
-  root.querySelectorAll('[data-dl]').forEach(b=>b.onclick=()=>downloadPath(b.dataset.dl,b,b.dataset.legacy==='1'));
+  root.querySelectorAll('[data-dl]').forEach(b=>b.onclick=()=>{const card=b.closest('.galleryThumb');downloadPath(b.dataset.dl,b,b.dataset.legacy==='1',card?.dataset.photoId||'',b.dataset.kind||'design')});
   root.querySelectorAll('[data-trash]').forEach(b=>b.onclick=()=>trashPhoto(b.dataset.trash));
   root.querySelectorAll('[data-restore]').forEach(b=>b.onclick=()=>restorePhoto(b.dataset.restore));
   root.querySelectorAll('[data-day-zip]').forEach(b=>b.onclick=()=>{
@@ -459,8 +460,25 @@ function renderPhotos(rows){
   }
 }
 
-async function downloadPath(path,button,legacy=false){const old=button.textContent;button.disabled=true;try{if(legacy){const a=document.createElement('a');a.href=path;a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove();return}const name=path.split('/').pop()||'foto.jpg';const j=await adminFiles('signed-photo-url',{path,filename:name});if(!j?.url)throw new Error('Download-Link konnte nicht erstellt werden');const a=document.createElement('a');a.href=j.url;a.target='_blank';a.rel='noopener';a.download=name;document.body.appendChild(a);a.click();a.remove()}catch(e){alert('Download fehlgeschlagen: '+e.message)}finally{button.disabled=false;button.textContent=old}}
-
+function submitAdminDirectDownload(fields,button,label='Download wird gestartet …'){
+  const old=button?.textContent||'Herunterladen';
+  if(button){button.disabled=true;button.textContent=label}
+  const form=document.createElement('form');form.method='POST';form.action=directDownloadUrl;form.style.display='none';
+  const payload={mode:'admin',credential:credential(),...fields};
+  for(const [name,value] of Object.entries(payload)){const input=document.createElement('input');input.type='hidden';input.name=name;input.value=String(value??'');form.appendChild(input)}
+  document.body.appendChild(form);form.submit();setTimeout(()=>{form.remove();if(button){button.disabled=false;button.textContent=old}},1400);
+}
+async function downloadPath(path,button,legacy=false,photoId='',kind='design'){
+  if(legacy){
+    const old=button.textContent;button.disabled=true;
+    try{const a=document.createElement('a');a.href=path;a.target='_blank';a.rel='noopener';a.download=zipFilename(path);document.body.appendChild(a);a.click();a.remove()}
+    finally{button.disabled=false;button.textContent=old}
+    return;
+  }
+  if(!photoId)return alert('Foto-ID fehlt.');
+  submitAdminDirectDownload({action:'file',event_token:currentGalleryEvent,photo_id:photoId,file_kind:kind},button,'Datei wird geladen …');
+  showToast('Download wurde gestartet.');
+}
 function zipSlug(s){return String(s||'event').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'event'}
 function zipFilename(path,fallback='foto.jpg'){const n=String(path||'').split('/').pop();return n||fallback}
 async function fetchZipBlob(url){const r=await fetch(url,{mode:'cors'});if(!r.ok)throw new Error('Datei konnte nicht geladen werden ('+r.status+')');return r.blob()}
@@ -516,8 +534,10 @@ async function downloadDayZip(day,type,button){
   const ev=events.find(x=>String(x.event_token)===String(currentGalleryEvent)),root=zipSlug(ev?.title||'event');
   const rows=currentGalleryRows.filter(p=>galleryRowDayKey(p,ev)===day);
   const label=type==='original'?'originale':type==='design'?'event-designs':'originale-und-designs';
-  const dayLabel=day==='__test__'?'TEST':day;
-  await createGalleryZip(rows,type,'FTS-'+root+'-'+dayLabel+'-'+label+'.zip',button);
+  const dayLabel=day==='__test__'?'TEST':day,filename='FTS-'+root+'-'+dayLabel+'-'+label+'.zip';
+  if(rows.some(p=>p.legacy))return createGalleryZip(rows,type,filename,button);
+  submitAdminDirectDownload({action:'zip',event_token:currentGalleryEvent,day,type,title:ev?.title||'event',filename},button,'ZIP wird geladen …');
+  $('#zipStatus').textContent='✓ ZIP-Download wurde gestartet.';
 }
 
 async function trashPhoto(id){if(!confirm('Foto in den Papierkorb verschieben? Es verschwindet sofort aus dem Kundenportal.'))return;await rpc('fts_admin_trash_photo',{p_admin_code:credential(),p_photo_id:id});await loadGallery('active');await loadEvents(false)}async function restorePhoto(id){await rpc('fts_admin_restore_photo',{p_admin_code:credential(),p_photo_id:id});await loadGallery('trash');await loadEvents(false)}
