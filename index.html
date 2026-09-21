@@ -1034,6 +1034,8 @@ function bindPrintControls(rows){
     if(qty)qty.onchange=()=>{const x=printSelection.get(i);x.quantity=Math.max(1,Math.min(20,Number(qty.value)||1));qty.value=String(x.quantity);updatePrintSummary()};
   });
   if(!printConfig?.configured){printStatus(ptr('notConfigured'),'warn');return}
+  const paypalButton=document.getElementById('paypalPrintButton');
+  if(paypalPrintReady&&!paypalButton?.dataset?.bound){paypalPrintReady=false;paypalPrintSession=null}
   printStatus('');ensurePayPalPrint();
 }
 async function showMySelfies(){
