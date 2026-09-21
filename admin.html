@@ -149,6 +149,12 @@
             <div class="hint">Beispiel: 2 = du kannst zwei Tage vor dem ersten Event-Tag echte Uploads testen. Testfotos landen getrennt im TEST-Ordner.</div>
           </div>
           <div class="full">
+            <label class="langSetting" style="align-items:center">
+              <input id="lumorexEnabled" type="checkbox" checked>
+              <span><b>LUMOREX / VIMA Show freigeben</b><span class="hint" style="display:block;margin-top:4px">AN = dieses Event darf in der Live-Show-Software über den vorhandenen Read-only-Fotofeed angezeigt werden. AUS = der Feed dieses Events wird gesperrt. Kann jederzeit über „Bearbeiten“ geändert werden.</span></span>
+            </label>
+          </div>
+          <div class="full">
             <label>Selfie-/Galerie-Links nach dem Event (optional)</label>
             <input id="galleryUrl" type="hidden">
             <div class="galleryLinkManager" id="galleryLinkManager"></div>
@@ -1086,6 +1092,13 @@ async function persistEventAssets(eventToken,storageSlug,customerToken){
   return {persisted,flyerPath,qrLogoPath};
 }
 
+async function persistLumorexSetting(eventToken){
+  await rpc('fts_admin_set_lumorex_enabled_v2',{
+    p_admin_code:authCredential(),
+    p_event_token:eventToken,
+    p_enabled:$('#lumorexEnabled').checked===true
+  });
+}
 async function persistEventLifecycle(eventToken){
   const lc=lifecycleDataFromForm();
   await rpc('fts_admin_set_event_lifecycle_v41',{
@@ -1144,12 +1157,14 @@ $('#createEvent').onclick=async()=>{
       await persistEventAds(eventToken,storageSlug);
       await persistEventExtras(eventToken);
       await persistEventLifecycle(eventToken);
+      await persistLumorexSetting(eventToken);
     }else{
       const args=eventArgs(true);const d=await rpc('fts_admin_create_event_v9',args),r=d[0];eventToken=r.event_token;storageSlug=r.storage_slug;alias=r.short_code;expires=r.expires_at;
       await persistEventAssets(eventToken,storageSlug,args.p_customer_token);
       await persistEventAds(eventToken,storageSlug);
       await persistEventExtras(eventToken);
       await persistEventLifecycle(eventToken);
+      await persistLumorexSetting(eventToken);
     }
 
     const guest=cfg.baseUrl+'?e='+encodeURIComponent(alias);const poster=cfg.baseUrl+'poster.html?e='+encodeURIComponent(alias);const customer=cfg.baseUrl+'customer.html?c='+encodeURIComponent($('#customerToken').value.trim());
@@ -1174,8 +1189,9 @@ async function loadModeEvent(token,duplicate=false){
   let e=await rpc('fts_admin_get_event_v9',{p_admin_code:authCredential(),p_event_token:token});if(!e)throw new Error('Event nicht gefunden.');
   try{const ex=await rpc('fts_admin_get_event_extras_v10',{p_admin_code:authCredential(),p_event_token:token});if(ex?.[0])e={...e,...ex[0]}}catch(err){console.warn('Event-Zusatzdaten',err)}
   try{let lcRows;try{lcRows=await rpc('fts_admin_get_event_lifecycle_v41',{p_admin_code:authCredential(),p_event_token:token})}catch(_e){lcRows=await rpc('fts_admin_get_event_lifecycle_v11',{p_admin_code:authCredential(),p_event_token:token})}if(lcRows?.[0])e.lifecycle_v11=lcRows[0]}catch(err){console.warn('Event-Lifecycle',err)}
+  try{const lr=await rpc('fts_admin_get_lumorex_status_v2',{p_admin_code:authCredential(),p_event_token:token});const ls=Array.isArray(lr)?lr[0]:lr;if(ls)e.lumorex_enabled=ls.enabled!==false}catch(err){console.warn('LUMOREX / VIMA Show',err)}
   saveCustomer(e.customer_name,e.customer_token);$('#title').value=e.title||'';$('#subtitle').value=e.subtitle||'';$('#location').value=e.location||'';$('#overlay').value=e.overlay_text||'';
-  $('#shortCode').value=duplicate?slug(((e.short_code||slug(e.title))+'-2')).slice(0,30):(e.short_code||'');$('#shortCode').disabled=!duplicate;$('#shortCode').dataset.manual='1';$('#days').value=e.retention_days||3;$('#testDays').value=e.test_days_before??2;
+  $('#shortCode').value=duplicate?slug(((e.short_code||slug(e.title))+'-2')).slice(0,30):(e.short_code||'');$('#shortCode').disabled=!duplicate;$('#shortCode').dataset.manual='1';$('#days').value=e.retention_days||3;$('#testDays').value=e.test_days_before??2;$('#lumorexEnabled').checked=e.lumorex_enabled!==false;
   const rawTags=parseArr(e.event_tags),tagLc=lifecycleFromTags(rawTags),dbLc=e.lifecycle_v11||null;
   const lc=dbLc?{schedule:parseArr(dbLc.schedule),galleryUrl:dbLc.gallery_url||'',galleryLinks:parseArr(dbLc.gallery_links),galleryAvailableAt:dbLc.gallery_available_at||'',linkExpiresAt:dbLc.link_expires_at||''}:tagLc;
   clearDays();
