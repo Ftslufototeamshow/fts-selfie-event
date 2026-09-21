@@ -162,8 +162,10 @@ async function clearPhotoNotifications(eventToken=''){
   try{
     const notes=await self.registration.getNotifications();
     for(const n of notes){
-      const isPhoto=String(n.tag||'').startsWith('fts-photo-')||String(n.tag||'').startsWith('fts-event-');
-      const sameEvent=!eventToken||String(n.data?.event_token||'')===String(eventToken)||String(n.tag||'')==='fts-event-'+eventToken;
+      const tag=String(n.tag||''),noteEvent=String(n.data?.event_token||'');
+      const isLegacyPhoto=tag.startsWith('fts-photo-')&&!noteEvent;
+      const isPhoto=isLegacyPhoto||tag.startsWith('fts-event-')||tag.startsWith('fts-photo-');
+      const sameEvent=!eventToken||isLegacyPhoto||noteEvent===String(eventToken)||tag==='fts-event-'+eventToken;
       if(isPhoto&&sameEvent)n.close();
     }
   }catch{}
