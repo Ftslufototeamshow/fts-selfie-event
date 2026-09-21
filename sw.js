@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v36-social-privacy-20260921';
+const CACHE='fts-selfie-v37-album-share-20260921';
 const CORE=['./','./index.html','./config.js','./social-share.js','./manifest.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
