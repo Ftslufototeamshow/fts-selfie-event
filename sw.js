@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v44-visible-day-social-text-20260921';
+const CACHE='fts-selfie-v45-paypal-sandbox-print-20260922';
 const CORE=['./','./index.html','./config.js','./social-share.js','./manifest.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
