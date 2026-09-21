@@ -154,3 +154,18 @@ grant execute on function public.fts_get_event_social_copy_v36(text) to anon, au
 grant execute on function public.fts_get_customer_designs_v36(text) to anon, authenticated;
 grant execute on function public.fts_customer_set_social_photo_v36(text,uuid,boolean) to anon, authenticated;
 grant execute on function public.fts_admin_social_photo_status_v36(text,text) to anon, authenticated;
+
+
+drop policy if exists fts_social_permissions_no_direct on public.fts_event_social_permissions_v36;
+create policy fts_social_permissions_no_direct
+on public.fts_event_social_permissions_v36
+for all to anon, authenticated
+using (false)
+with check (false);
+
+drop policy if exists fts_social_photos_no_direct on public.fts_event_social_photos_v36;
+create policy fts_social_photos_no_direct
+on public.fts_event_social_photos_v36
+for all to anon, authenticated
+using (false)
+with check (false);
