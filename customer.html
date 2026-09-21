@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>FTS Kunden-Galerie</title>
 <style>
-:root{font-family:Inter,system-ui,sans-serif;background:#071315;color:#f5f1e8;--accent:#d9b56d}*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#071113,#102426);min-height:100vh}.wrap{width:min(1180px,calc(100% - 24px));margin:auto;padding:26px 0 50px}.brand{font-size:.72rem;letter-spacing:.2em;color:var(--accent);font-weight:900}h1{font-size:clamp(2rem,6vw,3.7rem);margin:8px 0 10px}.intro{color:#91a5a1;margin-bottom:16px}.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 24px}.btn,.downloadBtn{border:0;background:var(--accent);color:#102020;text-decoration:none;font-weight:900;padding:10px 12px;border-radius:10px;font-size:.82rem;cursor:pointer}.btn.secondary,.downloadBtn.secondary{background:#15383a;color:#f5f1e8;border:1px solid rgba(255,255,255,.09)}.btn:disabled,.downloadBtn:disabled{opacity:.5;cursor:wait}.event{background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:16px;margin-bottom:20px}.eventHead{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:end;margin-bottom:13px}.eventTitle{font-size:1.55rem;font-weight:900}.meta{color:#95a8a4;font-size:.84rem}.expires{color:var(--accent);font-size:.78rem;font-weight:800}.eventActions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.dayFolder{margin-top:14px;padding:13px;border-radius:18px;background:#081d1f;border:1px solid rgba(255,255,255,.08)}.dayHead{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.dayTitle{font-weight:950;color:#f3efe7;font-size:1.05rem}.dayCount{font-size:.74rem;color:#8da09c;font-weight:800}.dayActions{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 9px}.dayActions .downloadBtn{background:var(--accent);color:#102020}.swipeHint{font-size:.7rem;color:#819390;margin-bottom:7px}.photos{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;overscroll-behavior-inline:contain;-webkit-overflow-scrolling:touch;padding:2px 2px 10px;scrollbar-width:thin}.card{flex:0 0 clamp(160px,43vw,220px);scroll-snap-align:start;background:#0b1e20;border:1px solid rgba(255,255,255,.07);border-radius:15px;padding:8px}.label{font-size:.68rem;color:var(--accent);font-weight:900;margin:2px 2px 6px}.card img{width:100%;aspect-ratio:4/5;object-fit:contain;border-radius:10px;background:#061012;display:block}.links{display:grid;gap:6px;margin-top:8px}.links .btn,.links .downloadBtn{width:100%;text-align:center;font-size:.7rem;padding:8px 7px}.empty{color:#819390;padding:14px 4px}.status{display:none;margin:0 0 18px;padding:11px 13px;border-radius:11px;background:#0a2426;color:#cbd7d5}.status.show{display:block}@media(max-width:480px){.toolbar .btn{width:100%}.eventActions .downloadBtn{width:100%}.dayActions{display:grid;grid-template-columns:1fr}.dayActions .downloadBtn{width:100%}.card{flex-basis:44vw;min-width:145px}}
+:root{font-family:Inter,system-ui,sans-serif;background:#071315;color:#f5f1e8;--accent:#d9b56d}*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#071113,#102426);min-height:100vh}.wrap{width:min(1180px,calc(100% - 24px));margin:auto;padding:26px 0 50px}.brand{font-size:.72rem;letter-spacing:.2em;color:var(--accent);font-weight:900}h1{font-size:clamp(2rem,6vw,3.7rem);margin:8px 0 10px}.intro{color:#91a5a1;margin-bottom:16px}.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 24px}.btn,.downloadBtn{border:0;background:var(--accent);color:#102020;text-decoration:none;font-weight:900;padding:10px 12px;border-radius:10px;font-size:.82rem;cursor:pointer}.btn.secondary,.downloadBtn.secondary{background:#15383a;color:#f5f1e8;border:1px solid rgba(255,255,255,.09)}.btn:disabled,.downloadBtn:disabled{opacity:.5;cursor:wait}.event{background:#071719;border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:16px;margin-bottom:20px}.eventHead{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:end;margin-bottom:13px}.eventTitle{font-size:1.55rem;font-weight:900}.meta{color:#95a8a4;font-size:.84rem}.expires{color:var(--accent);font-size:.78rem;font-weight:800}.eventActions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.dayFolder{margin-top:14px;padding:13px;border-radius:18px;background:#081d1f;border:1px solid rgba(255,255,255,.08)}.dayHead{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.dayTitle{font-weight:950;color:#f3efe7;font-size:1.05rem}.dayCount{font-size:.74rem;color:#8da09c;font-weight:800}.dayActions{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 9px}.dayActions .downloadBtn{background:var(--accent);color:#102020}.swipeHint{font-size:.7rem;color:#819390;margin-bottom:7px}.photos{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;overscroll-behavior-inline:contain;-webkit-overflow-scrolling:touch;padding:2px 2px 10px;scrollbar-width:thin}.card{flex:0 0 clamp(160px,43vw,220px);scroll-snap-align:start;background:#0b1e20;border:1px solid rgba(255,255,255,.07);border-radius:15px;padding:8px}.label{font-size:.68rem;color:var(--accent);font-weight:900;margin:2px 2px 6px}.card img{width:100%;aspect-ratio:4/5;object-fit:contain;border-radius:10px;background:#061012;display:block}.links{display:grid;gap:6px;margin-top:8px}.links .btn,.links .downloadBtn{width:100%;text-align:center;font-size:.7rem;padding:8px 7px}.empty{color:#819390;padding:14px 4px}.status{display:none;margin:0 0 18px;padding:11px 13px;border-radius:11px;background:#0a2426;color:#cbd7d5}.status.show{display:block}.eventAds{margin-top:16px;padding:13px;border-radius:18px;background:linear-gradient(145deg,#081d1f,#0b2628);border:1px solid rgba(217,181,109,.22);overflow:hidden}.eventAdsHead{display:flex;align-items:end;justify-content:space-between;gap:10px;margin-bottom:9px}.eventAdsTitle{font-weight:950;color:var(--accent);font-size:1rem}.eventAdsMeta{font-size:.68rem;color:#849793;text-align:right}.eventAdLink{display:block;text-decoration:none;border-radius:13px;overflow:hidden;background:#02090a;border:1px solid rgba(255,255,255,.07)}.eventAdLink.noLink{cursor:default}.eventAdImage{display:block;width:100%;aspect-ratio:4/1;object-fit:cover;background:#02090a}.eventAdFoot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}.eventAdName{font-size:.76rem;font-weight:900;color:#dce4e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.eventAdCounter{font-size:.67rem;color:#879995;white-space:nowrap}@media(max-width:480px){.toolbar .btn{width:100%}.eventActions .downloadBtn{width:100%}.dayActions{display:grid;grid-template-columns:1fr}.dayActions .downloadBtn{width:100%}.card{flex-basis:44vw;min-width:145px}}
 </style>
 </head>
 <body>
@@ -23,6 +23,47 @@
 const cfg=window.FTS_CONFIG,client=supabase.createClient(cfg.supabaseUrl,cfg.publishableKey),customerToken=new URLSearchParams(location.search).get('c');
 const liveBase=`${cfg.supabaseUrl}/storage/v1/object/public/${cfg.liveBucket}/`;
 const $=s=>document.querySelector(s);$('#refreshBtn').onclick=()=>location.reload();
+const customerAdTimers=new Map();
+function luxToday(){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Luxembourg',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  const get=t=>parts.find(x=>x.type===t)?.value||'00';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+function safeHttpUrl(v){try{const u=new URL(String(v||''));return ['http:','https:'].includes(u.protocol)?u.href:''}catch{return''}}
+function activeAdItems(row){
+  if(!row?.ads_enabled)return[];
+  let items=row.ad_items;if(!Array.isArray(items)){try{items=JSON.parse(items||'[]')}catch{items=[]}}
+  const today=luxToday();
+  return items.filter(x=>{
+    if(!x?.path||x.active===false)return false;
+    const start=String(x.start_date||''),end=String(x.end_date||'');
+    return (!start||today>=start)&&(!end||today<=end);
+  });
+}
+function customerAdUrl(path){return liveBase+enc(path)}
+async function attachEventAds(ev,section){
+  try{
+    const {data,error}=await client.rpc('fts_get_event_ads_v2',{p_event_token:ev.event_token});
+    if(error)throw error;
+    const row=Array.isArray(data)?data[0]:data,items=activeAdItems(row);
+    if(!items.length)return;
+    const box=document.createElement('section');box.className='eventAds';
+    box.innerHTML=`<div class="eventAdsHead"><div class="eventAdsTitle">Werbung im Event</div><div class="eventAdsMeta">Live-Anzeige · Wechsel alle 3 Sek.</div></div><a class="eventAdLink" rel="noopener noreferrer"><img class="eventAdImage" alt="Werbung"></a><div class="eventAdFoot"><div class="eventAdName"></div><div class="eventAdCounter"></div></div>`;
+    section.appendChild(box);
+    const link=box.querySelector('.eventAdLink'),img=box.querySelector('.eventAdImage'),name=box.querySelector('.eventAdName'),counter=box.querySelector('.eventAdCounter');
+    let index=0;
+    const show=()=>{
+      const item=items[index%items.length],href=safeHttpUrl(item.link);
+      img.src=customerAdUrl(item.path);img.alt=item.name||'Werbung';name.textContent=item.name||'Werbung';counter.textContent=(index%items.length+1)+' / '+items.length;
+      if(href){link.href=href;link.target='_blank';link.classList.remove('noLink')}else{link.removeAttribute('href');link.removeAttribute('target');link.classList.add('noLink')}
+    };
+    show();
+    if(items.length>1){
+      const old=customerAdTimers.get(ev.event_token);if(old)clearInterval(old);
+      customerAdTimers.set(ev.event_token,setInterval(()=>{index=(index+1)%items.length;show()},3000));
+    }
+  }catch(e){console.warn('Kundenportal Werbung',e)}
+}
 function setStatus(text){const s=$('#status');s.textContent=text;s.classList.toggle('show',!!text)}
 function eventDaysOf(ev){let d=ev.event_days;if(!Array.isArray(d)){try{d=JSON.parse(d||'[]')}catch{d=[]}}if(!d.length)d=[ev.event_date];return [...new Set(d.filter(Boolean))].sort()}
 function enc(p){return String(p||'').split('/').map(encodeURIComponent).join('/')}function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}function fmt(d){return d?new Date(d+'T12:00:00').toLocaleDateString('de-DE'):''}function fmtDT(d){return d?new Date(d).toLocaleDateString('de-DE'):''}function weekday(d){return new Date(d+'T12:00:00').toLocaleDateString('de-DE',{weekday:'long'})}function slug(s){return String(s||'event').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}function fileExt(p){const m=String(p||'').match(/(\.[a-z0-9]{2,5})$/i);return m?m[1].toLowerCase():'.jpg'}function fileStem(p){const n=String(p||'').split('/').pop()||'foto';return n.replace(/\.[^.]+$/,'')}
@@ -35,6 +76,7 @@ async function boot(){if(!customerToken){$('#events').innerHTML='<div class="emp
       dayCount.textContent=count+' Foto'+(count===1?'':'s');
       if(!count)grid.innerHTML='<div class="empty">Noch keine fertigen Event-Designs an diesem Tag.</div>';else{dayZip.disabled=dayItems.length===0;dayZip.onclick=()=>downloadZip(dayItems,`FTS-${slug(ev.title)}-${day}-event-designs.zip`,dayZip)}
     }
+    await attachEventAds(ev,section);
   }
 }
 function addDesignCard(grid,url,zipPath){const el=document.createElement('article');el.className='card';el.innerHTML=`<div class="label">Event-Design</div><img src="${url}" loading="lazy"><div class="links"><button class="downloadBtn">Event-Design herunterladen</button><a class="btn secondary" href="${url}" target="_blank" rel="noopener">Design öffnen</a></div>`;const img=el.querySelector('img');img.addEventListener('error',()=>{el.remove();if(!grid.querySelector('.card'))grid.innerHTML='<div class="empty">Keine verfügbaren Designs.</div>'});el.querySelector('button').onclick=()=>downloadOne(url,zipPath.split('/').pop(),el.querySelector('button'));grid.appendChild(el)}
