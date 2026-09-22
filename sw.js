@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v54-print-freeze-fix-20260922';
+const CACHE='fts-selfie-v55-print-event-window-20260922';
 const CORE=['./','./index.html','./dashboard.html','./print.html','./config.js','./print-billing-v47.js','./print-billing-v47-fix.js','./print-billing-guest-v54.js','./gallery-links-v48.js','./guest-runtime-v52.js','./dashboard-stats-v49.js','./dashboard-stats-v52.js','./social-share.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
