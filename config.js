@@ -5,7 +5,7 @@ self.FTS_CONFIG = {
   legacyBucket: "fts-selfie-uploads",
   baseUrl: "https://ftslufototeamshow.github.io/fts-selfie-event/",
   defaultEventToken: "e_cE5HKlFIJGTFA-78tjIPtrPL",
-  cacheVersion: "fts-selfie-v47-print-billing"
+  cacheVersion: "fts-selfie-v48-gallery-links"
 };
 
 function ftsApplyPrintBillingV47Polish(page) {
@@ -65,21 +65,31 @@ if (typeof window !== "undefined") {
   window.addEventListener("load", () => {
     const page = (location.pathname.split("/").pop() || "index.html").toLowerCase();
     if (!["index.html", "admin.html", "print.html", ""].includes(page)) return;
-    if (document.querySelector('script[data-fts-print-billing-v47]')) return;
-    const script = document.createElement("script");
-    script.src = "./print-billing-v47.js?v=47";
-    script.async = true;
-    script.dataset.ftsPrintBillingV47 = "1";
-    script.onload = () => {
-      if (page === "print.html" && !document.querySelector('script[data-fts-print-billing-v47-fix]')) {
-        const fix = document.createElement("script");
-        fix.src = "./print-billing-v47-fix.js?v=47";
-        fix.async = true;
-        fix.dataset.ftsPrintBillingV47Fix = "1";
-        document.head.appendChild(fix);
-      }
-      ftsApplyPrintBillingV47Polish(page);
-    };
-    document.head.appendChild(script);
+
+    if (!document.querySelector('script[data-fts-print-billing-v47]')) {
+      const script = document.createElement("script");
+      script.src = "./print-billing-v47.js?v=47";
+      script.async = true;
+      script.dataset.ftsPrintBillingV47 = "1";
+      script.onload = () => {
+        if (page === "print.html" && !document.querySelector('script[data-fts-print-billing-v47-fix]')) {
+          const fix = document.createElement("script");
+          fix.src = "./print-billing-v47-fix.js?v=47";
+          fix.async = true;
+          fix.dataset.ftsPrintBillingV47Fix = "1";
+          document.head.appendChild(fix);
+        }
+        ftsApplyPrintBillingV47Polish(page);
+      };
+      document.head.appendChild(script);
+    }
+
+    if (["index.html", "admin.html", ""].includes(page) && !document.querySelector('script[data-fts-gallery-links-v48]')) {
+      const gallery = document.createElement("script");
+      gallery.src = "./gallery-links-v48.js?v=48";
+      gallery.async = true;
+      gallery.dataset.ftsGalleryLinksV48 = "1";
+      document.head.appendChild(gallery);
+    }
   });
 }
