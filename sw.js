@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v49b-final-20260922';
+const CACHE='fts-selfie-v49c-loader-fix-20260922';
 const CORE=['./','./index.html','./dashboard.html','./print.html','./config.js','./print-billing-v47.js','./print-billing-v47-fix.js','./gallery-links-v48.js','./guest-final-v49b.js','./dashboard-stats-v49.js','./social-share.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
