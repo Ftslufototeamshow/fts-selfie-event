@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v49c-loader-fix-20260922';
+const CACHE='fts-selfie-v49d-runtime-network-first-20260922';
 const CORE=['./','./index.html','./dashboard.html','./print.html','./config.js','./print-billing-v47.js','./print-billing-v47-fix.js','./gallery-links-v48.js','./guest-final-v49b.js','./dashboard-stats-v49.js','./social-share.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
@@ -23,6 +23,13 @@ self.addEventListener('fetch',event=>{
     event.respondWith((async()=>{
       try{const fresh=await fetch(req);const cache=await caches.open(CACHE);cache.put(req,fresh.clone()).catch(()=>{});return fresh}
       catch{return (await caches.match(req)) || (await caches.match('./index.html')) || (await caches.match('./offline.html'))}
+    })());return;
+  }
+  const runtimeFile=u.origin===self.location.origin && (u.pathname.endsWith('.js') || u.pathname.endsWith('.json') || u.pathname.endsWith('.webmanifest'));
+  if(runtimeFile){
+    event.respondWith((async()=>{
+      try{const fresh=await fetch(req,{cache:'no-store'});if(fresh.ok){const cache=await caches.open(CACHE);cache.put(req,fresh.clone()).catch(()=>{});}return fresh}
+      catch{return (await caches.match(req)) || Response.error()}
     })());return;
   }
   event.respondWith((async()=>{
