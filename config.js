@@ -5,7 +5,7 @@ self.FTS_CONFIG = {
   legacyBucket: "fts-selfie-uploads",
   baseUrl: "https://ftslufototeamshow.github.io/fts-selfie-event/",
   defaultEventToken: "KUERBIS26",
-  cacheVersion: "fts-selfie-v49c-loader-fix"
+  cacheVersion: "fts-selfie-v50-loader-rescue"
 };
 
 function ftsApplyPrintBillingV47Polish(page) {
@@ -50,7 +50,92 @@ function ftsLoadScriptOnce(src, marker, onload) {
   const s = document.createElement("script");s.src = src;s.async = true;s.setAttribute(marker, "1");if (onload) s.onload = onload;document.head.appendChild(s);
 }
 
+function ftsGuestEventTokenV50() {
+  try { return new URLSearchParams(location.search).get("e") || self.FTS_CONFIG.defaultEventToken; }
+  catch { return self.FTS_CONFIG.defaultEventToken; }
+}
+
+function ftsLoaderSessionV50() {
+  try {
+    const k="fts_loader_session_v50";let v=sessionStorage.getItem(k);
+    if(!v){v=(crypto.randomUUID?crypto.randomUUID():"loader_"+Date.now().toString(36));sessionStorage.setItem(k,v)}
+    return v;
+  } catch { return "loader"; }
+}
+
+function ftsReportLoaderV50(message, details={}, severity="warning") {
+  if (typeof window === "undefined" || !navigator.onLine) return;
+  try {
+    fetch(`${self.FTS_CONFIG.supabaseUrl}/functions/v1/fts-client-issue`, {
+      method:"POST",keepalive:true,
+      headers:{"apikey":self.FTS_CONFIG.publishableKey,"Content-Type":"application/json"},
+      body:JSON.stringify({
+        event_token:ftsGuestEventTokenV50(),issue_type:"guest_loader",severity,
+        message:String(message||"Gastseite Ladeproblem").slice(0,500),details,
+        issue_key:"guest-loader-v50",resolved:false,session_id:ftsLoaderSessionV50()
+      })
+    }).catch(()=>{});
+  } catch {}
+}
+
+async function ftsClearGuestRuntimeCacheV50() {
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs=await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.filter(r=>String(r.scope||"").includes("/fts-selfie-event/")).map(r=>r.unregister().catch(()=>false)));
+    }
+  } catch {}
+  try {
+    if ("caches" in window) {
+      const keys=await caches.keys();
+      await Promise.all(keys.filter(k=>String(k).startsWith("fts-selfie-")).map(k=>caches.delete(k).catch(()=>false)));
+    }
+  } catch {}
+}
+
+function ftsInstallGuestLoaderRescueV50() {
+  const page=(location.pathname.split("/").pop()||"index.html").toLowerCase();
+  if (!["index.html",""] .includes(page)) return;
+
+  window.addEventListener("error",e=>{
+    ftsReportLoaderV50("JavaScript-Fehler auf der Gastseite",{message:String(e?.message||""),file:String(e?.filename||""),line:Number(e?.lineno||0)},"error");
+  });
+  window.addEventListener("unhandledrejection",e=>{
+    ftsReportLoaderV50("Unbehandelter Fehler auf der Gastseite",{reason:String(e?.reason?.message||e?.reason||"").slice(0,500)},"error");
+  });
+
+  setTimeout(async()=>{
+    const card=document.getElementById("card");
+    const stillLoading=!!card && /Event wird geladen/i.test(card.textContent||"");
+    if(!stillLoading)return;
+    const u=new URL(location.href);
+    const rescued=u.searchParams.get("fts_rescue")==="1";
+    ftsReportLoaderV50(rescued?"Gastseite hängt auch nach Cache-Neustart":"Gastseite hing im alten Laufzeit-Cache",{href:location.pathname+location.search,rescued},rescued?"error":"warning");
+    if(rescued)return;
+    await ftsClearGuestRuntimeCacheV50();
+    if(!u.searchParams.get("e"))u.searchParams.set("e",self.FTS_CONFIG.defaultEventToken);
+    u.searchParams.set("fts_rescue","1");
+    u.searchParams.set("v",String(Date.now()));
+    location.replace(u.toString());
+  },6500);
+
+  window.addEventListener("load",()=>{
+    setTimeout(()=>{
+      const card=document.getElementById("card");
+      if(card && !/Event wird geladen/i.test(card.textContent||"")){
+        try{
+          const u=new URL(location.href);
+          if(u.searchParams.has("fts_rescue")||u.searchParams.has("v")){
+            u.searchParams.delete("fts_rescue");u.searchParams.delete("v");history.replaceState(null,"",u.toString());
+          }
+        }catch{}
+      }
+    },1500);
+  });
+}
+
 if (typeof window !== "undefined") {
+  ftsInstallGuestLoaderRescueV50();
   window.addEventListener("load", () => {
     const page = (location.pathname.split("/").pop() || "index.html").toLowerCase();
     if (!["index.html", "admin.html", "print.html", "dashboard.html", ""].includes(page)) return;
