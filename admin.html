@@ -154,16 +154,14 @@
               <span><b>LUMOREX / VIMA Show freigeben</b><span class="hint" style="display:block;margin-top:4px">AN = dieses Event darf in der Live-Show-Software über den vorhandenen Read-only-Fotofeed angezeigt werden. AUS = der Feed dieses Events wird gesperrt. Kann jederzeit über „Bearbeiten“ geändert werden.</span></span>
             </label>
           </div>
-          <div class="full" style="padding:12px;border:1px solid rgba(217,181,109,.25);border-radius:14px;background:#081d1f">
+          <div class="full" style="padding:13px;border:1px solid rgba(217,181,109,.25);border-radius:14px;background:#081d1f">
             <label class="langSetting" style="align-items:center">
               <input id="printEnabled" type="checkbox">
-              <span><b>Fotodruck vor Ort · PayPal Sandbox</b><span class="hint" style="display:block;margin-top:4px">AN = Besucher können ihre eigenen fertigen Selfies für 2,00 € pro Ausdruck auswählen und im PayPal-Sandbox-Checkout testen. Ohne serverseitig bestätigtes COMPLETED wird kein Druckauftrag freigegeben.</span></span>
+              <span><b>Drucker vorhanden · Fotoprint anbieten</b><span class="hint" style="display:block;margin-top:4px">AN = Gäste sehen bei ihren eigenen Selfies die Fotoprint-Auswahl 10×15 cm für 2,00 € pro Ausdruck. AUS = im Gastbereich wird keine Druckfunktion angezeigt.</span></span>
             </label>
-            <div class="grid" style="margin-top:10px">
-              <div><label>Druck verfügbar ab (optional)</label><input id="printStartsAt" type="datetime-local"><div class="hint">Leer = sofort nach Aktivierung.</div></div>
-              <div><label>Druck verfügbar bis (optional)</label><input id="printEndsAt" type="datetime-local"><div class="hint">Leer = keine zusätzliche Zeitbegrenzung.</div></div>
-            </div>
-            <div class="hint" style="margin-top:7px">Testbetrieb: 1 Ausdruck = 2,00 € · Währung EUR · PayPal Sandbox. Live-Zahlungen sind noch nicht aktiv.</div>
+            <input id="printStartsAt" type="hidden">
+            <input id="printEndsAt" type="hidden">
+            <div class="hint" style="margin-top:7px">Die Bezahlung wird erst später nach der PayPal-Konfiguration live geschaltet. Ohne serverseitig bestätigtes COMPLETED wird niemals ein Druckauftrag freigegeben.</div>
           </div>
           <div class="full">
             <label>Selfie-/Galerie-Links nach dem Event (optional)</label>
