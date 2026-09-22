@@ -21,6 +21,16 @@
     };
     scanEventText=function(e,count){return `${Number(count||0).toLocaleString('de-DE')} QR-Aufrufe gesamt`};
 
+    const previousRender=render;
+    render=function(){const out=previousRender.apply(this,arguments);setTimeout(fixListLabels,25);return out};
+    function fixListLabels(){
+      document.querySelectorAll('.event .badge,.countLabel').forEach(el=>{
+        const t=String(el.textContent||'');
+        if(/neue QR-Besucher gesamt/i.test(t))el.textContent=t.replace(/neue QR-Besucher gesamt/ig,'QR-Aufrufe gesamt');
+        else if(/QR-Besucher gesamt/i.test(t))el.textContent=t.replace(/QR-Besucher gesamt/ig,'QR-Aufrufe gesamt');
+      });
+    }
+
     const previousOpen=openStats;
     openStats=async function(token){await previousOpen(token);await patchModal(token)};
 
@@ -50,7 +60,7 @@
       }catch(e){console.warn('Statistik v52 anzeigen',e)}
     }
 
-    setTimeout(async()=>{try{await loadScanStats();if(typeof loadEvents==='function')await loadEvents(false)}catch{}},0);
+    setTimeout(async()=>{try{await loadScanStats();if(typeof loadEvents==='function')await loadEvents(false);setTimeout(fixListLabels,50)}catch{}},0);
     return true;
   }
 })();
