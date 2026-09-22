@@ -1,7 +1,14 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v49d-runtime-network-first-20260922';
+const CACHE='fts-selfie-v50-loader-rescue-20260922';
 const CORE=['./','./index.html','./dashboard.html','./print.html','./config.js','./print-billing-v47.js','./print-billing-v47-fix.js','./gallery-links-v48.js','./guest-final-v49b.js','./dashboard-stats-v49.js','./social-share.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
+
+async function fetchWithTimeout(req,ms=4500,init={}){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),ms);
+  try{return await fetch(req,{...init,signal:controller.signal})}
+  finally{clearTimeout(timer)}
+}
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));
@@ -15,26 +22,26 @@ self.addEventListener('fetch',event=>{
   const u=new URL(req.url);
   if(u.hostname.endsWith('.supabase.co')){
     event.respondWith((async()=>{
-      try{const fresh=await fetch(req);if(fresh.ok){const cache=await caches.open(CACHE);cache.put(req,fresh.clone()).catch(()=>{});}return fresh}
+      try{const fresh=await fetchWithTimeout(req,6000);if(fresh.ok){const cache=await caches.open(CACHE);cache.put(req,fresh.clone()).catch(()=>{});}return fresh}
       catch{return (await caches.match(req)) || Response.error()}
     })());return;
   }
   if(req.mode==='navigate'){
     event.respondWith((async()=>{
-      try{const fresh=await fetch(req);const cache=await caches.open(CACHE);cache.put(req,fresh.clone()).catch(()=>{});return fresh}
+      try{const fresh=await fetchWithTimeout(req,5000);const cache=await caches.open(CACHE);cache.put(req,fresh.clone()).catch(()=>{});return fresh}
       catch{return (await caches.match(req)) || (await caches.match('./index.html')) || (await caches.match('./offline.html'))}
     })());return;
   }
   const runtimeFile=u.origin===self.location.origin && (u.pathname.endsWith('.js') || u.pathname.endsWith('.json') || u.pathname.endsWith('.webmanifest'));
   if(runtimeFile){
     event.respondWith((async()=>{
-      try{const fresh=await fetch(req,{cache:'no-store'});if(fresh.ok){const cache=await caches.open(CACHE);cache.put(req,fresh.clone()).catch(()=>{});}return fresh}
+      try{const fresh=await fetchWithTimeout(req,3500,{cache:'no-store'});if(fresh.ok){const cache=await caches.open(CACHE);cache.put(req,fresh.clone()).catch(()=>{});}return fresh}
       catch{return (await caches.match(req)) || Response.error()}
     })());return;
   }
   event.respondWith((async()=>{
     const cached=await caches.match(req);if(cached)return cached;
-    try{const fresh=await fetch(req);const cache=await caches.open(CACHE);cache.put(req,fresh.clone()).catch(()=>{});return fresh}catch{return Response.error()}
+    try{const fresh=await fetchWithTimeout(req,5000);const cache=await caches.open(CACHE);cache.put(req,fresh.clone()).catch(()=>{});return fresh}catch{return Response.error()}
   })());
 });
 
