@@ -1,7 +1,7 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v52-stable-runtime-20260922';
-const CORE=['./','./index.html','./dashboard.html','./print.html','./config.js','./print-billing-v47.js','./print-billing-v47-fix.js','./gallery-links-v48.js','./guest-final-v49b.js','./guest-runtime-v52.js','./dashboard-stats-v49.js','./dashboard-stats-v52.js','./social-share.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
+const CACHE='fts-selfie-v54-print-freeze-fix-20260922';
+const CORE=['./','./index.html','./dashboard.html','./print.html','./config.js','./print-billing-v47.js','./print-billing-v47-fix.js','./print-billing-guest-v54.js','./gallery-links-v48.js','./guest-runtime-v52.js','./dashboard-stats-v49.js','./dashboard-stats-v52.js','./social-share.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));
@@ -14,7 +14,6 @@ self.addEventListener('fetch',event=>{
   if(req.method!=='GET')return;
   const u=new URL(req.url);
 
-  // API traffic must never be held up by the offline cache/service worker.
   if(u.hostname.endsWith('.supabase.co'))return;
 
   if(req.mode==='navigate'){
