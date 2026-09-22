@@ -1,7 +1,7 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v45-paypal-sandbox-print-20260922';
-const CORE=['./','./index.html','./config.js','./social-share.js','./manifest.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
+const CACHE='fts-selfie-v46-print-station-20260922';
+const CORE=['./','./index.html','./dashboard.html','./print.html','./config.js','./social-share.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));
@@ -150,9 +150,14 @@ self.addEventListener('push', event => {
     data: {
       url: data.url || './dashboard.html',
       event_token: data.event_token || '',
-      photo_id: data.photo_id || ''
+      photo_id: data.photo_id || '',
+      print_order_id: data.print_order_id || '',
+      kind: data.kind || ''
     },
-    actions: data.test ? [] : [{ action: 'open-photo', title: 'Foto ansehen' }]
+    actions: data.test ? [] : [{
+      action: data.kind === 'print_ready' ? 'open-print' : 'open-photo',
+      title: data.kind === 'print_ready' ? 'Druckauftrag öffnen' : 'Foto ansehen'
+    }]
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
