@@ -983,8 +983,8 @@ async function ensurePayPalPrint(){
         }catch(e){console.error('PayPal capture',e);printStatus(ptr('error'),'err')}
         finally{printBusy=false}
       },
-      onCancel:async()=>{await cancelCurrentPrintOrder();printStatus(ptr('cancelled'),'warn');printBusy=false},
-      onError:error=>{console.error('PayPal payment',error);printStatus(ptr('error'),'err');printBusy=false}
+      onCancel:async()=>{await cancelCurrentPrintOrder();currentPrintOrder=null;printStatus(ptr('cancelled'),'warn');printBusy=false},
+      onError:async error=>{console.error('PayPal payment',error);if(currentPrintOrder)await cancelCurrentPrintOrder();currentPrintOrder=null;printStatus(ptr('error'),'err');printBusy=false}
     });
     const btn=document.getElementById('paypalPrintButton');
     if(!btn)throw new Error('PayPal Button fehlt');
