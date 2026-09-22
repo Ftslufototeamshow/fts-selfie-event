@@ -5,7 +5,7 @@ self.FTS_CONFIG = {
   legacyBucket: "fts-selfie-uploads",
   baseUrl: "https://ftslufototeamshow.github.io/fts-selfie-event/",
   defaultEventToken: "KUERBIS26",
-  cacheVersion: "fts-selfie-v51-stable-boot"
+  cacheVersion: "fts-selfie-v52-stable-runtime"
 };
 
 function ftsApplyPrintBillingV47Polish(page) {
@@ -71,62 +71,67 @@ function ftsLoadScriptOnce(src, marker, onload) {
   document.head.appendChild(s);
 }
 
-function ftsPageV51() {
+function ftsPageV52() {
   try { return (location.pathname.split("/").pop() || "index.html").toLowerCase(); }
   catch { return "index.html"; }
 }
 
-function ftsGuestTokenV51() {
+function ftsGuestTokenV52() {
   try { return new URLSearchParams(location.search).get("e") || self.FTS_CONFIG.defaultEventToken; }
   catch { return self.FTS_CONFIG.defaultEventToken; }
 }
 
-function ftsReportGuestBootV51(message, details = {}, severity = "warning") {
+function ftsReportGuestBootV52(message, details = {}, severity = "warning") {
   if (typeof window === "undefined" || !navigator.onLine) return;
   try {
-    const nativeFetch = window.__ftsNativeFetchV51 || window.fetch.bind(window);
+    const nativeFetch = window.__ftsNativeFetchV52 || window.fetch.bind(window);
     nativeFetch(`${self.FTS_CONFIG.supabaseUrl}/functions/v1/fts-client-issue`, {
       method: "POST",
       keepalive: true,
       headers: {"apikey": self.FTS_CONFIG.publishableKey, "Content-Type": "application/json"},
       body: JSON.stringify({
-        event_token: ftsGuestTokenV51(),
-        issue_type: "guest_loader",
-        severity,
-        message: String(message || "Gastseite Ladeproblem").slice(0, 500),
-        details,
-        issue_key: "guest-loader-v51",
-        resolved: false,
-        session_id: "guest-v51"
+        event_token: ftsGuestTokenV52(), issue_type: "guest_loader", severity,
+        message: String(message || "Gastseite Ladeproblem").slice(0, 500), details,
+        issue_key: "guest-loader-v52", resolved: false, session_id: "guest-v52"
       })
     }).catch(() => {});
   } catch {}
 }
 
-function ftsInstallInitialRpcTimeoutV51() {
-  if (typeof window === "undefined" || ftsPageV51() !== "index.html") return;
-  if (window.__ftsFetchTimeoutV51) return;
-  window.__ftsFetchTimeoutV51 = true;
+function ftsInstallFetchGuardV52() {
+  if (typeof window === "undefined" || ftsPageV52() !== "index.html" || window.__ftsFetchGuardV52) return;
+  window.__ftsFetchGuardV52 = true;
   const nativeFetch = window.fetch.bind(window);
-  window.__ftsNativeFetchV51 = nativeFetch;
+  window.__ftsNativeFetchV52 = nativeFetch;
   window.fetch = function(input, init = {}) {
     let url = "";
     try { url = typeof input === "string" ? input : String(input?.url || ""); } catch {}
-    const isInitialEventRpc = /\/rest\/v1\/rpc\/fts_get_event(?:$|_|\?)/.test(url);
-    if (!isInitialEventRpc || init.signal) return nativeFetch(input, init);
+
+    if (/\/functions\/v1\/fts-scan(?:\?|$)/.test(url) && typeof init?.body === "string") {
+      try {
+        const body = JSON.parse(init.body);
+        if (body && body.session_id && !body.visitor_id) {
+          return Promise.resolve(new Response('{"ok":true,"legacy_suppressed":true}', {status: 200, headers: {"Content-Type": "application/json"}}));
+        }
+      } catch {}
+    }
+
+    let exactEventRpc = false;
+    try { exactEventRpc = new URL(url, location.href).pathname.endsWith('/rest/v1/rpc/fts_get_event'); } catch {}
+    if (!exactEventRpc || init.signal) return nativeFetch(input, init);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 7000);
     return nativeFetch(input, {...init, signal: controller.signal}).finally(() => clearTimeout(timer));
   };
 }
 
-function ftsResetOldGuestWorkerV51() {
-  if (typeof window === "undefined" || ftsPageV51() !== "index.html") return;
-  if (!("serviceWorker" in navigator) || !navigator.serviceWorker.controller) return;
+function ftsResetOldGuestWorkerV52() {
+  if (typeof window === "undefined" || ftsPageV52() !== "index.html" || !("serviceWorker" in navigator)) return;
   try {
-    const key = "fts_guest_sw_reset_v51";
-    if (sessionStorage.getItem(key) === "1") return;
-    sessionStorage.setItem(key, "1");
+    const key = "fts_guest_sw_reset_v52";
+    if (localStorage.getItem(key) === "1") return;
+    localStorage.setItem(key, "1");
+    if (!navigator.serviceWorker.controller) return;
     Promise.resolve().then(async () => {
       try {
         const regs = await navigator.serviceWorker.getRegistrations();
@@ -139,118 +144,89 @@ function ftsResetOldGuestWorkerV51() {
         }
       } catch {}
       const u = new URL(location.href);
-      u.searchParams.set("fts_boot", "51");
+      u.searchParams.set("fts_boot", "52");
       u.searchParams.set("v", String(Date.now()));
       location.replace(u.toString());
     });
   } catch {}
 }
 
-function ftsInstallGuestWatchdogV51() {
-  if (typeof window === "undefined" || ftsPageV51() !== "index.html") return;
-
-  window.addEventListener("error", e => {
-    ftsReportGuestBootV51("JavaScript-Fehler auf der Gastseite", {
-      message: String(e?.message || ""),
-      file: String(e?.filename || ""),
-      line: Number(e?.lineno || 0)
-    }, "error");
-  });
-  window.addEventListener("unhandledrejection", e => {
-    ftsReportGuestBootV51("Unbehandelter Fehler auf der Gastseite", {
-      reason: String(e?.reason?.message || e?.reason || "").slice(0, 500)
-    }, "error");
-  });
+function ftsInstallGuestWatchdogV52() {
+  if (typeof window === "undefined" || ftsPageV52() !== "index.html") return;
+  window.addEventListener("error", e => ftsReportGuestBootV52("JavaScript-Fehler auf der Gastseite", {message: String(e?.message || ""), file: String(e?.filename || ""), line: Number(e?.lineno || 0)}, "error"));
+  window.addEventListener("unhandledrejection", e => ftsReportGuestBootV52("Unbehandelter Fehler auf der Gastseite", {reason: String(e?.reason?.message || e?.reason || "").slice(0, 500)}, "error"));
 
   setTimeout(() => {
     const card = document.getElementById("card");
     if (!card || !/Event wird geladen/i.test(card.textContent || "")) return;
-    ftsReportGuestBootV51("Gastseite: erster Eventabruf dauert zu lange", {token: ftsGuestTokenV51()});
-    try {
-      if (typeof boot === "function" && !window.__ftsBootRetryV51) {
-        window.__ftsBootRetryV51 = true;
-        void boot();
-      }
-    } catch (e) {
-      ftsReportGuestBootV51("Gastseite: Wiederholungsversuch konnte nicht gestartet werden", {error: String(e?.message || e)}, "error");
-    }
+    ftsReportGuestBootV52("Gastseite: Eventabruf dauert zu lange", {token: ftsGuestTokenV52()});
+    try { if (typeof boot === "function" && !window.__ftsBootRetryV52) { window.__ftsBootRetryV52 = true; void boot(); } } catch {}
   }, 4500);
 
   setTimeout(() => {
     const card = document.getElementById("card");
     if (!card || !/Event wird geladen/i.test(card.textContent || "")) return;
     const u = new URL(location.href);
-    if (u.searchParams.get("fts_retry") !== "1") {
-      ftsReportGuestBootV51("Gastseite: automatischer Neustart nach Ladefehler", {token: ftsGuestTokenV51()}, "error");
-      u.searchParams.set("fts_retry", "1");
+    if (u.searchParams.get("fts_retry") !== "52") {
+      u.searchParams.set("fts_retry", "52");
       u.searchParams.set("v", String(Date.now()));
       location.replace(u.toString());
       return;
     }
-    card.innerHTML = `<div class="loading"><h2>Event konnte nicht vollständig geladen werden.</h2><p>Bitte Internetverbindung kurz prüfen und erneut laden.</p><button type="button" class="main" id="ftsRetryGuestV51">Erneut laden</button></div>`;
-    document.getElementById("ftsRetryGuestV51")?.addEventListener("click", () => {
-      const next = new URL(location.href);
-      next.searchParams.delete("fts_retry");
-      next.searchParams.set("v", String(Date.now()));
-      location.replace(next.toString());
+    card.innerHTML = `<div class="loading"><h2>Event konnte nicht vollständig geladen werden.</h2><p>Bitte Internetverbindung kurz prüfen und erneut laden.</p><button type="button" class="main" id="ftsRetryGuestV52">Erneut laden</button></div>`;
+    document.getElementById("ftsRetryGuestV52")?.addEventListener("click", () => {
+      const next = new URL(location.href); next.searchParams.delete("fts_retry"); next.searchParams.set("v", String(Date.now())); location.replace(next.toString());
     });
   }, 10500);
 }
 
-function ftsGuestBaseReadyV51() {
+function ftsGuestBaseReadyV52() {
   try {
     const card = document.getElementById("card");
     return typeof ev !== "undefined" && !!ev && !!card && !/Event wird geladen/i.test(card.textContent || "");
   } catch { return false; }
 }
 
-function ftsLoadGuestExtensionsV51() {
+function ftsLoadGuestRuntimeV52() {
   let tries = 0;
   const timer = setInterval(() => {
     tries += 1;
-    if (!ftsGuestBaseReadyV51()) {
-      if (tries > 200) clearInterval(timer);
-      return;
-    }
+    if (!ftsGuestBaseReadyV52()) { if (tries > 200) clearInterval(timer); return; }
     clearInterval(timer);
     try {
       const u = new URL(location.href);
-      if (u.searchParams.has("fts_boot") || u.searchParams.has("fts_retry") || u.searchParams.has("v")) {
-        u.searchParams.delete("fts_boot");
-        u.searchParams.delete("fts_retry");
-        u.searchParams.delete("v");
-        history.replaceState(null, "", u.toString());
-      }
+      for (const k of ["fts_boot", "fts_retry", "v"]) u.searchParams.delete(k);
+      history.replaceState(null, "", u.toString());
     } catch {}
-    ftsLoadScriptOnce("./print-billing-v47.js?v=51", "data-fts-print-billing-v47", () => ftsApplyPrintBillingV47Polish("index.html"));
-    ftsLoadScriptOnce("./gallery-links-v48.js?v=51", "data-fts-gallery-links-v48", () => {
-      ftsLoadScriptOnce("./guest-final-v49b.js?v=51", "data-fts-guest-final-v49b");
-    });
+    ftsLoadScriptOnce("./print-billing-v47.js?v=52", "data-fts-print-billing-v47", () => ftsApplyPrintBillingV47Polish("index.html"));
+    ftsLoadScriptOnce("./guest-runtime-v52.js?v=52", "data-fts-guest-runtime-v52");
   }, 100);
 }
 
 if (typeof window !== "undefined") {
-  const page = ftsPageV51();
+  const page = ftsPageV52();
   if (page === "index.html") {
-    ftsInstallInitialRpcTimeoutV51();
-    ftsInstallGuestWatchdogV51();
-    ftsResetOldGuestWorkerV51();
-    window.addEventListener("load", ftsLoadGuestExtensionsV51, {once: true});
+    ftsInstallFetchGuardV52();
+    ftsInstallGuestWatchdogV52();
+    ftsResetOldGuestWorkerV52();
+    window.addEventListener("load", ftsLoadGuestRuntimeV52, {once: true});
   } else {
     window.addEventListener("load", () => {
       if (page === "admin.html" || page === "print.html") {
-        ftsLoadScriptOnce("./print-billing-v47.js?v=51", "data-fts-print-billing-v47", () => {
-          if (page === "print.html") ftsLoadScriptOnce("./print-billing-v47-fix.js?v=51", "data-fts-print-billing-v47-fix");
+        ftsLoadScriptOnce("./print-billing-v47.js?v=52", "data-fts-print-billing-v47", () => {
+          if (page === "print.html") ftsLoadScriptOnce("./print-billing-v47-fix.js?v=52", "data-fts-print-billing-v47-fix");
           ftsApplyPrintBillingV47Polish(page);
         });
       }
       if (page === "admin.html") {
-        ftsLoadScriptOnce("./gallery-links-v48.js?v=51", "data-fts-gallery-links-v48", () => {
-          ftsLoadScriptOnce("./guest-final-v49b.js?v=51", "data-fts-guest-final-v49b");
+        ftsLoadScriptOnce("./gallery-links-v48.js?v=52", "data-fts-gallery-links-v48", () => {
+          ftsLoadScriptOnce("./guest-final-v49b.js?v=52", "data-fts-guest-final-v49b");
         });
       }
       if (page === "dashboard.html") {
-        ftsLoadScriptOnce("./dashboard-stats-v49.js?v=51", "data-fts-dashboard-stats-v49");
+        ftsLoadScriptOnce("./dashboard-stats-v49.js?v=52", "data-fts-dashboard-stats-v49", () => {
+          ftsLoadScriptOnce("./dashboard-stats-v52.js?v=52", "data-fts-dashboard-stats-v52");
+        });
       }
     });
   }
