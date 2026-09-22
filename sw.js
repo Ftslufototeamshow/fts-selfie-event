@@ -1,7 +1,7 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v47-print-billing-20260922';
-const CORE=['./','./index.html','./dashboard.html','./print.html','./config.js','./print-billing-v47.js','./print-billing-v47-fix.js','./social-share.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
+const CACHE='fts-selfie-v48-gallery-links-20260922';
+const CORE=['./','./index.html','./dashboard.html','./print.html','./config.js','./print-billing-v47.js','./print-billing-v47-fix.js','./gallery-links-v48.js','./social-share.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));
