@@ -4,8 +4,8 @@ self.FTS_CONFIG = {
   liveBucket: "fts-selfie-live",
   legacyBucket: "fts-selfie-uploads",
   baseUrl: "https://ftslufototeamshow.github.io/fts-selfie-event/",
-  defaultEventToken: "e_cE5HKlFIJGTFA-78tjIPtrPL",
-  cacheVersion: "fts-selfie-v49b-final-guest-stats-social-ads"
+  defaultEventToken: "KUERBIS26",
+  cacheVersion: "fts-selfie-v49c-loader-fix"
 };
 
 function ftsApplyPrintBillingV47Polish(page) {
