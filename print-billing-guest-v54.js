@@ -1,8 +1,8 @@
 (()=>{
   const page=(location.pathname.split('/').pop()||'index.html').toLowerCase();
   if(page!=='index.html'&&page!=='')return;
-  if(window.__ftsGuestPrintBillingV54)return;
-  window.__ftsGuestPrintBillingV54=true;
+  if(window.__ftsGuestPrintBillingV55)return;
+  window.__ftsGuestPrintBillingV55=true;
 
   const localLang=()=>typeof lang!=='undefined'&&['de','en','fr'].includes(lang)?lang:'de';
   const modeText={
@@ -17,6 +17,11 @@
     tries++;
     if(install()||tries>120)clearInterval(timer);
   },100);
+
+  function uploadsOpen(){
+    try{return ['day','test'].includes(String(typeof routeMode!=='undefined'?routeMode:''))}
+    catch{return false}
+  }
 
   function install(){
     if(typeof bindPrintControls!=='function'||typeof paypalPrintApi!=='function'||typeof updatePrintSummary!=='function')return false;
@@ -37,8 +42,24 @@
     };
     const refreshLabel=()=>{const next=buttonText();if(coveredBtn.textContent!==next)coveredBtn.textContent=next};
 
+    function applyAvailability(recheckRoute=false){
+      if(recheckRoute&&typeof resolveRoute==='function'){
+        try{resolveRoute()}catch{}
+      }
+      const active=uploadsOpen();
+      document.querySelectorAll('.mySelfiePrintChoice').forEach(el=>{el.style.display=active?'':'none'});
+      if(!active){
+        checkout.classList.remove('show');
+        coveredBtn.style.display='none';
+        document.getElementById('paypalPrintHost')?.classList.remove('show');
+        try{printSelection?.clear?.()}catch{}
+      }
+      return active;
+    }
+
     const oldSummary=updatePrintSummary;
     updatePrintSummary=function(){
+      if(!applyAvailability(false))return;
       const mode=printConfig?.billing_mode||'guest_paypal';
       if(mode==='guest_paypal')return oldSummary.apply(this,arguments);
       const items=selectedPrintItems(),qty=items.reduce((n,x)=>n+Number(x.quantity||0),0),count=document.getElementById('selfiePrintCount'),sum=document.getElementById('selfiePrintTotal'),host=document.getElementById('paypalPrintHost');
@@ -50,6 +71,7 @@
 
     const oldBind=bindPrintControls;
     bindPrintControls=function(rows){
+      if(!applyAvailability(false))return;
       const mode=printConfig?.billing_mode||'guest_paypal';
       if(mode==='guest_paypal'){coveredBtn.style.display='none';return oldBind.apply(this,arguments)}
       const box=document.getElementById('selfiePrintCheckout');if(!box)return;
@@ -64,8 +86,8 @@
       document.querySelectorAll('[data-print-select]').forEach(check=>{
         const i=Number(check.dataset.printSelect),row=rows[i],qty=document.querySelector('[data-print-qty="'+i+'"]');if(!row?.photo_id)return;
         printSelection.set(i,{photo_id:row.photo_id,selected:false,quantity:1});
-        check.onchange=()=>{const x=printSelection.get(i);x.selected=check.checked;if(qty)qty.disabled=!check.checked;updatePrintSummary()};
-        if(qty)qty.onchange=()=>{const x=printSelection.get(i);x.quantity=Math.max(1,Math.min(20,Number(qty.value)||1));qty.value=String(x.quantity);updatePrintSummary()};
+        check.onchange=()=>{if(!applyAvailability(true))return;const x=printSelection.get(i);x.selected=check.checked;if(qty)qty.disabled=!check.checked;updatePrintSummary()};
+        if(qty)qty.onchange=()=>{if(!applyAvailability(true))return;const x=printSelection.get(i);x.quantity=Math.max(1,Math.min(20,Number(qty.value)||1));qty.value=String(x.quantity);updatePrintSummary()};
       });
       document.getElementById('paypalPrintHost')?.classList.remove('show');
       if(typeof printStatus==='function')printStatus('');
@@ -74,6 +96,7 @@
     };
 
     coveredBtn.onclick=async()=>{
+      if(!applyAvailability(true))return;
       const items=selectedPrintItems();if(!items.length){printStatus(ptr('choose'),'warn');return}
       coveredBtn.disabled=true;const old=coveredBtn.textContent;coveredBtn.textContent='…';
       try{
@@ -85,6 +108,8 @@
       finally{coveredBtn.disabled=false;coveredBtn.textContent=old;refreshLabel()}
     };
 
+    applyAvailability(true);
+    setInterval(()=>applyAvailability(true),10000);
     refreshLabel();
     return true;
   }
