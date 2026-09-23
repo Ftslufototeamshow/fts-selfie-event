@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Foundation
+import CryptoKit
 
 // MARK: - Production queue models
 
@@ -704,8 +705,21 @@ final class ProductionCore: ObservableObject {
 
     func downloadUpdate() async -> URL? {
         guard let r=updateRelease,let s=r.external_url,let u=URL(string:s) else{return nil}
+        let expected=(r.sha256 ?? "").trimmingCharacters(in:.whitespacesAndNewlines).lowercased()
+        guard !expected.isEmpty else {
+            lastError="Update wurde nicht geladen: veröffentlichte SHA-256-Prüfsumme fehlt."
+            return nil
+        }
         do {
-            let (tmp,_) = try await URLSession.shared.download(from:u)
+            let (tmp,response) = try await URLSession.shared.download(from:u)
+            if let http=response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                throw NSError(domain:"FTSPrinter",code:http.statusCode,userInfo:[NSLocalizedDescriptionKey:"Update-Server HTTP \(http.statusCode)"])
+            }
+            let actual=try Self.fileSHA256(tmp)
+            guard actual==expected else {
+                try? FileManager.default.removeItem(at:tmp)
+                throw NSError(domain:"FTSPrinter",code:88,userInfo:[NSLocalizedDescriptionKey:"Update-Prüfsumme stimmt nicht. Datei wurde verworfen."])
+            }
             let ext=u.pathExtension.isEmpty ? "dmg" : u.pathExtension
             let dest=FileManager.default.urls(for:.downloadsDirectory,in:.userDomainMask).first!
                 .appendingPathComponent("FTS-Printer-\(r.version).\(ext)")
@@ -716,5 +730,16 @@ final class ProductionCore: ObservableObject {
             lastError="Update konnte nicht geladen werden: \(error.localizedDescription)"
             return nil
         }
+    }
+
+    private static func fileSHA256(_ url:URL) throws -> String {
+        let handle=try FileHandle(forReadingFrom:url)
+        defer{try? handle.close()}
+        var hasher=SHA256()
+        while true {
+            guard let data=try handle.read(upToCount:1_048_576),!data.isEmpty else{break}
+            hasher.update(data:data)
+        }
+        return hasher.finalize().map{String(format:"%02x",$0)}.joined()
     }
 }
