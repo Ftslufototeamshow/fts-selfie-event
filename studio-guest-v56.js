@@ -109,7 +109,7 @@
   }
   function drawMulti(ctx,text,x,y,spec,maxWidth){
     if(!text)return;
-    const weight=Number(spec?.weight||900),fontId=spec?.font||'clean',start=Math.max(14,Number(spec?.size_pct||5.8)*ctx.canvas.width/100);
+    const weight=Number(spec?.weight||900),fontId=spec?.font||'clean',scaleBase=Math.min(ctx.canvas.width,ctx.canvas.height),start=Math.max(14,Number(spec?.size_pct||5.8)*scaleBase/100);
     const size=fit(ctx,text,maxWidth,start,Math.max(14,start*.55),s=>weight+' '+s+'px '+fontStack(fontId));
     ctx.font=weight+' '+size+'px '+fontStack(fontId);
     ctx.textBaseline='alphabetic';ctx.textAlign=spec?.align||'left';
@@ -145,7 +145,7 @@
       if(helpers.drawEventDecorations)await Promise.resolve(helpers.drawEventDecorations(ctx,w,h,'photo'));
       return;
     }
-    const banner=ov.banner||{},heightPct=Math.max(12,Math.min(48,Number(banner.height_pct||30))),bh=h*heightPct/100,by=h-bh;
+    const banner=ov.banner||{},wideLayout=helpers.selectedLayout==='groupwide',requestedHeight=Math.max(12,Math.min(48,Number(banner.height_pct||30))),heightPct=wideLayout?Math.max(16,Math.min(24,requestedHeight)):requestedHeight,bh=h*heightPct/100,by=h-bh;
     if(banner.enabled!==false){
       const type=banner.type||'gradient',op=Math.max(0,Math.min(1,Number(banner.opacity??.86))),color=banner.color||'#071315';
       if(type==='solid'){ctx.fillStyle=alpha(color,op);ctx.fillRect(0,by,w,bh)}
@@ -169,7 +169,7 @@
       const a=line.align||align,xx=a==='center'?w/2:a==='right'?w-pad:pad;
       drawMulti(ctx,txt,xx,lineY,{...line,align:a,size_pct:line.size_pct||2.1,weight:line.weight||600,color:line.color||'#e8efed'},maxW);
     }
-    if((ev?.photo_branding||'bottom')!=='none'&&ov.branding!==false){ctx.save();ctx.textAlign='right';ctx.textBaseline='alphabetic';ctx.fillStyle='rgba(255,255,255,.68)';ctx.font='600 '+Math.max(13,w*.015)+'px system-ui';ctx.fillText('FTS.lu · Selfie Event',w-pad,h-Math.max(14,h*.014));ctx.restore()}
+    if((ev?.photo_branding||'bottom')!=='none'&&ov.branding!==false){ctx.save();ctx.textAlign='right';ctx.textBaseline='alphabetic';ctx.fillStyle='rgba(255,255,255,.68)';const base=Math.min(w,h);ctx.font='600 '+Math.max(12,base*.015)+'px system-ui';ctx.fillText('FTS.lu · Selfie Event',w-pad,h-Math.max(12,h*.014));ctx.restore()}
     if(helpers.drawEventLogos)await helpers.drawEventLogos(ctx,w,h,'photo');
     if(helpers.drawEventDecorations)await Promise.resolve(helpers.drawEventDecorations(ctx,w,h,'photo'));
   }
