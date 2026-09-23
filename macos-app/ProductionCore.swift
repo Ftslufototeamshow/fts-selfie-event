@@ -397,7 +397,7 @@ final class ProductionCore: ObservableObject {
                 "p_display_name":slot.name,
                 "p_state":slot.state,
                 "p_eta_seconds":slot.eta,
-                "p_current_unit_id":slot.currentUnit as Any? ?? NSNull(),
+                "p_current_unit_id":((slot.currentUnit?.hasPrefix("LOCAL:") == true) ? NSNull() : (slot.currentUnit as Any? ?? NSNull())),
                 "p_last_error":slot.lastError as Any? ?? NSNull()
             ], as: Bool.self)
         }
@@ -641,6 +641,38 @@ final class ProductionCore: ObservableObject {
             lastError=error.localizedDescription
             return nil
         }
+    }
+
+    func requeueServerUnit(_ unit: V80WorkUnit, state: AppState, confirmedNotPrinted: Bool) async {
+        guard confirmedNotPrinted, let dev=state.deviceToken, let session=state.sessionToken else{return}
+        do {
+            let _: JSONValue = try await api.rpc("fts_printer_fail_unit_v80", body:[
+                "p_device_token":dev,"p_session_token":session,"p_unit_id":unit.unit_id,
+                "p_error":"Mitarbeiter hat bestätigt: nicht gedruckt","p_confirm_not_printed":true
+            ])
+            if let i=printerSlots.firstIndex(where:{$0.currentUnit==unit.unit_id}) {
+                printerSlots[i].state="IDLE";printerSlots[i].eta=0;printerSlots[i].currentUnit=nil;printerSlots[i].lastError=nil
+            }
+            await refresh(state:state)
+        } catch { lastError=error.localizedDescription }
+    }
+
+    func cancelLocalJob(_ job: V80LocalPrintJob, state: AppState) async {
+        guard job.status == .waiting, let dev=state.deviceToken, let session=state.sessionToken else{return}
+        do {
+            let ok:Bool=try await api.rpc("fts_printer_cancel_local_job_v80",body:[
+                "p_device_token":dev,"p_session_token":session,"p_local_job_id":job.id.uuidString
+            ])
+            if ok,let i=localQueue.jobs.firstIndex(where:{$0.id==job.id}) {
+                localQueue.jobs[i].status = .cancelled
+                for ui in localQueue.jobs[i].units.indices where localQueue.jobs[i].units[ui].status == .waiting {
+                    localQueue.jobs[i].units[ui].status = .cancelled
+                }
+                saveLocalQueue()
+            }
+            await state.refreshSelected()
+            await refresh(state:state)
+        } catch { lastError=error.localizedDescription }
     }
 
     func markPickedUp(_ pickup:V80Pickup,state:AppState) async {
