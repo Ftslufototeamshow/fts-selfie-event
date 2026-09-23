@@ -122,18 +122,18 @@
     chars.forEach((ch,i)=>{ctx.fillStyle=colors[i%colors.length];ctx.fillText(ch,left,y);left+=widths[i]});
   }
   function pumpkinFrame(ctx,w,h){
-    const cx=w*.5,cy=h*.42,rx=Math.min(w*.35,h*.28),ry=rx*.82;
-    ctx.save();
-    ctx.globalAlpha=.94;
-    ctx.fillStyle='#ef7d1a';ctx.strokeStyle='#8b3d08';ctx.lineWidth=Math.max(8,w*.009);
+    const layer=document.createElement('canvas');layer.width=w;layer.height=h;
+    const p=layer.getContext('2d'),cx=w*.5,cy=h*.42,rx=Math.min(w*.35,h*.28),ry=rx*.82;
+    p.globalAlpha=.94;
+    p.fillStyle='#ef7d1a';p.strokeStyle='#8b3d08';p.lineWidth=Math.max(8,w*.009);
     for(const dx of [-.42,-.2,0,.2,.42]){
-      ctx.beginPath();ctx.ellipse(cx+rx*dx,cy,rx*.47,ry,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+      p.beginPath();p.ellipse(cx+rx*dx,cy,rx*.47,ry,0,0,Math.PI*2);p.fill();p.stroke();
     }
-    ctx.globalCompositeOperation='destination-out';
-    ctx.beginPath();ctx.ellipse(cx,cy,rx*.55,ry*.60,0,0,Math.PI*2);ctx.fill();
-    ctx.globalCompositeOperation='source-over';
-    ctx.fillStyle='#3b6b27';ctx.fillRect(cx-rx*.07,cy-ry*1.12,rx*.14,ry*.28);
-    ctx.restore();
+    p.globalCompositeOperation='destination-out';
+    p.beginPath();p.ellipse(cx,cy,rx*.55,ry*.60,0,0,Math.PI*2);p.fill();
+    p.globalCompositeOperation='source-over';
+    p.fillStyle='#3b6b27';p.beginPath();p.roundRect(cx-rx*.07,cy-ry*1.15,rx*.14,ry*.33,Math.max(4,rx*.04));p.fill();
+    ctx.drawImage(layer,0,0);
   }
 
   async function drawOverlay(ctx,canvas,ev,config,helpers={}){
