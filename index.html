@@ -952,7 +952,7 @@ function resetForNewSelfie(){
   document.getElementById('captureFlow')?.classList.remove('hiddenFlow');
   document.getElementById('sendFlow')?.classList.remove('hiddenFlow');
   const p=document.getElementById('photo');if(p)p.value='';
-  const c=document.getElementById('consent');if(c)c.checked=false;syncOnlineDecisionUi();
+  const c=document.getElementById('consent');if(c)c.checked=false;syncOnlineDecisionUi();syncBasePrivacyUi();
   const cmp=document.getElementById('compare');if(cmp)cmp.style.display='none';
   const msg=document.getElementById('message');if(msg)msg.className='msg';
   stopAds();const ad=document.getElementById('adSlot'),send=document.getElementById('sendFlow');if(ad&&send)send.parentNode.insertBefore(ad,send);ad?.classList.remove('show');
@@ -993,6 +993,13 @@ async function openLatestPrint(){
   document.getElementById('selfiePrintCheckout')?.scrollIntoView({behavior:'smooth',block:'center'});
 }
 function clearMySelfieTempUrls(){for(const u of mySelfieTempUrls)try{URL.revokeObjectURL(u)}catch{}mySelfieTempUrls=[]}
+async function loadPhotoPrintStatus(){
+  const sessionId=existingGuestSessionId();if(!sessionId||!navigator.onLine)return new Map();
+  try{
+    const rows=await rpc('fts_guest_photo_print_status_v62',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[];
+    return new Map(rows.map(x=>[String(x.photo_id),x]));
+  }catch(e){console.warn('Foto-Druckstatus',e);return new Map()}
+}
 async function loadMySelfieRows(){
   const sessionId=existingGuestSessionId();if(!sessionId)return[];
   const rows=[];
@@ -1246,19 +1253,20 @@ async function showMySelfies(){
   const panel=document.getElementById('mySelfiesPanel'),grid=document.getElementById('mySelfiesGrid');if(!panel||!grid)return;
   panel.classList.add('show');setMySelfieHint('');const postText=document.getElementById('mySelfiesPostText');if(postText&&!postText.value)postText.value=mySelfieSocialText();grid.innerHTML='<div class="emptySelfies">…</div>';
   clearMySelfieTempUrls();
-  const [rows,cfgPrint]=await Promise.all([loadMySelfieRows(),loadPrintConfig()]);
+  const [rows,cfgPrint,printStates]=await Promise.all([loadMySelfieRows(),loadPrintConfig(),loadPhotoPrintStatus()]);
   printConfig=cfgPrint;
+  for(const r of rows){const ps=printStates.get(String(r.photo_id||''));r.has_paid_print=ps?.has_paid_print===true;r.printed=ps?.printed===true;r.latest_pickup_status=ps?.latest_pickup_status||''}
   if(!rows.length){grid.innerHTML=`<div class="emptySelfies">${esc(tr('noMySelfies'))}</div>`;document.getElementById('selfiePrintCheckout')?.classList.remove('show');return}
   const printActive=printConfig?.enabled!==false;
-  const digitalUnlocked=!printActive;
-  const anySocial=digitalUnlocked&&rows.some(r=>r.online_publication_consent===true);
+  const anySocial=rows.some(r=>(!printActive||r.printed===true)&&r.online_publication_consent===true);
   const postBox=document.querySelector('.mySelfiesPostCopy');if(postBox)postBox.style.display=anySocial?'block':'none';
   grid.innerHTML=rows.map((r,i)=>{
     const onlineYes=r.online_publication_consent===true;
     const printUi=printConfig?.enabled&&r.photo_id?`<div class="mySelfiePrintChoice"><label><input type="checkbox" data-print-select="${i}"><span>${esc(ptr('select'))} · 2,00 €</span></label><div class="mySelfiePrintQty"><span>${esc(ptr('qty'))}</span><input type="number" min="1" max="20" step="1" value="1" disabled data-print-qty="${i}"></div></div>`:'';
+    const digitalUnlocked=!printActive||r.printed===true;
     const digitalUi=digitalUnlocked
       ? `<button type="button" class="mySelfieDownload" data-my-download="${i}">${esc(tr('downloadSelfie'))}</button>${onlineYes?`<button type="button" class="mySelfieFacebook" data-my-facebook="${i}">${esc(tr('facebookShare'))}</button><button type="button" class="mySelfieInstagram" data-my-instagram="${i}">${esc(tr('instagramShare'))}</button>`:''}`
-      : `<div class="digitalLocked">${esc(tr('digitalLockedPrint'))}</div>`;
+      : '';
     return `<article class="mySelfieCard"><img src="${esc(r.url)}" alt="Event-Selfie"><small>${new Date(r.created_at).toLocaleString(lang==='de'?'de-DE':lang==='fr'?'fr-FR':'en-GB')}${r.pending?' · '+esc(tr('pending')):''}</small><span class="onlineStatus ${onlineYes?'yes':'no'}">${esc(onlineYes?tr('onlineReleased'):tr('onlinePrivate'))}</span><div class="mySelfieActions"><button type="button" class="mySelfiePrivacy" data-my-privacy="${i}">${esc(tr('privacyReview'))}</button>${digitalUi}</div>${printUi}</article>`;
   }).join('');
   grid.querySelectorAll('[data-my-privacy]').forEach(b=>b.onclick=()=>toggleMySelfiePrivacy(rows[Number(b.dataset.myPrivacy)],b));
@@ -1274,7 +1282,11 @@ async function submitPhoto(){
  if(!selectedFile)return showMessage(tr('noPhoto'));
  if(onlineDecision===null)return showMessage(tr('noOnlineDecision'));
  if(onlineDecision===true&&!peopleRightsConfirmed)return showMessage(tr('noPeopleRights'));
- if(!document.getElementById('consent').checked)return showMessage(tr('noConsent'));
+ if(!basePrivacyAccepted){
+   const consent=document.getElementById('consent');
+   if(!consent?.checked)return showMessage(tr('noConsent'));
+   rememberBasePrivacy();
+ }
  if(selectedFile.size>15*1024*1024)return showMessage(tr('tooBig'));
  if(!designedBlob)await makeDesign(selectedFile);
 
@@ -1298,6 +1310,7 @@ async function submitPhoto(){
      publicationPath:onlineDecision===true?`${routeBase}/publication/${publicationId}.jpg`:null,
      originalBlob:selectedFile,designedBlob,publicationBlob:onlineDecision===true?publication?.blob:null,originalType:selectedFile.type||'image/jpeg',
      onlinePublicationConsent:onlineDecision===true,peopleRightsConfirmed:onlineDecision===true&&peopleRightsConfirmed===true,onlineConsentLocale:lang,
+     basePrivacyAccepted:true,basePrivacyVersion:BASE_PRIVACY_VERSION,basePrivacyLocale:lang,
      guestSessionId:guestSessionId(),isTest:routeMode==='test'
    };
    const previewBlob=designedBlob;let offlineResult=false;
@@ -1310,7 +1323,7 @@ async function submitPhoto(){
    }
    showSuccessPanel(offlineResult,previewBlob);
    selectedFile=null;designedBlob=null;publicationPrep=null;onlineDecision=null;peopleRightsConfirmed=false;
-   document.getElementById('photo').value='';document.getElementById('consent').checked=false;syncOnlineDecisionUi();await updateQueueCount();await refreshMySelfiesAccess();
+   document.getElementById('photo').value='';const consent=document.getElementById('consent');if(consent)consent.checked=false;syncOnlineDecisionUi();syncBasePrivacyUi();await updateQueueCount();await refreshMySelfiesAccess();
  }catch(e){console.error(e);showMessage(tr('saveError')+': '+(e?.message||'Error'),'err')}
  finally{btn.disabled=false;btn.textContent=tr('send')}
 }
