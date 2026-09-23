@@ -923,16 +923,16 @@ async function makeDesign(file){
  canvas.width=spec.w;canvas.height=spec.h;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle=ev.bg1||'#071315';ctx.fillRect(0,0,canvas.width,canvas.height);
  if(spec.mode==='contain')drawContainWithBlur(ctx,img,canvas.width,canvas.height);else drawFilteredCover(ctx,img,canvas.width,canvas.height,spec.zoom||1,selectedFilter)
  if(ev?.studio_v56&&window.FTS_STUDIO_V56?.drawOverlay){
-   await window.FTS_STUDIO_V56.drawOverlay(ctx,canvas,ev,ev.studio_v56,{selectedFilter,drawEventLogos,drawEventDecorations,photoEventDayText,assetUrl,loadRemoteImage});
+   await window.FTS_STUDIO_V56.drawOverlay(ctx,canvas,ev,ev.studio_v56,{selectedFilter,selectedLayout,drawEventLogos,drawEventDecorations,photoEventDayText,assetUrl,loadRemoteImage});
  }else{
    const top=ctx.createLinearGradient(0,0,0,canvas.height*.28);top.addColorStop(0,'rgba(0,0,0,.48)');top.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=top;ctx.fillRect(0,0,canvas.width,canvas.height*.32);
    const bottom=ctx.createLinearGradient(0,canvas.height*.48,0,canvas.height);bottom.addColorStop(0,'rgba(3,14,15,0)');bottom.addColorStop(.3,'rgba(3,14,15,.64)');bottom.addColorStop(1,'rgba(3,14,15,.96)');ctx.fillStyle=bottom;ctx.fillRect(0,canvas.height*.48,canvas.width,canvas.height*.52);
-   const pad=Math.max(24,canvas.width*.045);
+   const scaleBase=Math.min(canvas.width,canvas.height),pad=Math.max(24,canvas.width*.045);
    const maxW=canvas.width-pad*2,y=canvas.height-pad*2.35,title=String(ev.title||'');ctx.textBaseline='alphabetic';ctx.fillStyle='#fff';
-   const titleSize=fitText(ctx,title,maxW,Math.max(38,canvas.width*.06),Math.max(25,canvas.width*.037),900);ctx.font=`900 ${titleSize}px system-ui`;ctx.fillText(title,pad,y-Math.max(48,canvas.width*.058));
-   ctx.fillStyle=ev.accent;const sub=String(ev.subtitle||'');const subSize=fitText(ctx,sub,maxW,Math.max(25,canvas.width*.035),Math.max(18,canvas.width*.024),800);ctx.font=`800 ${subSize}px system-ui`;ctx.fillText(sub,pad,y);
-   ctx.fillStyle='rgba(255,255,255,.88)';const overBase=String(ev.overlay_text||ev.title||''),photoDay=photoEventDayText(),over=photoDay?(overBase?overBase+' · '+photoDay:photoDay):overBase;const overSize=fitText(ctx,over,maxW,Math.max(18,canvas.width*.024),Math.max(14,canvas.width*.018),600);ctx.font=`600 ${overSize}px system-ui`;ctx.fillText(over,pad,y+Math.max(30,canvas.width*.035));
-   if((ev.photo_branding||'bottom')!=='none'){ctx.save();ctx.textAlign='right';ctx.textBaseline='alphabetic';ctx.fillStyle='rgba(255,255,255,.72)';ctx.font=`600 ${Math.max(14,canvas.width*.016)}px system-ui`;ctx.fillText('FTS.lu · Selfie Event',canvas.width-pad,canvas.height-Math.max(18,canvas.height*.018));ctx.restore()}
+   const titleSize=fitText(ctx,title,maxW,Math.max(32,scaleBase*.055),Math.max(22,scaleBase*.032),900);ctx.font=`900 ${titleSize}px system-ui`;ctx.fillText(title,pad,y-Math.max(40,scaleBase*.052));
+   ctx.fillStyle=ev.accent;const sub=String(ev.subtitle||'');const subSize=fitText(ctx,sub,maxW,Math.max(22,scaleBase*.032),Math.max(16,scaleBase*.021),800);ctx.font=`800 ${subSize}px system-ui`;ctx.fillText(sub,pad,y);
+   ctx.fillStyle='rgba(255,255,255,.88)';const overBase=String(ev.overlay_text||ev.title||''),photoDay=photoEventDayText(),over=photoDay?(overBase?overBase+' · '+photoDay:photoDay):overBase;const overSize=fitText(ctx,over,maxW,Math.max(16,scaleBase*.021),Math.max(12,scaleBase*.015),600);ctx.font=`600 ${overSize}px system-ui`;ctx.fillText(over,pad,y+Math.max(26,scaleBase*.03));
+   if((ev.photo_branding||'bottom')!=='none'){ctx.save();ctx.textAlign='right';ctx.textBaseline='alphabetic';ctx.fillStyle='rgba(255,255,255,.72)';ctx.font=`600 ${Math.max(12,scaleBase*.015)}px system-ui`;ctx.fillText('FTS.lu · Selfie Event',canvas.width-pad,canvas.height-Math.max(16,canvas.height*.018));ctx.restore()}
    await drawEventLogos(ctx,canvas.width,canvas.height,'photo');
    await Promise.resolve(drawEventDecorations(ctx,canvas.width,canvas.height,'photo'));
  }
