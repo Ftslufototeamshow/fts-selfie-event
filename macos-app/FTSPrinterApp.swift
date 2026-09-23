@@ -397,7 +397,7 @@ final class LocalImportManager: ObservableObject {
         imported = m.records.sorted { $0.importedAt > $1.importedAt }
     }
 
-    private static func scanSync(activation: LocalActivation) throws -> (records: [ImportRecord], newCount: Int, lastSource: String) {
+    nonisolated private static func scanSync(activation: LocalActivation) throws -> (records: [ImportRecord], newCount: Int, lastSource: String) {
         let fm = FileManager.default
         let eventFolder = URL(fileURLWithPath: activation.folderPath)
         let originalFolder = eventFolder.appendingPathComponent("Kamera Original", isDirectory: true)
@@ -452,7 +452,7 @@ final class LocalImportManager: ObservableObject {
         return (manifest.records, newCount, sourceLabel)
     }
 
-    private static func sha256(_ url: URL) throws -> String {
+    nonisolated private static func sha256(_ url: URL) throws -> String {
         let h = try FileHandle(forReadingFrom: url)
         defer { try? h.close() }
         var hasher = SHA256()
@@ -463,7 +463,7 @@ final class LocalImportManager: ObservableObject {
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    private static func uniqueDestination(folder: URL, name: String) -> URL {
+    nonisolated private static func uniqueDestination(folder: URL, name: String) -> URL {
         let fm = FileManager.default
         var candidate = folder.appendingPathComponent(name)
         if !fm.fileExists(atPath: candidate.path) { return candidate }
@@ -477,7 +477,7 @@ final class LocalImportManager: ObservableObject {
         return candidate
     }
 
-    private static func cameraIdentity(_ url: URL) -> String? {
+    nonisolated private static func cameraIdentity(_ url: URL) -> String? {
         guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any] else { return nil }
         let tiff = props["{TIFF}"] as? [String: Any]
@@ -870,7 +870,11 @@ struct MainView: View {
                     CameraImportView(event:event).environmentObject(state).tabItem{Label("Kamera / Karte",systemImage:"sdcard")}.tag(1)
                 }.padding(.horizontal,12).padding(.bottom,12)
             } else {
-                ContentUnavailableView("Kein Printer-Event","calendar.badge.exclamationmark",description:Text("Im FTS Cockpit zuerst ein Event mit Print oder lokaler Kamera freigeben."))
+                VStack(spacing:12){
+                    Image(systemName:"calendar.badge.exclamationmark").font(.system(size:42)).foregroundStyle(.secondary)
+                    Text("Kein Printer-Event").font(.title2.bold())
+                    Text("Im FTS Cockpit zuerst ein Event mit Print oder lokaler Kamera freigeben.").foregroundStyle(.secondary)
+                }.frame(maxWidth:.infinity,maxHeight:.infinity)
             }
             HStack{Text(state.status).font(.caption).foregroundStyle(.secondary);Spacer()}.padding(.horizontal,16).padding(.bottom,8)
         }.frame(minWidth:980,minHeight:700)
@@ -906,7 +910,12 @@ struct OrdersView:View{
     var body:some View{
         ScrollView{
             LazyVStack(spacing:12){
-                if live.isEmpty{ContentUnavailableView("Keine aktuellen Druckaufträge",systemImage:"printer")}
+                if live.isEmpty{
+                    VStack(spacing:10){
+                        Image(systemName:"printer").font(.system(size:36)).foregroundStyle(.secondary)
+                        Text("Keine aktuellen Druckaufträge").font(.headline)
+                    }.frame(maxWidth:.infinity).padding(50)
+                }
                 ForEach(live){o in OrderCard(order:o).environmentObject(state)}
             }.padding(8)
         }
