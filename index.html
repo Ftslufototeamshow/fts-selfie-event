@@ -1140,6 +1140,7 @@ setInterval(cleanupSavedEventLinks,60000);
 window.addEventListener('online',()=>{updateNet();processQueue()});navigator.serviceWorker?.addEventListener?.('message',e=>{if(e.data?.type==='FTS_QUEUE_FLUSHED'){refreshMySelfiesAccess();if(document.getElementById('mySelfiesPanel')?.classList.contains('show'))showMySelfies()}});window.addEventListener('offline',updateNet);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)processQueue()});
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);boot();
 </script>
+<script src="./print-pickup-guest-v57.js"></script>
 <script src="./camera-live-v56.js"></script>
 </body>
 </html>
