@@ -140,6 +140,7 @@ struct StockSnapshot: Codable, Hashable {
     let selfie_printed: Int?
     let selfie_waiting: Int?
     let active_reservations: Int?
+    let camera_waiting: Int?
     let camera_prints: Int?
     let test_prints: Int?
     let misprints: Int?
@@ -619,10 +620,12 @@ final class AppState: ObservableObject {
     @Published var status = ""
 
     let localImport = LocalImportManager()
+    let mediaIngest = MediaIngestV80()
+    let production = ProductionCore()
     private let api = FTSAPI.shared
     private var liveDeviceToken: String?
     private var liveSessionToken: String?
-    static let appVersion = "0.1.4"
+    static let appVersion = "0.2.0-core"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -698,7 +701,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.1.4"
+                "p_user_agent":"FTS Printer macOS 0.2.0-core"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -726,7 +729,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.1.4"
+                "p_user_agent":"FTS Printer macOS 0.2.0-core"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session
@@ -741,6 +744,11 @@ final class AppState: ObservableObject {
     }
 
     func switchStaff() async {
+        if production.printerSlots.contains(where:{["PREPARING","TRANSFER","PRINTING"].contains($0.state)}) {
+            errorMessage="Mitarbeiterwechsel erst möglich, wenn alle Drucker sicher frei sind."
+            return
+        }
+        production.autoDispatch=false
         if let dev=deviceToken,let session=sessionToken {
             let _:Bool? = try? await api.rpc("fts_printer_logout_v72",body:["p_device_token":dev,"p_session_token":session],as:Bool.self)
         }
@@ -750,6 +758,11 @@ final class AppState: ObservableObject {
     }
 
     func resetDevice() {
+        if production.printerSlots.contains(where:{["PREPARING","TRANSFER","PRINTING"].contains($0.state)}) {
+            errorMessage="Gerätefreigabe kann während eines laufenden Drucks nicht zurückgesetzt werden."
+            return
+        }
+        production.autoDispatch=false
         liveSessionToken=nil;liveDeviceToken=nil
         Keychain.remove("staffSession");Keychain.remove("deviceToken");currentUser=nil;events=[];orders=[];phase = .deviceSetup
     }
@@ -762,7 +775,11 @@ final class AppState: ObservableObject {
             let rows:[EventRow]=try await api.rpc("fts_printer_events_v74",body:["p_device_token":dev,"p_session_token":session])
             events=rows
             if !rows.contains(where:{$0.event_token==selectedEventToken}) { selectedEventToken=rows.first?.event_token ?? "" }
-            if let e=selectedEvent { localImport.load(event:e) }
+            if let e=selectedEvent {
+                localImport.load(event:e)
+                mediaIngest.load(event:e)
+                production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
+            }
             if selectedEventToken.isEmpty {
                 orders=[]
                 stock=nil
@@ -780,7 +797,11 @@ final class AppState: ObservableObject {
 
     func selectEvent(_ token:String) async {
         selectedEventToken=token
-        if let e=selectedEvent { localImport.load(event:e) }
+        if let e=selectedEvent {
+                localImport.load(event:e)
+                mediaIngest.load(event:e)
+                production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
+            }
         await refreshSelected()
     }
 
@@ -984,8 +1005,10 @@ struct MainView: View {
                     Button("Bestand"){showStock=true}
                 }.padding(.horizontal,16).padding(.vertical,10)
                 TabView(selection:$tab){
-                    OrdersView().environmentObject(state).tabItem{Label("Selfie-Aufträge",systemImage:"photo.on.rectangle")}.tag(0)
-                    CameraImportView(event:event).environmentObject(state).tabItem{Label("Kamera / Karte",systemImage:"sdcard")}.tag(1)
+                    ProductionQueueView().environmentObject(state).tabItem{Label("Druckaufträge",systemImage:"printer.fill")}.tag(0)
+                    ProductionMediaView().environmentObject(state).tabItem{Label("SD / WLAN",systemImage:"sdcard")}.tag(1)
+                    ProductionPickupView().environmentObject(state).tabItem{Label("Kundenabholung",systemImage:"shippingbox")}.tag(2)
+                    ProductionSystemView().environmentObject(state).tabItem{Label("System & Printer",systemImage:"gearshape.2")}.tag(3)
                 }.padding(.horizontal,12).padding(.bottom,12)
             } else {
                 VStack(spacing:12){
@@ -1002,9 +1025,18 @@ struct MainView: View {
             Button("OK"){state.errorMessage=nil}
         } message:{Text(state.errorMessage ?? "")}
         .task(id:state.selectedEventToken){
+            state.production.discoverPrinters()
+            if let e=state.selectedEvent {
+                state.mediaIngest.load(event:e)
+                state.production.loadLocalQueue(folderPath:state.mediaIngest.activation?.folderPath)
+            }
+            await state.production.checkUpdate(platform:"macos")
             while !Task.isCancelled {
-                try? await Task.sleep(for:.seconds(5))
-                if !Task.isCancelled { await state.refreshSelected() }
+                if !Task.isCancelled {
+                    await state.refreshSelected()
+                    await state.production.refresh(state:state)
+                }
+                try? await Task.sleep(for:.seconds(2))
             }
         }
     }
