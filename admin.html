@@ -1263,7 +1263,7 @@ function boolish(v){return v===true||v===1||String(v).toLowerCase()==='true'}
 async function loadModeEvent(token,duplicate=false){
   let e=await rpc('fts_admin_get_event_v9',{p_admin_code:authCredential(),p_event_token:token});if(!e)throw new Error('Event nicht gefunden.');
   try{const ex=await rpc('fts_admin_get_event_extras_v10',{p_admin_code:authCredential(),p_event_token:token});if(ex?.[0])e={...e,...ex[0]}}catch(err){console.warn('Event-Zusatzdaten',err)}
-  try{let lcRows;try{lcRows=await rpc('fts_admin_get_event_lifecycle_v41',{p_admin_code:authCredential(),p_event_token:token})}catch(_e){lcRows=await rpc('fts_admin_get_event_lifecycle_v11',{p_admin_code:authCredential(),p_event_token:token})}if(lcRows?.[0])e.lifecycle_v11=lcRows[0]}catch(err){console.warn('Event-Lifecycle',err)}
+  try{const lcRows=await rpc('fts_admin_get_event_lifecycle_v41',{p_admin_code:authCredential(),p_event_token:token});if(lcRows?.[0])e.lifecycle_v11=lcRows[0]}catch(err){console.warn('Event-Lifecycle',err)}
   try{const lr=await rpc('fts_admin_get_lumorex_status_v2',{p_admin_code:authCredential(),p_event_token:token});const ls=Array.isArray(lr)?lr[0]:lr;if(ls)e.lumorex_enabled=ls.enabled!==false}catch(err){console.warn('LUMOREX / VIMA Show',err)}
   try{const pr=await rpc('fts_admin_get_print_settings_v45',{p_admin_code:authCredential(),p_event_token:token});const ps=Array.isArray(pr)?pr[0]:pr;if(ps)e.print_settings=ps}catch(err){console.warn('Fotodruck / PayPal',err)}
   saveCustomer(e.customer_name,e.customer_token);$('#title').value=e.title||'';$('#subtitle').value=e.subtitle||'';$('#location').value=e.location||'';$('#overlay').value=e.overlay_text||'';
