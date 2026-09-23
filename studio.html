@@ -103,6 +103,25 @@ input,select,textarea{width:100%;border:1px solid #ffffff18;background:#071b1d;c
       </div>
 
       <div class="panel">
+        <h2>Automatische Foto-Anpassung · 10×15</h2>
+        <div class="hint">Diese Regeln gelten verbindlich für Selfies und später identisch für lokale Kamera-/SD-Karten-Fotos in der Printer-App. Das Originalfoto bleibt unverändert.</div>
+        <label class="check"><input id="adaptiveEnabled" type="checkbox" checked> Motiv automatisch an Druckformat und Banner anpassen</label>
+        <label class="check"><input id="autoOrientation" type="checkbox" checked> Hoch-/Querformat automatisch aus dem Foto erkennen</label>
+        <label class="check"><input id="autoCrop" type="checkbox" checked> 10×15 randlos automatisch füllen und sinnvoll beschneiden</label>
+        <label class="check"><input id="faceSafeArea" type="checkbox" checked> Gesichter vor Banner und Schrift schützen</label>
+        <div class="row">
+          <div class="field"><label>Hochkant · Balken normal / minimal (%)</label><div class="row"><input id="portraitBannerMax" type="number" min="12" max="22" step="1" value="18"><input id="portraitBannerMin" type="number" min="10" max="18" step="1" value="12"></div></div>
+          <div class="field"><label>Querformat · Balken normal / minimal (%)</label><div class="row"><input id="landscapeBannerMax" type="number" min="14" max="26" step="1" value="22"><input id="landscapeBannerMin" type="number" min="10" max="20" step="1" value="14"></div></div>
+        </div>
+        <div class="row3">
+          <div class="field"><label>Abstand Gesicht ↔ Banner (%)</label><input id="faceGapPct" type="number" min="1" max="8" step=".5" value="2.5"></div>
+          <div class="field"><label>Gesichts-Schutzzone</label><input id="facePaddingRatio" type="number" min=".12" max=".65" step=".02" value=".34"></div>
+          <div class="field"><label>Min. Schriftgröße (%)</label><input id="minTextScalePct" type="number" min="52" max="92" step="1" value="68"></div>
+        </div>
+        <div class="hint">Druckprofil: 10×15 · automatische Ausrichtung · randloser Cover-Beschnitt. Wenn ein Gesicht tief sitzt, wird zuerst der Bildausschnitt verschoben, danach Balken und Schrift automatisch verkleinert.</div>
+      </div>
+
+      <div class="panel">
         <h2 id="filterPanelTitle">Filter für Gäste</h2>
         <div class="hint" id="filterPanelHint">Haken = beim Event verfügbar. ⭐ = direkt oben sichtbar. Alle weiteren Filter kommen unter „Mehr Filter“. So bleibt es für Gäste einfach.</div>
         <div id="filters"></div>
@@ -132,12 +151,13 @@ input,select,textarea{width:100%;border:1px solid #ffffff18;background:#071b1d;c
   </div>
 </main>
 <script src="./config.js"></script>
-<script src="./studio-guest-v56.js"></script>
+<script src="./social-share.js"></script>
+<script src="./fts-photo-engine.js"></script>
 <script src="./printer-staff-v72.js"></script>
 <script>
 const cfg=window.FTS_CONFIG, DEVICE_KEY='fts_device_token_v1', LEGACY_CODE_KEY='fts_cockpit_admin_code';
 const $=s=>document.querySelector(s);
-let eventToken=new URLSearchParams(location.search).get('e')||'',eventRow=null,studio={},previewImg=null,pendingBanner=null,oldBannerPath='',removeBanner=false;
+let eventToken=new URLSearchParams(location.search).get('e')||'',eventRow=null,studio={},previewImg=null,previewFaces=[],pendingBanner=null,oldBannerPath='',removeBanner=false;
 const categoryNames={standard:'Standard',classic:'Klassisch',retro:'Retro / Oldschool',event:'Event / Fun',comic:'Comic'};
 function auth(){return localStorage.getItem(DEVICE_KEY)||localStorage.getItem(LEGACY_CODE_KEY)||''}
 function H(){return {'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':'application/json'}}
@@ -149,13 +169,23 @@ function assetUrl(path){return path?cfg.supabaseUrl+'/storage/v1/object/public/'
 function loadRemoteImage(url){return new Promise(resolve=>{if(!url)return resolve(null);const i=new Image();i.crossOrigin='anonymous';i.onload=()=>resolve(i);i.onerror=()=>resolve(null);i.src=url})}
 async function adminFiles(action,extra={}){const r=await fetch(cfg.supabaseUrl+'/functions/v1/fts-admin-files',{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({credential:auth(),action,...extra})});const j=await r.json().catch(()=>({}));if(!r.ok||j.ok===false)throw new Error(j.error||'Datei-Aktion fehlgeschlagen');return j}
 function defaultConfig(){
-  return {version:56,overlay:{enabled:true,padding_pct:4.5,banner:{enabled:true,type:'gradient',color:'#071315',opacity:.86,height_pct:30,image_path:'',image_opacity:.35},
+  return {version:76,
+    adaptive:{enabled:true,auto_orientation:true,auto_crop:true,face_safe_area:true,face_padding_ratio:.34,face_gap_pct:2.5,min_text_scale:.68,portrait:{banner_max_pct:18,banner_min_pct:12},landscape:{banner_max_pct:22,banner_min_pct:14},print:{ratio:'10x15',bleed_pct:1.5}},
+    overlay:{enabled:true,padding_pct:4.5,banner:{enabled:true,type:'gradient',color:'#071315',opacity:.86,height_pct:30,image_path:'',image_opacity:.35},
     title:{enabled:true,source:'title',text:'',font:'clean',weight:900,size_pct:5.8,color:'#ffffff',align:'left',shadow:true,multicolor:false,colors:['#ffffff','#ffcf4a','#2ec4b6','#ff6b6b']},
     subtitle:{enabled:true,source:'subtitle',text:'',font:'clean',weight:800,size_pct:3.2,color:eventRow?.accent||'#d9b56d',align:'left',shadow:true},
     line:{enabled:true,source:'overlay',text:'',font:'clean',weight:600,size_pct:2.1,color:'#e8efed',align:'left',shadow:true,include_date:true},branding:true},
     filters:{enabled:['natural','warm','vivid','mono','cool','sepia','oldfilm','fade','retro90','polaroid','comic_soft','comic_pop','sketch','pumpkin'],featured:['natural','warm','mono','oldfilm','comic_soft','pumpkin'],default:'natural'}};
 }
-function mergeDefaults(raw){const d=defaultConfig(),r=raw&&typeof raw==='object'?raw:{};return {...d,...r,overlay:{...d.overlay,...(r.overlay||{}),banner:{...d.overlay.banner,...(r.overlay?.banner||{})},title:{...d.overlay.title,...(r.overlay?.title||{})},subtitle:{...d.overlay.subtitle,...(r.overlay?.subtitle||{})},line:{...d.overlay.line,...(r.overlay?.line||{})}},filters:{...d.filters,...(r.filters||{})}}}
+function mergeDefaults(raw){
+  const d=defaultConfig(),r=raw&&typeof raw==='object'?raw:{},a=r.adaptive||{};
+  return {...d,...r,
+    version:76,
+    adaptive:{...d.adaptive,...a,portrait:{...d.adaptive.portrait,...(a.portrait||{})},landscape:{...d.adaptive.landscape,...(a.landscape||{})},print:{...d.adaptive.print,...(a.print||{})}},
+    overlay:{...d.overlay,...(r.overlay||{}),banner:{...d.overlay.banner,...(r.overlay?.banner||{})},title:{...d.overlay.title,...(r.overlay?.title||{})},subtitle:{...d.overlay.subtitle,...(r.overlay?.subtitle||{})},line:{...d.overlay.line,...(r.overlay?.line||{})}},
+    filters:{...d.filters,...(r.filters||{})}
+  };
+}
 function setV(id,v){const e=$(id);if(e)e.value=v??''}function setC(id,v){const e=$(id);if(e)e.checked=!!v}
 function fillControls(){
   studio=mergeDefaults(studio);const o=studio.overlay,b=o.banner,t=o.title,s=o.subtitle,l=o.line;
@@ -164,20 +194,44 @@ function fillControls(){
   setV('#subText',s.text);setV('#subFont',s.font);setV('#subSize',s.size_pct);setV('#subColor',s.color);setV('#subAlign',s.align);
   setV('#lineText',l.text);setV('#lineColor',l.color);setC('#includeDate',l.include_date!==false);
   setV('#bannerType',b.type);setV('#bannerColor',b.color);setV('#bannerHeight',b.height_pct);setV('#bannerOpacity',b.opacity);setV('#bannerImageOpacity',b.image_opacity);setC('#bannerEnabled',b.enabled!==false);
+  const a=studio.adaptive||defaultConfig().adaptive;
+  setC('#adaptiveEnabled',a.enabled!==false);setC('#autoOrientation',a.auto_orientation!==false);setC('#autoCrop',a.auto_crop!==false);setC('#faceSafeArea',a.face_safe_area!==false);
+  setV('#portraitBannerMax',a.portrait?.banner_max_pct??18);setV('#portraitBannerMin',a.portrait?.banner_min_pct??12);
+  setV('#landscapeBannerMax',a.landscape?.banner_max_pct??22);setV('#landscapeBannerMin',a.landscape?.banner_min_pct??14);
+  setV('#faceGapPct',a.face_gap_pct??2.5);setV('#facePaddingRatio',a.face_padding_ratio??.34);setV('#minTextScalePct',Math.round(Number(a.min_text_scale??.68)*100));
   oldBannerPath=b.image_path||'';$('#bannerPath').textContent=oldBannerPath?'Gespeichert: '+oldBannerPath:'Kein Hintergrundbild gespeichert';
   renderFilters();renderPreview();
 }
 function readControls(){
   const enabled=[...document.querySelectorAll('[data-filter-on]:checked')].map(x=>x.value);
   const featured=[...document.querySelectorAll('[data-filter-star]:checked')].map(x=>x.value).filter(x=>enabled.includes(x)).slice(0,6);
-  const def=$('#defaultFilter').value;return {version:56,overlay:{enabled:true,padding_pct:4.5,banner:{enabled:$('#bannerEnabled').checked,type:$('#bannerType').value,color:$('#bannerColor').value,opacity:Number($('#bannerOpacity').value),height_pct:Number($('#bannerHeight').value),image_path:studio?.overlay?.banner?.image_path||'',image_opacity:Number($('#bannerImageOpacity').value)},
+  const def=$('#defaultFilter').value;
+  const portraitMax=Math.max(12,Math.min(22,Number($('#portraitBannerMax').value)||18));
+  const portraitMin=Math.max(10,Math.min(portraitMax,Number($('#portraitBannerMin').value)||12));
+  const landscapeMax=Math.max(14,Math.min(26,Number($('#landscapeBannerMax').value)||22));
+  const landscapeMin=Math.max(10,Math.min(landscapeMax,Number($('#landscapeBannerMin').value)||14));
+  return {version:76,
+    adaptive:{
+      enabled:$('#adaptiveEnabled').checked,
+      auto_orientation:$('#autoOrientation').checked,
+      auto_crop:$('#autoCrop').checked,
+      face_safe_area:$('#faceSafeArea').checked,
+      face_padding_ratio:Math.max(.12,Math.min(.65,Number($('#facePaddingRatio').value)||.34)),
+      face_gap_pct:Math.max(1,Math.min(8,Number($('#faceGapPct').value)||2.5)),
+      min_text_scale:Math.max(.52,Math.min(.92,(Number($('#minTextScalePct').value)||68)/100)),
+      portrait:{banner_max_pct:portraitMax,banner_min_pct:portraitMin},
+      landscape:{banner_max_pct:landscapeMax,banner_min_pct:landscapeMin},
+      print:{ratio:'10x15',bleed_pct:1.5}
+    },
+    overlay:{enabled:true,padding_pct:4.5,banner:{enabled:$('#bannerEnabled').checked,type:$('#bannerType').value,color:$('#bannerColor').value,opacity:Number($('#bannerOpacity').value),height_pct:Number($('#bannerHeight').value),image_path:studio?.overlay?.banner?.image_path||'',image_opacity:Number($('#bannerImageOpacity').value)},
     title:{enabled:true,source:'title',text:$('#titleText').value.trim(),font:$('#titleFont').value,weight:900,size_pct:Number($('#titleSize').value),color:$('#titleColor').value,align:$('#titleAlign').value,shadow:true,multicolor:$('#titleMulti').checked,colors:['#pal1','#pal2','#pal3','#pal4'].map(id=>$(id).value)},
     subtitle:{enabled:true,source:'subtitle',text:$('#subText').value.trim(),font:$('#subFont').value,weight:800,size_pct:Number($('#subSize').value),color:$('#subColor').value,align:$('#subAlign').value,shadow:true},
     line:{enabled:true,source:'overlay',text:$('#lineText').value.trim(),font:'clean',weight:600,size_pct:2.1,color:$('#lineColor').value,align:$('#subAlign').value,shadow:true,include_date:$('#includeDate').checked},branding:true},
-    filters:{enabled:enabled.length?enabled:['natural'],featured:featured.length?featured:[enabled[0]||'natural'],default:enabled.includes(def)?def:(enabled[0]||'natural')}};
+    filters:{enabled:enabled.length?enabled:['natural'],featured:featured.length?featured:[enabled[0]||'natural'],default:enabled.includes(def)?def:(enabled[0]||'natural')}
+  };
 }
 function renderFilters(){
-  const cat=window.FTS_STUDIO_V56.catalog,en=new Set(studio.filters.enabled||[]),star=new Set(studio.filters.featured||[]);
+  const cat=window.FTS_PHOTO_ENGINE.catalog,en=new Set(studio.filters.enabled||[]),star=new Set(studio.filters.featured||[]);
   $('#filters').innerHTML=Object.entries(categoryNames).map(([k,label])=>{
     const items=Object.entries(cat).filter(([,x])=>x.cat===k);
     if(!items.length)return'';return '<div class="filterGroup"><div class="filterGroupTitle">'+label+'</div><div class="filterGrid">'+items.map(([id,x])=>'<label class="filterCard"><input type="checkbox" data-filter-on value="'+id+'" '+(en.has(id)?'checked':'')+'><span><b>'+esc(x.de)+'</b><small>'+esc(x.descDe)+'</small><label class="star"><input type="checkbox" data-filter-star value="'+id+'" '+(star.has(id)?'checked':'')+'> ⭐ direkt zeigen</label></span></label>').join('')+'</div></div>';
@@ -186,7 +240,7 @@ function renderFilters(){
   syncFilterSelects();
 }
 function syncFilterSelects(){
-  const ids=[...document.querySelectorAll('[data-filter-on]:checked')].map(x=>x.value);const cat=window.FTS_STUDIO_V56.catalog;
+  const ids=[...document.querySelectorAll('[data-filter-on]:checked')].map(x=>x.value);const cat=window.FTS_PHOTO_ENGINE.catalog;
   const cur=$('#defaultFilter').value||studio.filters.default,curP=$('#previewFilter').value||cur;
   const opts=ids.map(id=>'<option value="'+id+'">'+esc(cat[id]?.de||id)+'</option>').join('');
   $('#defaultFilter').innerHTML=opts;$('#previewFilter').innerHTML=opts;
@@ -196,14 +250,45 @@ function drawSample(ctx,w,h){
   const g=ctx.createLinearGradient(0,0,w,h);g.addColorStop(0,'#2f5d62');g.addColorStop(1,'#d49a6a');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
   ctx.fillStyle='rgba(255,255,255,.16)';ctx.beginPath();ctx.arc(w*.5,h*.34,w*.13,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(0,0,0,.18)';ctx.beginPath();ctx.ellipse(w*.5,h*.66,w*.31,h*.28,0,0,Math.PI*2);ctx.fill();
 }
-function drawCover(ctx,img,w,h){const s=Math.max(w/img.naturalWidth,h/img.naturalHeight),dw=img.naturalWidth*s,dh=img.naturalHeight*s;ctx.drawImage(img,(w-dw)/2,(h-dh)/2,dw,dh)}
-let previewTimer;
-function schedulePreview(){clearTimeout(previewTimer);previewTimer=setTimeout(renderPreview,50)}
+let previewTimer,previewRenderSeq=0;
+function schedulePreview(){clearTimeout(previewTimer);previewTimer=setTimeout(renderPreview,80)}
 async function renderPreview(){
-  if(!eventRow)return;studio=mergeDefaults(readControls());const cv=$('#preview'),ctx=cv.getContext('2d');cv.width=720;cv.height=900;ctx.clearRect(0,0,cv.width,cv.height);
-  if(previewImg)drawCover(ctx,previewImg,cv.width,cv.height);else drawSample(ctx,cv.width,cv.height);
-  const key=$('#previewFilter').value||studio.filters.default||'natural';window.FTS_STUDIO_V56.applyFilter(cv,key);
-  await window.FTS_STUDIO_V56.drawOverlay(ctx,cv,{...eventRow,studio_v56:studio,photo_branding:'bottom'},studio,{selectedFilter:key,photoEventDayText:()=>String(eventRow.event_date||'').split('-').reverse().join('.'),assetUrl,loadRemoteImage});
+  if(!eventRow)return;
+  const seq=++previewRenderSeq;
+  studio=mergeDefaults(readControls());
+  const cv=$('#preview'),ctx=cv.getContext('2d',{willReadFrequently:true}),engine=window.FTS_PHOTO_ENGINE;
+  if(!engine)return setStatus('FTS Foto-Motor konnte nicht geladen werden.','err');
+  const key=$('#previewFilter').value||studio.filters.default||'natural';
+  let plan;
+  if(previewImg){
+    plan=engine.buildPlan(previewImg,'auto',studio,previewFaces);
+    if(seq!==previewRenderSeq)return;
+    cv.width=plan.w;cv.height=plan.h;ctx.clearRect(0,0,cv.width,cv.height);
+    engine.drawPhoto(ctx,previewImg,plan);
+    engine.applyFilter(cv,key);
+  }else{
+    const fake={naturalWidth:1200,naturalHeight:1800};
+    plan=engine.buildPlan(fake,'auto',studio,[]);
+    cv.width=plan.w;cv.height=plan.h;ctx.clearRect(0,0,cv.width,cv.height);
+    drawSample(ctx,cv.width,cv.height);
+    engine.applyFilter(cv,key);
+  }
+  await engine.drawOverlay(ctx,cv,{...eventRow,studio_config:studio,photo_branding:'bottom'},studio,{
+    selectedFilter:key,selectedLayout:'auto',
+    adaptiveState:{...plan.adaptive,orientation:plan.orientation},
+    photoEventDayText:()=>String(eventRow.event_date||'').split('-').reverse().join('.'),
+    assetUrl,loadRemoteImage
+  });
+  let info=$('#adaptivePreviewInfo');
+  if(!info){
+    info=document.createElement('div');info.id='adaptivePreviewInfo';info.className='hint';info.style.marginTop='8px';
+    document.querySelector('.previewPanel .panelBody')?.appendChild(info);
+  }
+  if(info){
+    const o=plan.orientation==='landscape'?'Querformat':'Hochformat';
+    const faces=plan.adaptive?.faceCount||0,banner=Math.round(plan.adaptive?.bannerPct||0),text=Math.round((plan.adaptive?.textScale||1)*100);
+    info.textContent='Automatik: '+o+' · '+faces+' Gesicht'+(faces===1?'':'er')+' · Balken '+banner+' % · Schrift '+text+' %'+(plan.adaptive?.unresolved?' · Motiv sehr tief – bitte Vorschau prüfen':'');
+  }
 }
 async function loadEvents(){
   if(!auth()){setStatus('Bitte zuerst das FTS Cockpit öffnen und dieses Gerät anmelden.','err');return}
@@ -215,7 +300,7 @@ async function loadEvents(){
 async function loadEvent(token){
   if(!token)return;setStatus('Event und Studio werden geladen …');eventToken=token;
   eventRow=await rpc('fts_admin_get_event_v9',{p_admin_code:auth(),p_event_token:token});
-  studio=await rpc('fts_admin_get_event_studio_v56',{p_admin_code:auth(),p_event_token:token})||{};
+  studio=await rpc('fts_admin_get_event_studio',{p_admin_code:auth(),p_event_token:token})||{};
   studio=mergeDefaults(studio);pendingBanner=null;removeBanner=false;fillControls();
   const printOnly=eventRow?.operation_mode==='print_only';
   $('#openGuestBtn').classList.toggle('hidden',printOnly);
@@ -238,7 +323,7 @@ async function save(){
     studio=readControls();
     if(removeBanner)studio.overlay.banner.image_path='';
     if(pendingBanner)studio.overlay.banner.image_path=await uploadBanner(pendingBanner);
-    const saved=await rpc('fts_admin_set_event_studio_v56',{p_admin_code:auth(),p_event_token:eventToken,p_config:studio});studio=mergeDefaults(saved||studio);
+    const saved=await rpc('fts_admin_set_event_studio',{p_admin_code:auth(),p_event_token:eventToken,p_config:studio});studio=mergeDefaults(saved||studio);
     oldBannerPath=studio.overlay.banner.image_path||'';pendingBanner=null;removeBanner=false;$('#bannerFile').value='';fillControls();setStatus('✓ Studio gespeichert. Bestehende Dateien wurden nicht gelöscht.','ok');
   }catch(e){setStatus('Speichern fehlgeschlagen: '+e.message,'err')}
   finally{btn.disabled=false}
@@ -312,7 +397,7 @@ $('#saveBtn').onclick=save;$('#resetBtn').onclick=()=>{studio=defaultConfig();fi
 document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>applyPreset(b.dataset.preset));
 $('#bannerFile').onchange=e=>{pendingBanner=e.target.files?.[0]||null;removeBanner=false;$('#bannerPath').textContent=pendingBanner?'Neu: '+pendingBanner.name:'Kein neues Bild';schedulePreview()};
 $('#removeBannerBtn').onclick=()=>{pendingBanner=null;removeBanner=true;studio.overlay.banner.image_path='';$('#bannerFile').value='';$('#bannerPath').textContent='Bild wird beim Speichern entfernt';schedulePreview()};
-$('#previewFile').onchange=e=>{const file=e.target.files?.[0];if(!file)return;const img=new Image();img.onload=()=>{previewImg=img;renderPreview()};img.src=URL.createObjectURL(file)};
+$('#previewFile').onchange=e=>{const file=e.target.files?.[0];if(!file)return;const url=URL.createObjectURL(file),img=new Image();img.onload=async()=>{previewImg=img;previewFaces=[];setStatus('Vorschaubild wird analysiert …');try{previewFaces=await window.FTS_SOCIAL?.detectFaces?.(img)||[]}catch(err){console.warn('Studio Gesichtserkennung',err)}finally{URL.revokeObjectURL(url)};await renderPreview();setStatus('Studio bereit · '+(eventRow?.title||''),'ok')};img.onerror=()=>URL.revokeObjectURL(url);img.src=url};
 $('#previewFilter').onchange=renderPreview;
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=72',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(()=>{});
 loadEvents().catch(e=>setStatus('Studio konnte nicht geladen werden: '+e.message,'err'));
