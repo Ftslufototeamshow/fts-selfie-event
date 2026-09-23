@@ -51,6 +51,12 @@ enum JSONValue: Codable, Hashable {
 
 // MARK: - API Models
 
+struct DeviceAdminChoice: Codable, Identifiable, Hashable {
+    let user_id: String
+    let display_name: String
+    var id: String { user_id }
+}
+
 struct StaffChoice: Codable, Identifiable, Hashable {
     let user_id: String
     let display_name: String
@@ -597,6 +603,7 @@ extension NSColor {
 final class AppState: ObservableObject {
     enum Phase { case boot, deviceSetup, staffLogin, main }
     @Published var phase: Phase = .boot
+    @Published var deviceAdmins: [DeviceAdminChoice] = []
     @Published var staffChoices: [StaffChoice] = []
     @Published var currentUser: SessionInfo?
     @Published var events: [EventRow] = []
@@ -616,7 +623,7 @@ final class AppState: ObservableObject {
     var selectedEvent: EventRow? { events.first(where: {$0.event_token == selectedEventToken}) }
 
     func bootstrap() async {
-        guard let dev = deviceToken, !dev.isEmpty else { phase = .deviceSetup; return }
+        guard let dev = deviceToken, !dev.isEmpty else { await loadDeviceAdmins(); return }
         if let session = sessionToken, !session.isEmpty {
             do {
                 let info: SessionInfo = try await api.rpc("fts_printer_validate_session_v72", body: ["p_device_token":dev,"p_session_token":session])
@@ -632,14 +639,28 @@ final class AppState: ObservableObject {
         await loadChoices()
     }
 
-    func activateDevice(adminCode: String) async {
-        guard !adminCode.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { errorMessage="FTS Admin-Code eingeben."; return }
+    func loadDeviceAdmins() async {
         busy=true; defer{busy=false}
         do {
-            let token: String = try await api.rpc("fts_admin_register_device", body:[
-                "p_admin_code":adminCode,
+            let rows:[DeviceAdminChoice] = try await api.rpc("fts_printer_device_admin_choices_v75",body:[:])
+            deviceAdmins=rows
+            phase = .deviceSetup
+        } catch {
+            deviceAdmins=[]
+            phase = .deviceSetup
+            errorMessage=error.localizedDescription
+        }
+    }
+
+    func activateDevice(admin: DeviceAdminChoice, code: String) async {
+        guard !code.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { errorMessage="Persönlichen Administrator-Code eingeben."; return }
+        busy=true; defer{busy=false}
+        do {
+            let token: String = try await api.rpc("fts_printer_register_device_v75", body:[
+                "p_user_id":admin.user_id,
+                "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.1"
+                "p_user_agent":"FTS Printer macOS 0.1.1"
             ])
             Keychain.set(token,key:"deviceToken")
             await loadChoices()
@@ -647,7 +668,7 @@ final class AppState: ObservableObject {
     }
 
     func loadChoices() async {
-        guard let dev=deviceToken else { phase = .deviceSetup; return }
+        guard let dev=deviceToken else { await loadDeviceAdmins(); return }
         do {
             let rows:[StaffChoice] = try await api.rpc("fts_printer_login_choices_v72",body:["p_device_token":dev])
             staffChoices=rows;phase = .staffLogin
@@ -661,7 +682,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.1"
+                "p_user_agent":"FTS Printer macOS 0.1.1"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             Keychain.set(session,key:"staffSession");currentUser=info;phase = .main
@@ -800,16 +821,34 @@ final class AppState: ObservableObject {
 
 struct DeviceSetupView: View {
     @EnvironmentObject var state:AppState
+    @State private var selected=""
     @State private var code=""
+    var admin:DeviceAdminChoice?{state.deviceAdmins.first{$0.user_id==selected}}
     var body:some View {
         VStack(spacing:22){
             Image(systemName:"printer.fill").font(.system(size:52)).foregroundStyle(.teal)
             Text("FTS Printer").font(.largeTitle.bold())
-            Text("Dieses MacBook / diesen iMac einmalig mit dem FTS Admin-Code freischalten. Danach arbeiten die Mitarbeiter nur noch mit ihrem persönlichen Printer-Code.")
-                .multilineTextAlignment(.center).foregroundStyle(.secondary).frame(maxWidth:560)
-            SecureField("FTS Admin-Code",text:$code).textFieldStyle(.roundedBorder).frame(maxWidth:380).onSubmit{Task{await state.activateDevice(adminCode:code)}}
-            Button("Mac freischalten"){Task{await state.activateDevice(adminCode:code)}}.buttonStyle(.borderedProminent).disabled(state.busy)
+            Text("Diesen Mac einmalig mit einem Printer-Administrator freischalten. Administrator auswählen und dessen persönlichen Printer-Code eingeben.")
+                .multilineTextAlignment(.center).foregroundStyle(.secondary).frame(maxWidth:600)
+            if state.deviceAdmins.isEmpty {
+                Text("Kein aktiver Printer-Administrator gefunden. Im FTS Cockpit zuerst mindestens einen Printer-Administrator anlegen.")
+                    .foregroundStyle(.orange).multilineTextAlignment(.center).frame(maxWidth:560)
+                Button("Administratoren neu laden"){Task{await state.loadDeviceAdmins()}}
+            } else {
+                Picker("Printer-Administrator",selection:$selected){
+                    Text("Bitte auswählen …").tag("")
+                    ForEach(state.deviceAdmins){a in Text(a.display_name).tag(a.user_id)}
+                }.frame(maxWidth:420)
+                SecureField("Persönlicher Administrator-Code",text:$code).textFieldStyle(.roundedBorder).frame(maxWidth:380)
+                    .onSubmit{if let a=admin{Task{await state.activateDevice(admin:a,code:code)}}}
+                Button("Mac freischalten"){
+                    if let a=admin{Task{await state.activateDevice(admin:a,code:code)}}
+                }.buttonStyle(.borderedProminent).disabled(admin==nil||code.isEmpty||state.busy)
+                Button("Administratoren aktualisieren"){Task{await state.loadDeviceAdmins()}}.buttonStyle(.plain)
+            }
         }.padding(50).frame(minWidth:720,minHeight:520)
+        .onAppear{if selected.isEmpty{selected=state.deviceAdmins.first?.user_id ?? ""}}
+        .onChange(of:state.deviceAdmins){_ in if !state.deviceAdmins.contains(where:{$0.user_id==selected}){selected=state.deviceAdmins.first?.user_id ?? ""}}
     }
 }
 
