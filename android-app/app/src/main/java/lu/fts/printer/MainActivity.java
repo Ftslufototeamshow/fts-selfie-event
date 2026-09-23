@@ -36,6 +36,10 @@ public class MainActivity extends Activity {
     final ArrayList<Staff> staff = new ArrayList<>();
     final ArrayList<EventModel> events = new ArrayList<>();
     final ArrayList<OrderModel> orders = new ArrayList<>();
+    final ArrayList<JSONObject> workUnits = new ArrayList<>();
+    final ArrayList<JSONObject> pickupRows = new ArrayList<>();
+    final ArrayList<JSONObject> printerNodes = new ArrayList<>();
+    final ArrayList<JSONObject> archiveRows = new ArrayList<>();
 
     SharedPreferences prefs;
     String deviceToken = "", sessionToken = "", currentUser = "", currentRole = "";
@@ -277,18 +281,25 @@ public class MainActivity extends Activity {
         reloadEvents.setOnClickListener(v->{View b=findTagged(content,"body");if(b instanceof LinearLayout)loadEvents((LinearLayout)b);});
 
         LinearLayout tab=row();
-        Button ordersBtn=button("Selfie-Aufträge");
-        Button cameraBtn=secondaryButton("Kamera / Handyfoto");
+        Button ordersBtn=button("Druckaufträge");
+        Button pickupBtn=secondaryButton("Abholung");
+        Button printersBtn=secondaryButton("Printer");
+        Button cameraBtn=secondaryButton("Handyfoto");
         tab.addView(ordersBtn,new LinearLayout.LayoutParams(0,-2,1));
+        tab.addView(pickupBtn,new LinearLayout.LayoutParams(0,-2,1));
+        tab.addView(printersBtn,new LinearLayout.LayoutParams(0,-2,1));
         tab.addView(cameraBtn,new LinearLayout.LayoutParams(0,-2,1));
         content.addView(tab);
 
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setTag("body");
         content.addView(body);
         ordersBtn.setOnClickListener(v->{activeScreen="orders";renderOrders(body);});
+        pickupBtn.setOnClickListener(v->{activeScreen="pickup";renderPickups(body,"");});
+        printersBtn.setOnClickListener(v->{activeScreen="printers";renderPrinters(body);});
         cameraBtn.setOnClickListener(v->{activeScreen="camera";renderCamera(body);});
 
         loadEvents(body);
+        checkUpdate();
         handler.removeCallbacksAndMessages(null);
         handler.postDelayed(new Runnable(){public void run(){if(onMain){refreshSelected();handler.postDelayed(this,5000);}}},5000);
     }
