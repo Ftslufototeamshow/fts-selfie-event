@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SRC="$ROOT/macos-app/FTSPrinterApp.swift"
+SOURCES=("$ROOT"/macos-app/*.swift)
 PLIST="$ROOT/macos-app/Info.plist"
 DIST="$ROOT/dist"
 APP="$DIST/FTS Printer 014.app"
@@ -11,8 +11,8 @@ rm -f "$MACOS/FTS Printer"
 SDK="$(xcrun --sdk macosx --show-sdk-path)"
 mkdir -p "$DIST/build"
 COMMON=(-parse-as-library -O -sdk "$SDK" -framework SwiftUI -framework AppKit -framework Foundation -framework Security -framework CryptoKit -framework ImageIO)
-xcrun swiftc "$SRC" "${COMMON[@]}" -target arm64-apple-macos13.0 -o "$DIST/build/fts-printer-arm64"
-xcrun swiftc "$SRC" "${COMMON[@]}" -target x86_64-apple-macos13.0 -o "$DIST/build/fts-printer-x86_64"
+xcrun swiftc "${SOURCES[@]}" "${COMMON[@]}" -target arm64-apple-macos13.0 -o "$DIST/build/fts-printer-arm64"
+xcrun swiftc "${SOURCES[@]}" "${COMMON[@]}" -target x86_64-apple-macos13.0 -o "$DIST/build/fts-printer-x86_64"
 lipo -create "$DIST/build/fts-printer-arm64" "$DIST/build/fts-printer-x86_64" -output "$MACOS/FTS Printer"
 cp "$PLIST" "$APP/Contents/Info.plist"
 chmod +x "$MACOS/FTS Printer"
