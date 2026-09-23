@@ -6,7 +6,7 @@
   function addCss(){
     if(document.getElementById('ftsPickupStationCss57'))return;
     const s=document.createElement('style');s.id='ftsPickupStationCss57';s.textContent=`
-.order{overflow:hidden}.orderToggle{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;text-align:left;padding:14px;background:transparent!important;color:inherit!important;border:0!important;border-radius:0!important}.orderToggle .amount{align-self:center}.orderToggle .arrow{display:inline-grid;place-items:center;width:27px;height:27px;margin-left:7px;border-radius:999px;background:#172829;color:var(--gold);font-size:1rem;vertical-align:middle}.order.collapsed .orderBody{display:none}.order:not(.collapsed) .orderToggle .arrow{transform:rotate(180deg)}.orderBody{border-top:1px solid #202a2b}.pickupStrip{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#0b1718}.pickupStrip span{font-size:.68rem;color:var(--muted);font-weight:800}.pickupStrip strong{font-size:1.3rem;letter-spacing:.12em;color:var(--gold)}.testStrip{padding:8px 14px;background:#5a3b17;color:#ffe1a0;font-weight:950;font-size:.72rem;letter-spacing:.04em}.photos{padding-top:12px}.photoItem{position:relative}.photoItem .viewPhoto{display:block;padding:0;width:100%;background:transparent;border:0}.photoItem .singlePrint{width:100%;margin-top:6px;padding:7px 6px;border-radius:8px;background:#182829;color:#e8efed;border:1px solid #ffffff12;font-size:.66rem}.pickupBtn{background:#265a44!important;color:#d7ffe8!important}.archiveBtn{background:#293335!important;color:#e5ecea!important}.pickupWait{background:#46351b!important;color:#ffe19b!important}.receiptTestBanner{padding:10px 12px;margin:0 0 18px;border:2px solid #a76c16;background:#fff2cf;color:#714300;font-weight:950;text-align:center;letter-spacing:.05em}.receiptPickup{margin:14px 0;padding:12px;border:1px solid #d6c9ac;background:#fffaf0;border-radius:10px}.receiptPickup b{display:block;font-size:1.7rem;letter-spacing:.14em;margin-top:3px}.photoViewer57{position:fixed;inset:0;z-index:9999;background:#000d;display:none;place-items:center;padding:14px}.photoViewer57.show{display:grid}.photoViewer57 .box{position:relative;max-width:min(960px,100%);max-height:96vh}.photoViewer57 img{display:block;max-width:100%;max-height:92vh;object-fit:contain;border-radius:12px;background:#050909}.photoViewer57 button{position:absolute;right:8px;top:8px;border:0;border-radius:999px;width:38px;height:38px;background:#111d;color:#fff;font-size:1.1rem}.orderActions{grid-template-columns:repeat(2,minmax(0,1fr))}@media(max-width:720px){.orderActions{grid-template-columns:1fr}.orderToggle{padding:12px}.pickupStrip{padding:9px 12px}}
+.order{overflow:hidden}.orderToggle,.orderToggleLegacy{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;text-align:left;padding:14px;background:transparent!important;color:inherit!important;border:0!important;border-radius:0!important;cursor:pointer}.orderToggleLegacy{padding:14px 14px 10px}.orderToggle .amount,.orderToggleLegacy .amount{align-self:center}.orderToggle .arrow,.orderToggleLegacy .arrow{display:inline-grid;place-items:center;width:27px;height:27px;margin-left:7px;border-radius:999px;background:#172829;color:var(--gold);font-size:1rem;vertical-align:middle;transition:transform .18s ease}.order.collapsed .orderBody{display:none}.order:not(.collapsed) .orderToggle .arrow,.order:not(.collapsed) .orderToggleLegacy .arrow{transform:rotate(180deg)}.orderBody{border-top:1px solid #202a2b}.pickupStrip{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#0b1718}.pickupStrip span{font-size:.68rem;color:var(--muted);font-weight:800}.pickupStrip strong{font-size:1.3rem;letter-spacing:.12em;color:var(--gold)}.testStrip{padding:8px 14px;background:#5a3b17;color:#ffe1a0;font-weight:950;font-size:.72rem;letter-spacing:.04em}.photos{padding-top:12px}.photoItem{position:relative}.photoItem .viewPhoto{display:block;padding:0;width:100%;background:transparent;border:0}.photoItem .singlePrint{width:100%;margin-top:6px;padding:7px 6px;border-radius:8px;background:#182829;color:#e8efed;border:1px solid #ffffff12;font-size:.66rem}.pickupBtn{background:#265a44!important;color:#d7ffe8!important}.archiveBtn{background:#293335!important;color:#e5ecea!important}.pickupWait{background:#46351b!important;color:#ffe19b!important}.receiptTestBanner{padding:10px 12px;margin:0 0 18px;border:2px solid #a76c16;background:#fff2cf;color:#714300;font-weight:950;text-align:center;letter-spacing:.05em}.receiptPickup{margin:14px 0;padding:12px;border:1px solid #d6c9ac;background:#fffaf0;border-radius:10px}.receiptPickup b{display:block;font-size:1.7rem;letter-spacing:.14em;margin-top:3px}.photoViewer57{position:fixed;inset:0;z-index:9999;background:#000d;display:none;place-items:center;padding:14px}.photoViewer57.show{display:grid}.photoViewer57 .box{position:relative;max-width:min(960px,100%);max-height:96vh}.photoViewer57 img{display:block;max-width:100%;max-height:92vh;object-fit:contain;border-radius:12px;background:#050909}.photoViewer57 button{position:absolute;right:8px;top:8px;border:0;border-radius:999px;width:38px;height:38px;background:#111d;color:#fff;font-size:1.1rem}.orderActions{grid-template-columns:repeat(2,minmax(0,1fr))}@media(max-width:720px){.orderActions{grid-template-columns:1fr}.orderToggle{padding:12px}.pickupStrip{padding:9px 12px}}
 `;document.head.appendChild(s);
   }
   function viewer(){
@@ -106,6 +106,72 @@
     const pickup=r?.pickup_code?'<div class="receiptPickup"><span>Abholcode</span><b>'+esc(r.pickup_code)+'</b></div>':'';
     return test+base.replace('<div class="receiptItems">',pickup+'<div class="receiptItems">');
   };
+  function upgradeCompactCard(order){
+    if(!order||order.dataset.compact57==='1')return;
+    order.dataset.compact57='1';
+
+    let toggle=order.querySelector(':scope > .orderToggle');
+    let body=order.querySelector(':scope > .orderBody');
+
+    if(!toggle){
+      const top=order.querySelector(':scope > .orderTop');
+      if(!top)return;
+
+      body=document.createElement('div');
+      body.className='orderBody';
+      const move=[...order.children].filter(x=>x!==top&& !x.classList.contains('testStrip'));
+      move.forEach(x=>body.appendChild(x));
+      order.appendChild(body);
+
+      top.classList.add('orderToggleLegacy');
+      top.setAttribute('role','button');
+      top.setAttribute('tabindex','0');
+      top.setAttribute('aria-expanded','false');
+
+      const amount=top.querySelector('.amount');
+      if(amount&&!amount.querySelector('.arrow')){
+        const ar=document.createElement('i');
+        ar.className='arrow';ar.textContent='⌃';
+        amount.appendChild(ar);
+      }
+      const toggleLegacy=()=>{
+        const now=order.classList.toggle('collapsed');
+        top.setAttribute('aria-expanded',String(!now));
+      };
+      top.addEventListener('click',toggleLegacy);
+      top.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleLegacy()}});
+    }else{
+      toggle.setAttribute('aria-expanded','false');
+      toggle.onclick=()=>{
+        const collapsed=order.classList.toggle('collapsed');
+        toggle.setAttribute('aria-expanded',String(!collapsed));
+      };
+    }
+
+    if(String(launchOrder||'')===String(order.dataset.orderCard||'')){
+      order.classList.remove('collapsed');
+      (toggle||order.querySelector(':scope > .orderTop'))?.setAttribute('aria-expanded','true');
+    }else{
+      order.classList.add('collapsed');
+    }
+  }
+  function upgradeCompactOrders(root){
+    if(!root)return;
+    root.querySelectorAll('.order').forEach(upgradeCompactCard);
+  }
+  const compactObserver=new MutationObserver(muts=>{
+    for(const m of muts){
+      if(m.type==='childList'){
+        upgradeCompactOrders(document.getElementById('liveOrders'));
+        upgradeCompactOrders(document.getElementById('archiveOrders'));
+        break;
+      }
+    }
+  });
+  compactObserver.observe(document.getElementById('liveOrders'),{childList:true,subtree:false});
+  compactObserver.observe(document.getElementById('archiveOrders'),{childList:true,subtree:false});
+  setTimeout(()=>{upgradeCompactOrders(document.getElementById('liveOrders'));upgradeCompactOrders(document.getElementById('archiveOrders'))},0);
+
   addCss();viewer();
   $('#eventFilter').onchange=renderOrders;
   $('#archiveEventFilter').onchange=renderOrders;
