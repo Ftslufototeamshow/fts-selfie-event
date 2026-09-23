@@ -344,5 +344,5 @@ async function openPrivacyEditor({url,title='Datenschutz-Vorschau',masks=null,on
   });
 }
 
-window.FTS_SOCIAL={shareText,hashtags,copyText,protect,download,shareOne,shareMany,setPreview,blobFor,getManualMasks,setManualMasks,addManualMask,removeLastManualMask,openPrivacyEditor};
+window.FTS_SOCIAL={shareText,hashtags,copyText,protect,download,shareOne,shareMany,setPreview,blobFor,getManualMasks,setManualMasks,addManualMask,removeLastManualMask,openPrivacyEditor,detectFaces};
 })();
