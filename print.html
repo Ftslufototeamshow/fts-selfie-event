@@ -28,7 +28,7 @@ button,input,select{font:inherit}.shell{width:min(1100px,calc(100% - 24px));marg
 <main class="shell">
   <div class="top">
     <div class="brand"><div class="eyebrow">FTS.LU · SELFIE OPERATIONS</div><h1>Print Station</h1><p>Bezahlte Fotoprints sicher prüfen, drucken und dokumentieren.</p></div>
-    <div class="topActions"><a class="btn secondary" href="./dashboard.html">Cockpit</a><button class="secondary" id="installBtn">Auf Handy installieren</button><button class="ghost hidden" id="logoutBtn">Gerät abmelden</button></div>
+    <div class="topActions"><a class="btn secondary" id="cockpitBtn" href="./dashboard.html?stay=cockpit">Cockpit</a><button class="secondary" id="installBtn">Auf Handy installieren</button><button class="ghost hidden" id="logoutBtn">Gerät abmelden</button></div>
   </div>
 
   <section class="login" id="loginPanel">
@@ -85,12 +85,16 @@ function credential(){return localStorage.getItem(DEVICE_KEY)||''}
 function deviceLabel(){return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)?'FTS Print Station · Handy':'FTS Print Station'}
 function printStationStandalone(){return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}
 async function printStationInstalled(){
-  if(printStationStandalone())return true;
-  try{if(localStorage.getItem('fts_print_station_installed_v1')==='1')return true}catch{}
+  const isPrintLaunch=new URLSearchParams(location.search).get('pwa')==='print';
+  if(isPrintLaunch){
+    try{localStorage.setItem('fts_print_station_installed_v2','1')}catch{}
+    return true;
+  }
+  try{if(localStorage.getItem('fts_print_station_installed_v2')==='1')return true}catch{}
   try{
     if(typeof navigator.getInstalledRelatedApps==='function'){
       const apps=await navigator.getInstalledRelatedApps();
-      if(Array.isArray(apps)&&apps.length)return true;
+      if(Array.isArray(apps)&&apps.some(a=>String(a?.id||'').includes('fts-print-station')))return true;
     }
   }catch{}
   return false;
@@ -279,7 +283,11 @@ $('#refreshBtn').onclick=()=>loadCore();$('#archiveRefreshBtn').onclick=()=>load
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
 $('#receiptCloseBtn').onclick=()=>$('#receiptModal').classList.add('hidden');$('#receiptPrintBtn').onclick=()=>window.print();$('#receiptModal').onclick=e=>{if(e.target===$('#receiptModal'))$('#receiptModal').classList.add('hidden')};
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;refreshInstallButton()});
-window.addEventListener('appinstalled',()=>{try{localStorage.setItem('fts_print_station_installed_v1','1')}catch{}deferredInstallPrompt=null;refreshInstallButton()});
+if(printStationStandalone()){
+  try{localStorage.setItem('fts_admin_surface_v1','print')}catch{}
+}
+$('#cockpitBtn').addEventListener('click',()=>{try{localStorage.setItem('fts_admin_surface_v1','cockpit')}catch{}});
+window.addEventListener('appinstalled',()=>{try{localStorage.setItem('fts_print_station_installed_v2','1')}catch{}deferredInstallPrompt=null;refreshInstallButton()});
 matchMedia('(display-mode: standalone)').addEventListener?.('change',refreshInstallButton);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshInstallButton()});
 $('#installBtn').onclick=async()=>{
@@ -287,7 +295,7 @@ $('#installBtn').onclick=async()=>{
   if(deferredInstallPrompt){
     deferredInstallPrompt.prompt();
     const result=await deferredInstallPrompt.userChoice.catch(()=>null);
-    if(result?.outcome==='accepted'){try{localStorage.setItem('fts_print_station_installed_v1','1')}catch{}}
+    if(result?.outcome==='accepted'){try{localStorage.setItem('fts_print_station_installed_v2','1')}catch{}}
     deferredInstallPrompt=null;refreshInstallButton();return;
   }
   alert('Android/Samsung: Browser-Menü → Zum Startbildschirm hinzufügen. iPhone: Teilen → Zum Home-Bildschirm.');
