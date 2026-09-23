@@ -564,6 +564,20 @@ function render(){
 
    <div class="sendFlow ${uploadOpen?'':'hiddenFlow'}" id="sendFlow">
      <div class="privacyInfo"><strong id="privacyTitle">${tr('privacyTitle')}</strong><span id="privacyText">${tr('privacy')}</span></div>
+     <div class="onlineConsentBox">
+       <strong>${tr('onlinePublishTitle')}</strong>
+       <p>${tr('onlinePublishText')}</p>
+       <div class="onlineChoiceGrid">
+         <button type="button" id="onlineYesBtn" ${uploadOpen?'':'disabled'}>${tr('onlineYes')}</button>
+         <button type="button" id="onlineNoBtn" ${uploadOpen?'':'disabled'}>${tr('onlineNo')}</button>
+       </div>
+       <div class="onlineDecisionInfo" id="onlineDecisionInfo"></div>
+       <div class="peopleRights" id="peopleRightsWrap">
+         <label><input id="peopleRights" type="checkbox"><span>${tr('peopleRights')}</span></label>
+         <button type="button" class="ghostBtn" id="reviewOnlinePrivacyBtn" style="width:100%;margin-top:9px">${tr('privacyReview')}</button>
+         <div class="tiny" id="onlinePrivacyState" style="margin-top:7px"></div>
+       </div>
+     </div>
      <label class="consent"><input id="consent" type="checkbox" ${uploadOpen?'':'disabled'}><span id="consentText">${tr('consent')}</span></label>
      <button class="main" id="uploadBtn" ${uploadOpen?'':'disabled'}>${tr('send')}</button>
      <div id="message" class="msg"></div>
@@ -606,6 +620,11 @@ function render(){
  keepAdsVisible=!uploadOpen&&routeMode!=='expired';if(keepAdsVisible)startAds();
 
  document.getElementById('photo').addEventListener('change',onPhoto);
+ document.getElementById('onlineYesBtn').addEventListener('click',()=>setOnlineDecision(true));
+ document.getElementById('onlineNoBtn').addEventListener('click',()=>setOnlineDecision(false));
+ document.getElementById('peopleRights').addEventListener('change',e=>{peopleRightsConfirmed=e.target.checked===true});
+ document.getElementById('reviewOnlinePrivacyBtn').addEventListener('click',reviewOnlinePrivacy);
+ syncOnlineDecisionUi();
  document.getElementById('uploadBtn').addEventListener('click',submitPhoto);
  document.getElementById('newSelfieBtn').addEventListener('click',resetForNewSelfie);
  document.getElementById('mySelfiesBtn').addEventListener('click',showMySelfies);
@@ -635,13 +654,54 @@ function bindChoices(){
  document.querySelectorAll('[data-layout]').forEach(b=>b.onclick=()=>{selectedLayout=b.dataset.layout;document.querySelectorAll('[data-layout]').forEach(x=>x.classList.toggle('active',x===b));scheduleRedraw()});
  document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{selectedFilter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));scheduleRedraw()});
 }
-function scheduleRedraw(){if(!selectedFile)return;clearTimeout(redrawTimer);redrawTimer=setTimeout(()=>makeDesign(selectedFile),60)}
+function scheduleRedraw(){if(!selectedFile)return;publicationPrep=null;syncOnlineDecisionUi();clearTimeout(redrawTimer);redrawTimer=setTimeout(()=>makeDesign(selectedFile),60)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function showMessage(text,kind='err'){const x=document.getElementById('message');x.textContent=text;x.className='msg '+kind}
+function syncOnlineDecisionUi(){
+  const yes=document.getElementById('onlineYesBtn'),no=document.getElementById('onlineNoBtn'),info=document.getElementById('onlineDecisionInfo'),rights=document.getElementById('peopleRightsWrap'),check=document.getElementById('peopleRights'),review=document.getElementById('reviewOnlinePrivacyBtn'),state=document.getElementById('onlinePrivacyState');
+  yes?.classList.toggle('activeYes',onlineDecision===true);no?.classList.toggle('activeNo',onlineDecision===false);
+  if(info){
+    info.textContent=onlineDecision===true?tr('onlineYesInfo'):onlineDecision===false?tr('onlineNoInfo'):'';
+    info.classList.toggle('show',onlineDecision!==null);
+  }
+  rights?.classList.toggle('show',onlineDecision===true);
+  if(check)check.checked=peopleRightsConfirmed===true;
+  if(review)review.disabled=!designedBlob||onlineDecision!==true;
+  if(state){
+    state.textContent=publicationPrep?(publicationPrep.protectedCount?trf('privacyDone',{count:publicationPrep.protectedCount}):tr('privacyNone')):'';
+  }
+}
+function setOnlineDecision(value){
+  onlineDecision=value===true;
+  if(value!==true){peopleRightsConfirmed=false;publicationPrep=null}
+  syncOnlineDecisionUi();
+}
+async function preparePublicationCopy(openEditor=false){
+  if(!designedBlob||onlineDecision!==true)return null;
+  if(!window.FTS_SOCIAL)throw new Error('Hintergrundschutz nicht verfügbar');
+  const url=URL.createObjectURL(designedBlob);
+  try{
+    if(openEditor)await FTS_SOCIAL.openPrivacyEditor({url,title:tr('privacyReview'),initialProtected:true});
+    const result=await FTS_SOCIAL.protect(url);
+    publicationPrep={blob:result.blob,detected:Number(result.detected||0),protectedCount:Number(result.protectedCount||0),autoProtectedCount:Number(result.autoProtectedCount||0),manualCount:Number(result.manualCount||0)};
+    syncOnlineDecisionUi();
+    return publicationPrep;
+  }finally{URL.revokeObjectURL(url)}
+}
+async function reviewOnlinePrivacy(){
+  const btn=document.getElementById('reviewOnlinePrivacyBtn'),old=btn?.textContent;
+  if(!designedBlob)return showMessage(tr('noPhoto'));
+  try{
+    if(btn){btn.disabled=true;btn.textContent=tr('privacyWorking')}
+    const result=await preparePublicationCopy(true);
+    if(result?.detected>=5)showMessage(tr('manyFacesWarning'),'warn');
+  }catch(e){console.warn('Online-Hintergrundschutz',e);showMessage(String(e?.message||e),'err')}
+  finally{if(btn){btn.textContent=old||tr('privacyReview');btn.disabled=false}}
+}
 function loadImageFile(file){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=URL.createObjectURL(file)})}
 function loadRemoteImage(url){return new Promise((resolve,reject)=>{if(!url)return resolve(null);const img=new Image();img.crossOrigin='anonymous';img.onload=()=>resolve(img);img.onerror=()=>resolve(null);img.src=url})}
 function roundRect(c,x,y,w,h,r){const rr=Math.min(r,w/2,h/2);c.beginPath();c.moveTo(x+rr,y);c.arcTo(x+w,y,x+w,y+h,rr);c.arcTo(x+w,y+h,x,y+h,rr);c.arcTo(x,y+h,x,y,rr);c.arcTo(x,y,x+w,y,rr);c.closePath()}
-async function acceptPhotoFile(file){if(!file)return;keepAdsVisible=false;selectedFile=file;document.getElementById('originalPreview').src=URL.createObjectURL(file);await makeDesign(file);document.getElementById('compare').style.display='grid';document.getElementById('message').className='msg';startAds()}
+async function acceptPhotoFile(file){if(!file)return;keepAdsVisible=false;selectedFile=file;publicationPrep=null;document.getElementById('originalPreview').src=URL.createObjectURL(file);await makeDesign(file);document.getElementById('compare').style.display='grid';document.getElementById('message').className='msg';syncOnlineDecisionUi();startAds()}
 async function onPhoto(){const file=document.getElementById('photo').files?.[0];return acceptPhotoFile(file)}
 window.FTS_ACCEPT_CAMERA_FILE=acceptPhotoFile;
 window.FTS_GUEST_CAMERA_STATE=()=>({event:ev,filter:selectedFilter,layout:selectedLayout,routeMode,lang});
