@@ -121,7 +121,86 @@ function bindOrderActions(root){root.querySelectorAll('[data-print-order]').forE
 function renderOrders(){const ev=$('#eventFilter').value;let live=orders.filter(o=>!o.event_closed&&(!ev||o.event_token===ev));if(onlyReady)live=live.filter(o=>o.payment_status==='COMPLETED'&&o.print_status==='READY');$('#liveOrders').innerHTML=live.length?live.map(orderHtml).join(''):'<div class="empty">Aktuell keine passenden Druckaufträge.</div>';bindOrderActions($('#liveOrders'));const aev=$('#archiveEventFilter').value;const archived=orders.filter(o=>o.event_closed&&(!aev||o.event_token===aev));$('#archiveOrders').innerHTML=archived.length?archived.map(orderHtml).join(''):'<div class="empty">Noch keine archivierten Druckaufträge.</div>';bindOrderActions($('#archiveOrders'));computeMetrics(orders);if(launchOrder){const el=document.querySelector('[data-order-card="'+CSS.escape(launchOrder)+'"]');if(el)setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'center'}),150)}}
 async function loadCore(showStatus=true){if(showStatus)$('#statusText').textContent='Aktualisiere …';try{const [e,o,y]=await Promise.all([rpc('fts_admin_print_station_events_v46',{p_admin_code:credential()}),rpc('fts_admin_print_station_orders_v46',{p_admin_code:credential(),p_event_token:null}),rpc('fts_admin_print_year_summary_v46',{p_admin_code:credential()})]);events=e||[];orders=o||[];years=y||[];eventOptions($('#eventFilter'),false);eventOptions($('#archiveEventFilter'),true);if(launchEvent){$('#eventFilter').value=launchEvent}renderOrders();renderYears();$('#statusText').textContent='Aktuell · '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});if(!timer)timer=setInterval(()=>{if(activeTab==='live')loadCore(false)},5000)}catch(e){console.error(e);$('#statusText').textContent='Verbindung wird erneut versucht';if(isCredentialError(e)){localStorage.removeItem(DEVICE_KEY);setLoggedIn(false)}}}
 async function signedPath(path,name){try{const j=await adminFiles('signed-photo-url',{path,filename:name});if(j?.url)return j.url}catch(e){console.warn('Signed print URL',e)}return photoUrl(path)}
-async function printOrder(orderId,onlyIndex=null){const o=orders.find(x=>String(x.order_id)===String(orderId));if(!o||o.payment_status!=='COMPLETED'||o.print_status!=='READY')return toast('Dieser Auftrag ist nicht druckbereit.');const popup=window.open('','_blank');if(!popup)return alert('Bitte Pop-ups für die FTS Print Station erlauben.');popup.document.write('<!doctype html><title>Druck wird vorbereitet</title><body style="font-family:system-ui;padding:24px">Druck wird vorbereitet …</body>');try{const srcItems=Array.isArray(o.items)?o.items:[],selected=onlyIndex===null?srcItems:[srcItems[onlyIndex]].filter(Boolean),pages=[];for(let i=0;i<selected.length;i++){const item=selected[i];if(!item?.designed_path)continue;const url=await signedPath(item.designed_path,'FTS-Print-'+String(orderId).slice(0,8)+'-'+(i+1)+'.jpg');for(let q=0;q<Number(item.quantity||1);q++)pages.push(url)}if(!pages.length)throw new Error('Die Fotodatei ist nicht mehr vorhanden.');popup.document.open();popup.document.write('<!doctype html><html><head><meta charset="utf-8"><title>FTS Fotoprint</title><style>@page{size:100mm 150mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}.page{width:100mm;height:150mm;display:flex;align-items:center;justify-content:center;page-break-after:always;break-after:page;overflow:hidden}.page:last-child{page-break-after:auto;break-after:auto}.page img{width:100%;height:100%;object-fit:contain;display:block}@media screen{body{background:#222}.page{margin:15px auto;background:white;box-shadow:0 8px 30px #0008}}</style></head><body>'+pages.map(u=>'<div class="page"><img src="'+esc(u)+'"></div>').join('')+'<script>window.onload=()=>setTimeout(()=>window.print(),350)<\/script></body></html>');popup.document.close();toast('Druckdialog geöffnet. Danach „Gedruckt bestätigen“.')}catch(e){popup.close();alert('Druck konnte nicht vorbereitet werden: '+e.message)}}
+function loadPrintImage(url){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.crossOrigin='anonymous';
+    img.onload=()=>resolve(img);
+    img.onerror=()=>reject(new Error('Druckfoto konnte nicht geladen werden.'));
+    img.src=url;
+  });
+}
+async function printPdfImageData(url){
+  const r=await fetch(url,{cache:'no-store'});
+  if(!r.ok)throw new Error('Druckfoto konnte nicht geladen werden (HTTP '+r.status+').');
+  const blob=await r.blob();
+  return await new Promise((resolve,reject)=>{
+    const fr=new FileReader();
+    fr.onload=()=>resolve(String(fr.result||''));
+    fr.onerror=()=>reject(new Error('Druckfoto konnte nicht für PDF gelesen werden.'));
+    fr.readAsDataURL(blob);
+  });
+}
+async function printOrder(orderId,onlyIndex=null){
+  const o=orders.find(x=>String(x.order_id)===String(orderId));
+  if(!o||!['COMPLETED','COVERED','FREE'].includes(String(o.payment_status||''))||o.print_status!=='READY'){
+    return toast('Dieser Auftrag ist nicht druckbereit.');
+  }
+  const jsPDF=window.jspdf?.jsPDF;
+  if(!jsPDF)return alert('PDF-Druckmodul ist noch nicht geladen. Bitte Seite einmal aktualisieren.');
+
+  // Open a real viewer window synchronously so Android/PWA popup blocking does not interfere.
+  const viewer=window.open('','_blank');
+  if(!viewer)return alert('Bitte Pop-ups für die FTS Print Station erlauben.');
+  viewer.document.open();
+  viewer.document.write('<!doctype html><html><head><meta charset="utf-8"><title>FTS Druck-PDF wird erstellt</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:system-ui;background:#071315;color:#fff;margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;text-align:center}.box{max-width:420px}.spin{width:44px;height:44px;border:4px solid #ffffff33;border-top-color:#d9b56d;border-radius:50%;margin:0 auto 18px;animation:s 1s linear infinite}@keyframes s{to{transform:rotate(360deg)}}small{color:#9eb0ac}</style></head><body><div class="box"><div class="spin"></div><b>Druck-PDF wird erstellt …</b><br><small>Die Print Station bleibt geöffnet.</small></div></body></html>');
+  viewer.document.close();
+
+  try{
+    const srcItems=Array.isArray(o.items)?o.items:[];
+    const selected=onlyIndex===null?srcItems:[srcItems[onlyIndex]].filter(Boolean);
+    const pages=[];
+    for(let i=0;i<selected.length;i++){
+      const item=selected[i];
+      if(!item?.designed_path)continue;
+      const url=await signedPath(item.designed_path,'FTS-Print-'+String(orderId).slice(0,8)+'-'+(i+1)+'.jpg');
+      const img=await loadPrintImage(url);
+      const data=await printPdfImageData(url);
+      const qty=Math.max(1,Number(item.quantity||1));
+      for(let q=0;q<qty;q++)pages.push({data,w:img.naturalWidth||img.width,h:img.naturalHeight||img.height});
+    }
+    if(!pages.length)throw new Error('Die Fotodatei ist nicht mehr vorhanden.');
+
+    // Canon SELPHY CP1500 postcard print area: 100 × 148 mm.
+    const firstLandscape=pages[0].w>pages[0].h;
+    const doc=new jsPDF({unit:'mm',format:[100,148],orientation:firstLandscape?'landscape':'portrait',compress:true});
+
+    pages.forEach((p,index)=>{
+      const landscape=p.w>p.h;
+      if(index>0)doc.addPage([100,148],landscape?'landscape':'portrait');
+      const pageW=landscape?148:100,pageH=landscape?100:148;
+      const scale=Math.min(pageW/p.w,pageH/p.h);
+      const drawW=p.w*scale,drawH=p.h*scale;
+      const x=(pageW-drawW)/2,y=(pageH-drawH)/2;
+      doc.addImage(p.data,'JPEG',x,y,drawW,drawH,undefined,'FAST');
+    });
+
+    const blob=doc.output('blob');
+    const pdfUrl=URL.createObjectURL(blob);
+    const fileName='FTS-Fotoprint-'+String(orderId).slice(0,8).toUpperCase()+'.pdf';
+
+    viewer.document.open();
+    viewer.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+esc(fileName)+'</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;height:100%;background:#111}iframe{border:0;width:100%;height:100%}.fallback{position:fixed;left:10px;right:10px;bottom:10px;display:flex;gap:8px;justify-content:center}.fallback a{background:#d9b56d;color:#17201f;text-decoration:none;font:800 14px system-ui;padding:12px 16px;border-radius:10px;box-shadow:0 4px 18px #0008}</style></head><body><iframe src="'+pdfUrl+'" title="FTS Druck-PDF"></iframe><div class="fallback"><a href="'+pdfUrl+'" download="'+esc(fileName)+'">PDF öffnen / speichern</a></div></body></html>');
+    viewer.document.close();
+
+    // Keep the blob alive long enough for Android PDF viewers / external print services.
+    setTimeout(()=>URL.revokeObjectURL(pdfUrl),15*60*1000);
+    toast('Druck-PDF geöffnet. Im PDF-Menü „Drucken“ wählen und danach „Gedruckt bestätigen“.');
+  }catch(e){
+    try{viewer.document.body.innerHTML='<div style="font-family:system-ui;padding:24px"><h2>Druck-PDF konnte nicht erstellt werden</h2><p>'+esc(e?.message||e)+'</p></div>'}catch{}
+    alert('Druck konnte nicht vorbereitet werden: '+(e?.message||e));
+  }
+}
 async function markPrinted(id,btn){if(!confirm('Wurde dieser Auftrag wirklich vollständig gedruckt?'))return;btn.disabled=true;try{const ok=await rpc('fts_admin_mark_printed_v45',{p_admin_code:credential(),p_order_id:id});if(!ok)throw new Error('Auftrag ist nicht mehr druckbereit.');toast('Auftrag als gedruckt markiert.');await loadCore(false)}catch(e){alert(e.message)}finally{btn.disabled=false}}
 function renderYears(){const root=$('#yearList');if(!years.length){root.innerHTML='<div class="empty">Noch keine bezahlten Selfie-Druckumsätze vorhanden.</div>';$('#receiptList').innerHTML='';return}root.innerHTML=years.map(y=>'<article class="yearCard"><div class="yearHead"><h3>'+y.year+'</h3><div class="yearTotal"><strong>'+euro(y.net_cents)+'</strong><small>Selfie-Umsatz nach Erstattungen</small></div></div><div class="yearStats"><div class="yearStat"><b>'+Number(y.orders||0)+'</b><span>BEZAHLTE AUFTRÄGE</span></div><div class="yearStat"><b>'+Number(y.prints||0)+'</b><span>FOTOPRINTS</span></div><div class="yearStat"><b>'+euro(y.gross_cents)+'</b><span>BRUTTO EINGANG</span></div><div class="yearStat"><b>'+euro(y.refunds_cents)+'</b><span>ERSTATTET</span></div></div><div class="yearActions"><button data-year-open="'+y.year+'">Belege '+y.year+' anzeigen</button><button class="secondary" data-year-report="'+y.year+'">Jahresübersicht drucken / PDF</button><button class="secondary" data-year-zip="'+y.year+'">Belege als ZIP sichern</button></div></article>').join('');root.querySelectorAll('[data-year-open]').forEach(b=>b.onclick=()=>loadReceipts(Number(b.dataset.yearOpen)));root.querySelectorAll('[data-year-report]').forEach(b=>b.onclick=()=>printYear(Number(b.dataset.yearReport)));root.querySelectorAll('[data-year-zip]').forEach(b=>b.onclick=()=>downloadYearZip(Number(b.dataset.yearZip),b))}
 async function loadReceipts(year){selectedYear=year;$('#receiptList').innerHTML='<div class="empty">Belege werden geladen …</div>';try{receipts=await rpc('fts_admin_print_receipts_v46',{p_admin_code:credential(),p_year:year,p_event_token:null})||[];$('#receiptList').innerHTML=receipts.length?receipts.map(r=>'<button class="receiptRow" data-receipt="'+r.receipt_id+'"><span><b>'+esc(r.receipt_number)+' · '+esc(r.event_title)+'</b><small>'+dt(r.paid_at)+' · '+Number(r.quantity_total)+' Print'+(Number(r.quantity_total)===1?'':'s')+' · Aufbewahrung bis '+new Date(r.retain_until+'T12:00:00').toLocaleDateString('de-DE')+'</small></span><span class="receiptAmount"><b>'+euro(r.net_cents)+'</b><small>'+esc(r.payment_status)+'</small></span></button>').join(''):'<div class="empty">Keine Belege in diesem Jahr.</div>';$('#receiptList').querySelectorAll('[data-receipt]').forEach(b=>b.onclick=()=>openReceipt(receipts.find(r=>r.receipt_id===b.dataset.receipt)))}catch(e){$('#receiptList').innerHTML='<div class="empty">Belege konnten nicht geladen werden.</div>'}}
