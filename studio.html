@@ -215,21 +215,20 @@ async function loadEvent(token){
 }
 async function uploadBanner(file){
   const ext=(file.name.split('.').pop()||'webp').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,5)||'webp';
-  const root=eventRow.storage_slug||eventRow.short_code||'event';const path=root+'/assets/studio/banner-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;
+  const storageSlug=String(eventRow.storage_slug||eventRow.short_code||'event').replace(/[^a-z0-9-]/gi,'-').replace(/-+/g,'-');
+  const path=eventToken+'/'+storageSlug+'/assets/studio/banner-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;
   const r=await fetch(cfg.supabaseUrl+'/storage/v1/object/'+encodeURIComponent(cfg.liveBucket)+'/'+encodePath(path),{method:'POST',headers:{'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':file.type||'application/octet-stream','x-upsert':'false'},body:file});
   if(!r.ok)throw new Error((await r.text())||'Hintergrundbild konnte nicht hochgeladen werden');return path;
 }
 async function save(){
   if(!eventRow)return;const btn=$('#saveBtn');btn.disabled=true;setStatus('Studio wird gespeichert …');
-  let newPath='',toDelete='';
   try{
     studio=readControls();
-    if(removeBanner){toDelete=oldBannerPath;studio.overlay.banner.image_path=''}
-    if(pendingBanner){newPath=await uploadBanner(pendingBanner);if(oldBannerPath&&oldBannerPath!==newPath)toDelete=oldBannerPath;studio.overlay.banner.image_path=newPath}
+    if(removeBanner)studio.overlay.banner.image_path='';
+    if(pendingBanner)studio.overlay.banner.image_path=await uploadBanner(pendingBanner);
     const saved=await rpc('fts_admin_set_event_studio_v56',{p_admin_code:auth(),p_event_token:eventToken,p_config:studio});studio=mergeDefaults(saved||studio);
-    if(toDelete&&String(toDelete).includes('/assets/studio/'))await adminFiles('delete-paths',{paths:[toDelete]}).catch(console.warn);
-    oldBannerPath=studio.overlay.banner.image_path||'';pendingBanner=null;removeBanner=false;$('#bannerFile').value='';fillControls();setStatus('✓ Studio gespeichert. Gastseite verwendet jetzt dieses Design.','ok');
-  }catch(e){if(newPath)await adminFiles('delete-paths',{paths:[newPath]}).catch(()=>{});setStatus('Speichern fehlgeschlagen: '+e.message,'err')}
+    oldBannerPath=studio.overlay.banner.image_path||'';pendingBanner=null;removeBanner=false;$('#bannerFile').value='';fillControls();setStatus('✓ Studio gespeichert. Bestehende Dateien wurden nicht gelöscht.','ok');
+  }catch(e){setStatus('Speichern fehlgeschlagen: '+e.message,'err')}
   finally{btn.disabled=false}
 }
 const presets={
