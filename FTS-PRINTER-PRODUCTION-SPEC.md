@@ -98,6 +98,33 @@ Dieser Bereich ist für die professionellen Kamera-/Fotobox-Fotos vorgesehen. Di
 - Die App zeigt neue Fotos fortlaufend in einer übersichtlichen Galerie; das neueste Foto steht sichtbar an erster Stelle bzw. wird deutlich hervorgehoben.
 
 
+
+### Getrennte Quellen: SD-Karten-Album und WLAN-Kamera-Album
+
+Für ein Event können gleichzeitig zwei lokale Eingangsquellen aktiv sein:
+
+- **SD-Karten-Album** für Fotos, die beim Einstecken einer registrierten Karte A/B/C/D importiert werden.
+- **WLAN-Kamera-Album** für Fotos, die über Canon EOS Utility bzw. die Hersteller-Übertragung automatisch in einen festgelegten lokalen Empfangsordner geschrieben werden.
+
+Beide Quellen bleiben logisch getrennt sichtbar, laufen aber nach dem Import in dieselbe FTS-Druckwarteschlange und dieselbe Mehrdrucker-Logik.
+
+### Alte Fotos auf einer SD-Karte sicher ignorieren
+
+Eine SD-Karte muss technisch **nicht zwingend leer** sein. Für den Eventbetrieb wird eine leere bzw. sauber vorbereitete Karte weiterhin empfohlen, aber die App muss auch mit bereits vorhandenen Ordnern/Fotos sicher umgehen.
+
+Beim erstmaligen Aktivieren einer Karte für ein Event erstellt die App einen **Startbestand / Baseline-Snapshot** aller bereits vorhandenen unterstützten Bilddateien auf der Karte.
+
+- Alle Dateien, die bei der Aktivierung bereits vorhanden sind, werden als **Altbestand** markiert und nicht automatisch in das aktuelle Event importiert.
+- Danach importiert die App nur Dateien, die nach diesem Startbestand neu hinzukommen und noch nicht im Import-Ledger stehen.
+- Das gilt auch dann, wenn die Kamera mehrere DCIM-Unterordner verwendet oder während des Events einen neuen Unterordner anlegt.
+- Die App durchsucht die relevanten Bildordner der Karte, aber sie importiert nur **neue, noch unbekannte Dateien**.
+- Die Erkennung basiert nicht nur auf Dateinamen, sondern zusätzlich auf Quellkarte, Pfad, Dateigröße, Änderungs-/Aufnahmezeit und Dateifingerprint.
+- Gleicher Dateiname mit anderem Inhalt darf als neues Foto erkannt werden; dieselbe Datei darf nie doppelt importiert werden.
+- Wird die Karte später erneut eingesteckt, zeigt die App z. B. **„Karte A erkannt · 126 bekannte Fotos · 8 neue Fotos“**.
+- Wird die Karte formatiert oder neu initialisiert, gilt die alte Baseline nicht mehr; die App verlangt eine neue Aktivierung / Zuordnung statt stillschweigend alte Regeln anzuwenden.
+
+Damit kann eine Karte noch ältere Eventfotos enthalten, ohne dass diese in das neue Event gezogen werden. Für maximale Betriebssicherheit bleibt die Empfehlung: Karten vor dem Event sauber vorbereiten und Altbestand vermeiden.
+
 ### SD-Karten A/B/C/D registrieren
 
 Die physischen Kamera-SD-Karten werden am Anfang des Events einmal in der Printer-App registriert.
