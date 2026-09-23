@@ -157,9 +157,7 @@ async function loadPosterEvent(){
   if(!core?.length)throw new Error('Event nicht aktiv');
   const ev={...core[0],ads_enabled:false,ad_items:[]};
   try{
-    let ads;
-    try{ads=await rpc('fts_get_event_ads_v2',{p_event_token:ref})}
-    catch(_e){ads=await rpc('fts_get_event_ads_v1',{p_event_token:ref})}
+    const ads=await rpc('fts_get_event_ads_v2',{p_event_token:ref})
     if(ads?.length){ev.ads_enabled=boolish(ads[0].ads_enabled);ev.ad_items=ads[0].ad_items||[];}
   }catch(e){console.warn('Werbung konnte nicht geladen werden',e)}
   try{
