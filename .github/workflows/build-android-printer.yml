@@ -1,0 +1,53 @@
+name: Build FTS Printer Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/build-android-printer.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Download Gradle
+        run: |
+          curl -L --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+      - name: Build installable test APK
+        run: |
+          cd android-app
+          /tmp/gradle-8.10.2/bin/gradle --no-daemon assembleDebug
+          mkdir -p ../dist-android
+          cp app/build/outputs/apk/debug/app-debug.apk ../dist-android/FTS-Printer-Samsung-v0.1.0.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FTS-Printer-Samsung
+          path: dist-android/FTS-Printer-Samsung-v0.1.0.apk
+          if-no-files-found: error
+      - name: Publish downloadable test release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="fts-printer-android-v0.1.0-test"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist-android/FTS-Printer-Samsung-v0.1.0.apk --clobber
+          else
+            gh release create "$TAG" dist-android/FTS-Printer-Samsung-v0.1.0.apk               --target "$GITHUB_SHA"               --title "FTS Printer Samsung / Android v0.1.0 TEST"               --prerelease               --notes "Installierbare interne Test-APK. Mitarbeiter-Login, Printer-Events, Selfie-Druckaufträge, Kundenbelege, Materialbestand, Mitarbeiterwechsel und lokaler Foto-Druck über Android Print Service."
+          fi
