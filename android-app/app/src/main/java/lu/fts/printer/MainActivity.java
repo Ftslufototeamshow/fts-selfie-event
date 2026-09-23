@@ -45,6 +45,7 @@ public class MainActivity extends Activity {
     Spinner eventSpinner;
     TextView statusText, stockText, userText;
     boolean onMain = false;
+    boolean recoveringAuth = false;
     String activeScreen = "orders";
     TextView eventInfoText;
     Uri selectedLocalPhoto = null;
@@ -156,7 +157,7 @@ public class MainActivity extends Activity {
                     "p_user_id",admin.id,
                     "p_code",c,
                     "p_label","FTS Printer · Samsung Android",
-                    "p_user_agent","FTS Printer Android 0.1.2"
+                    "p_user_agent","FTS Printer Android 0.1.3"
             ), result -> {
                 go.setEnabled(true);
                 if(result instanceof String){
@@ -212,7 +213,7 @@ public class MainActivity extends Activity {
                     "p_user_id",s.id,
                     "p_code",code,
                     "p_device_label","FTS Printer · Samsung Android",
-                    "p_user_agent","FTS Printer Android 0.1.2"
+                    "p_user_agent","FTS Printer Android 0.1.3"
             ), result -> {
                 login.setEnabled(true);
                 if(result instanceof JSONObject){
@@ -695,5 +696,41 @@ public class MainActivity extends Activity {
     View findTagged(ViewGroup g,String tag){for(int i=0;i<g.getChildCount();i++){View v=g.getChildAt(i);if(tag.equals(v.getTag()))return v;if(v instanceof ViewGroup){View x=findTagged((ViewGroup)v,tag);if(x!=null)return x;}}return null;}
     void status(String s){statusText.setText(s);}
     void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
-    void error(String s){new AlertDialog.Builder(this).setTitle("FTS Printer").setMessage(s==null?"Unbekannter Fehler":s).setPositiveButton("OK",null).show();}
+    void error(String s){
+        String msg=s==null?"Unbekannter Fehler":s;
+        if(recoveringAuth)return;
+        if(msg.toLowerCase(Locale.ROOT).contains("printer-sitzung ist nicht gültig")){
+            recoveringAuth=true;
+            onMain=false;
+            handler.removeCallbacksAndMessages(null);
+            sessionToken="";
+            currentUser="";
+            currentRole="";
+            orders.clear();
+            stock=null;
+            prefs.edit().remove("session_token").apply();
+            toast("Printer-Sitzung abgelaufen. Bitte Mitarbeiter neu anmelden.");
+            recoveringAuth=false;
+            loadStaff();
+            return;
+        }
+        if(msg.toLowerCase(Locale.ROOT).contains("printer-gerät nicht freigeschaltet")){
+            recoveringAuth=true;
+            onMain=false;
+            handler.removeCallbacksAndMessages(null);
+            sessionToken="";
+            deviceToken="";
+            currentUser="";
+            currentRole="";
+            events.clear();
+            orders.clear();
+            stock=null;
+            prefs.edit().remove("session_token").remove("device_token").apply();
+            toast("Gerätefreigabe muss erneuert werden.");
+            recoveringAuth=false;
+            loadDeviceAdmins();
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("FTS Printer").setMessage(msg).setPositiveButton("OK",null).show();
+    }
 }
