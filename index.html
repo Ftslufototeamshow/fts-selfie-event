@@ -534,13 +534,11 @@ async function boot(){
        if(ex?.length)Object.assign(merged,ex[0]);
      }catch(exErr){console.warn('Event extras online load',exErr)}
      try{
-       let lc;try{lc=await rpc('fts_get_event_lifecycle_v41',{p_event_token:eventToken})}catch(_e){lc=await rpc('fts_get_event_lifecycle_v11',{p_event_token:eventToken})}
+       const lc=await rpc('fts_get_event_lifecycle_v41',{p_event_token:eventToken})
        if(lc?.length)merged.lifecycle_v11=lc[0];
      }catch(lcErr){console.warn('Event lifecycle online load',lcErr)}
      try{
-       let ads;
-       try{ads=await rpc('fts_get_event_ads_v2',{p_event_token:eventToken})}
-       catch(_e){ads=await rpc('fts_get_event_ads_v1',{p_event_token:eventToken})}
+       const ads=await rpc('fts_get_event_ads_v2',{p_event_token:eventToken})
        if(ads?.length){merged.ads_enabled=boolish(ads[0].ads_enabled);merged.ad_items=ads[0].ad_items||[]}
      }catch(adErr){console.warn('Werbung online load',adErr)}
      try{const social=await rpc('fts_get_event_social_copy_v36',{p_event_token:eventToken});if(social?.length)merged.social_v36=social[0]}catch(socialErr){console.warn('Social-Daten online load',socialErr)}
@@ -1084,9 +1082,7 @@ async function loadMySelfieRows(){
   const rows=[];
   if(navigator.onLine&&routeMode!=='expired'){
     try{
-      let online=[];
-      try{online=await rpc('fts_get_guest_selfies_v61',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}
-      catch(_e){try{online=await rpc('fts_get_guest_selfies_v59',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}catch(_e2){try{online=await rpc('fts_get_guest_selfies_v45',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}catch(_e3){online=await rpc('fts_get_guest_selfies_v10',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}}}
+      const online=await rpc('fts_get_guest_selfies_v61',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]
       const wantedTest=routeMode==='test';
       for(const p of online){
         if(Object.prototype.hasOwnProperty.call(p,'is_test')&&Boolean(p.is_test)!==wantedTest)continue;
