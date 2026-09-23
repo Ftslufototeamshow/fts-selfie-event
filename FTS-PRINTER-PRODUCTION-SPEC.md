@@ -97,6 +97,42 @@ Dieser Bereich ist für die professionellen Kamera-/Fotobox-Fotos vorgesehen. Di
 - Die Übertragung zwischen Album und Printer-App erfolgt lokal. Kamera-/Fotobox-Dateien werden nicht unnötig über Supabase oder die öffentliche Selfie-Galerie geleitet.
 - Die App zeigt neue Fotos fortlaufend in einer übersichtlichen Galerie; das neueste Foto steht sichtbar an erster Stelle bzw. wird deutlich hervorgehoben.
 
+
+### SD-Karten A/B/C/D registrieren
+
+Die physischen Kamera-SD-Karten werden am Anfang des Events einmal in der Printer-App registriert.
+
+- Karte 1 bekommt die feste FTS-Bezeichnung **Karte A**.
+- Karte 2 bekommt **Karte B**.
+- Karte 3 bekommt **Karte C**.
+- Karte 4 bekommt **Karte D**.
+- Die sichtbare Kennzeichnung A/B/C/D wird zusätzlich physisch auf der jeweiligen Karte angebracht.
+- Bei der Erstregistrierung soll die App prüfen, ob die Karte für das Event leer bzw. ohne zu importierende alte Fotos ist.
+- Die App speichert für die Karte eine technische Kennung und legt zusätzlich eine kleine FTS-Kartenkennung auf der Karte ab, damit dieselbe Karte beim späteren Einstecken wieder als A/B/C/D erkannt werden kann.
+- Solange die Karte nach der Registrierung **nicht in der Kamera formatiert** wird, bleibt diese Kennung erhalten, auch nachdem mit der Kamera neue Fotos aufgenommen wurden.
+- Wenn die Karte formatiert wurde oder die Kennung fehlt, darf die App nicht raten. Sie zeigt **„Unbekannte Karte – erneut als A/B/C/D zuordnen“**.
+- Reines Fotografieren, Löschen einzelner Fotos oder erneutes Einstecken darf die A/B/C/D-Zuordnung nicht verändern.
+
+### Kunden-/Abholnummer 001, 002, 003 …
+
+Die Nummer **001, 002, 003 …** ist ausdrücklich **keine JPEG-Dateinummer** und verändert keine Canon-Datei.
+
+- Canon-Dateien bleiben unverändert, z. B. **IMG_5832.JPG**.
+- Für jeden neuen Kamera-/Fotobox-Kunden schlägt die Printer-App automatisch die nächste freie laufende Kundennummer vor: **001, 002, 003 …**.
+- Die Kundennummer wird zusammen mit der Kartenkennung angezeigt, z. B. **A 001**, **B 001**, **A 002**.
+- Der Kunde kann auf dem Papierzettel nur seine Nummer erhalten, z. B. **001 (A)**.
+- Am Druckplatz sieht der Mitarbeiter dieselbe Kombination, z. B. **A 001**.
+- Die Original-JPEGs werden intern nur diesem Kundenauftrag zugeordnet; sie werden nicht umbenannt.
+- Ein Kundenauftrag kann mehrere Originalfotos enthalten, jeweils mit eigener gewünschter Druckmenge.
+- Beispiel:
+  - **A 001**
+  - IMG_5832.JPG → 3×
+  - IMG_5833.JPG → 1×
+- Der Mitarbeiter sieht in der Oberfläche vorrangig **A 001** und die Fotos als Bildvorschau. Der Canon-Dateiname bleibt nur technische Hintergrundinformation.
+- Die App schlägt die Nummern automatisch der Reihe nach vor, damit der Mitarbeiter sie nicht jedes Mal neu erfinden muss.
+- Die Zählung kann pro Event neu bei **001** starten; die Kombination aus Event + Karte + Kundennummer bleibt intern eindeutig.
+- Diese Kundennummer dient auch zum Wiederfinden in Warteschlange, Druckstatus und Abholung.
+
 ### Manueller Mengenentscheid durch den Mitarbeiter
 
 Bei Kamera-/Fotobox-Fotos kommt die Zahlung aus der externen Fotokasse / dem Terminal / Cash. Deshalb gibt es in diesem Bereich **keine zweite Zahlung** in der Printer-App.
