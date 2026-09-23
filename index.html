@@ -1329,7 +1329,10 @@ async function submitPhoto(){
 }
 async function registerBackgroundSync(){try{const reg=await navigator.serviceWorker.ready;if('sync'in reg)await reg.sync.register('fts-upload-queue')}catch(e){console.warn('Background Sync nicht verfügbar',e)}}
 setInterval(cleanupSavedEventLinks,60000);
-window.addEventListener('online',()=>{updateNet();processQueue()});navigator.serviceWorker?.addEventListener?.('message',e=>{if(e.data?.type==='FTS_QUEUE_FLUSHED'){refreshMySelfiesAccess();if(document.getElementById('mySelfiesPanel')?.classList.contains('show'))showMySelfies()}});window.addEventListener('offline',updateNet);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)processQueue()});
+window.addEventListener('online',()=>{updateNet();processQueue()});
+window.addEventListener('fts:pickup-status-changed',()=>{if(document.getElementById('mySelfiesPanel')?.classList.contains('show'))setTimeout(()=>showMySelfies(),250)});
+navigator.serviceWorker?.addEventListener?.('message',e=>{if(e.data?.type==='FTS_QUEUE_FLUSHED'){refreshMySelfiesAccess();if(document.getElementById('mySelfiesPanel')?.classList.contains('show'))showMySelfies()}});
+window.addEventListener('offline',updateNet);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)processQueue()});
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);boot();
 </script>
 <script src="./print-pickup-guest-v57.js"></script>
