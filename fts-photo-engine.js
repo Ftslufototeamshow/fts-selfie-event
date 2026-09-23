@@ -191,6 +191,16 @@
     const gap=clampNum(a.face_gap_pct,1,8);
     const faceUnion=a.enabled!==false&&a.face_safe_area!==false?unionBoxes(faces,clampNum(a.face_padding_ratio,.12,.65),sw,sh):null;
     if(faceUnion&&a.auto_crop!==false){
+      // Wenn das Ausgangsformat vertikal keinen Beschnittsspielraum bietet und ein Gesicht tief sitzt,
+      // schaffen wir mit einem sehr kleinen kontrollierten Zoom Platz zum Hochschieben.
+      const bottomRatio=faceUnion.bottom/sh;
+      if(ch>=sh*.995&&bottomRatio>.72){
+        const zoom=clampNum(1+(bottomRatio-.72)*.28,1,1.10);
+        ch=sh/zoom;cw=ch*target;
+        if(cw>sw){cw=sw;ch=sw/target}
+        cx=clampNum((sw-cw)/2,0,Math.max(0,sw-cw));
+        cy=clampNum((sh-ch)/2,0,Math.max(0,sh-ch));
+      }
       if(cw<sw){const desired=(faceUnion.x+faceUnion.right)/2-cw/2;cx=clampNum(desired,0,sw-cw)}
       if(ch<sh){
         const targetBottom=1-(minimum+gap)/100;
