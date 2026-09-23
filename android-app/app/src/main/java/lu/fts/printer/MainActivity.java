@@ -574,7 +574,7 @@ public class MainActivity extends Activity {
         activeScreen="camera";
         body.removeAllViews();
         body.addView(txt("Kamera / Handyfoto",20,Color.WHITE,true));
-        body.addView(noteView("Fotos bleiben auf diesem Samsung lokal. Es wird nichts in die öffentliche Selfie-Galerie hochgeladen."));
+        body.addView(noteView("Handy-Notfallprint. Der normale Eventbetrieb mit SD-Karte/WLAN und automatischer Mehrdrucker-Verteilung läuft über den Mac-Print-Host. Fotos bleiben lokal und gehen nicht in die öffentliche Selfie-Galerie."));
         Button choose=button("Foto von Handy / SD-Karte auswählen");
         body.addView(choose);
         TextView sel=txt(selectedLocalName==null?"Noch kein Foto ausgewählt.":"Ausgewählt: "+selectedLocalName,13,Color.rgb(170,185,182),false);
@@ -628,9 +628,9 @@ public class MainActivity extends Activity {
     }
 
     void markPickedUp(OrderModel o){
-        rpc("fts_printer_mark_picked_up_v73",obj(
+        rpc("fts_printer_mark_picked_up_archive_v80",obj(
                 "p_device_token",deviceToken,"p_session_token",sessionToken,"p_order_id",o.id
-        ),r->{toast(Boolean.TRUE.equals(r)?"Abholung gespeichert.":"Noch nicht abholbereit.");refreshSelected();});
+        ),r->{toast(Boolean.TRUE.equals(r)?"Abgeholt und archiviert.":"Noch nicht abholbereit.");refreshSelected();});
     }
 
     void showReceipt(OrderModel o){
@@ -660,11 +660,26 @@ public class MainActivity extends Activity {
         });
     }
 
+    void checkUpdate(){
+        rpc("fts_printer_latest_release_v80",obj("p_platform","android"),result->{
+            if(result instanceof JSONArray){
+                JSONArray a=(JSONArray)result;
+                if(a.length()>0){
+                    JSONObject rel=a.optJSONObject(0);
+                    if(rel!=null && rel.optInt("build_number",0)>BuildConfig.VERSION_CODE){
+                        AppUpdater.offer(this,rel);
+                    }
+                }
+            }
+        });
+    }
+
     void showStockDialog(){
         LinearLayout w=new LinearLayout(this);w.setOrientation(LinearLayout.VERTICAL);w.setPadding(dp(20),dp(6),dp(20),0);
         if(stock!=null){
             w.addView(txt("Sicher verfügbar: "+stock.optInt("safe_available",0),22,Color.DKGRAY,true));
-            w.addView(txt("Selfie gedruckt: "+stock.optInt("selfie_printed",0)+" · Kamera: "+stock.optInt("camera_prints",0),13,Color.GRAY,false));
+            w.addView(txt("Selfie gedruckt: "+stock.optInt("selfie_printed",0)+" · Kamera: "+stock.optInt("camera_prints",0)+" · Kamera wartet: "+stock.optInt("camera_waiting",0),13,Color.GRAY,false));
+            w.addView(txt("RP-108: 108 Prints = 6 × 18 Blatt + 2 × 54 Farbfilm",12,Color.GRAY,false));
             if(stock.optBoolean("open_stock_unknown",false))w.addView(txt("Geöffneter Bestand unbekannt – wird nicht für neue Zahlungen gerechnet.",12,Color.rgb(170,110,0),true));
         }
         Spinner kind=new Spinner(this);
@@ -707,7 +722,7 @@ public class MainActivity extends Activity {
     void logoutAndSwitch(){
         onMain=false;handler.removeCallbacksAndMessages(null);
         rpc("fts_printer_logout_v72",obj("p_device_token",deviceToken,"p_session_token",sessionToken),r->{});
-        sessionToken="";prefs.edit().remove("session_token").apply();loadStaff();
+        sessionToken="";workUnits.clear();pickupRows.clear();printerNodes.clear();archiveRows.clear();prefs.edit().remove("session_token").apply();loadStaff();
     }
 
     interface RpcCallback { void done(Object result); }
