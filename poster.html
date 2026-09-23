@@ -268,7 +268,7 @@ async function printPoster(){
     if(btn){btn.disabled=false;btn.textContent=old||'A4 drucken'}
   }
 }
-if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});boot();
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=70',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(()=>{});boot();
 </script>
 </body>
 </html>
