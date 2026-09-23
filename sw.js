@@ -1,7 +1,7 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
 const CACHE_PREFIX='fts-selfie-';
-const CACHE='fts-selfie-v70-current-only-20260923';
+const CACHE='fts-selfie-v71-material-stock-20260923';
 const CORE=['./','./index.html','./dashboard.html','./studio.html','./print.html','./config.js','./social-share.js','./studio-guest-v56.js','./camera-live-v56.js','./print-pickup-guest-v57.js','./print-pickup-station-v57.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 async function purgeOldFtsCaches(){
