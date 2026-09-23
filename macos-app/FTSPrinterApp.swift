@@ -622,6 +622,31 @@ final class AppState: ObservableObject {
     var sessionToken: String? { Keychain.get("staffSession") }
     var selectedEvent: EventRow? { events.first(where: {$0.event_token == selectedEventToken}) }
 
+    @discardableResult
+    func recoverAuthentication(from error: Error) async -> Bool {
+        let message=error.localizedDescription
+        if message.localizedCaseInsensitiveContains("Printer-Gerät nicht freigeschaltet") {
+            Keychain.remove("staffSession")
+            Keychain.remove("deviceToken")
+            currentUser=nil
+            events=[];orders=[];stock=nil;selectedEventToken=""
+            status="Gerätefreigabe erneuern."
+            errorMessage=nil
+            await loadDeviceAdmins()
+            return true
+        }
+        if message.localizedCaseInsensitiveContains("Printer-Sitzung ist nicht gültig") {
+            Keychain.remove("staffSession")
+            currentUser=nil
+            orders=[];stock=nil
+            status="Sitzung abgelaufen · bitte Mitarbeiter neu anmelden."
+            errorMessage=nil
+            await loadChoices()
+            return true
+        }
+        return false
+    }
+
     func bootstrap() async {
         guard let dev = deviceToken, !dev.isEmpty else { await loadDeviceAdmins(); return }
         if let session = sessionToken, !session.isEmpty {
@@ -663,7 +688,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.1.2"
+                "p_user_agent":"FTS Printer macOS 0.1.3"
             ])
             Keychain.set(token,key:"deviceToken")
             await loadChoices()
@@ -675,7 +700,12 @@ final class AppState: ObservableObject {
         do {
             let rows:[StaffChoice] = try await api.rpc("fts_printer_login_choices_v72",body:["p_device_token":dev])
             staffChoices=rows;phase = .staffLogin
-        } catch { errorMessage=error.localizedDescription;phase = .deviceSetup }
+        } catch {
+            if !(await recoverAuthentication(from:error)) {
+                errorMessage=error.localizedDescription
+                phase = .deviceSetup
+            }
+        }
     }
 
     func login(user: StaffChoice, code: String) async {
@@ -685,7 +715,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.1.2"
+                "p_user_agent":"FTS Printer macOS 0.1.3"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             Keychain.set(session,key:"staffSession")
@@ -728,6 +758,7 @@ final class AppState: ObservableObject {
             }
             return true
         } catch {
+            if await recoverAuthentication(from:error) { return false }
             errorMessage="Events konnten nicht geladen werden: "+error.localizedDescription
             return false
         }
@@ -746,7 +777,9 @@ final class AppState: ObservableObject {
             async let s:StockSnapshot=api.rpc("fts_printer_stock_v73",body:["p_device_token":dev,"p_session_token":session,"p_event_token":selectedEventToken])
             let (oo,ss)=try await(o,s);orders=oo;stock=ss
             status="Aktuell · \(Date().formatted(date:.omitted,time:.shortened))"
-        } catch { errorMessage=error.localizedDescription }
+        } catch {
+            if !(await recoverAuthentication(from:error)) { errorMessage=error.localizedDescription }
+        }
     }
 
     func printOrder(_ order:PrintOrder) async {
@@ -765,7 +798,9 @@ final class AppState: ObservableObject {
             let ok:Bool=try await api.rpc("fts_printer_mark_printed_v73",body:["p_device_token":dev,"p_session_token":session,"p_order_id":order.order_id])
             if !ok { throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Auftrag konnte nicht als gedruckt bestätigt werden."]) }
             await refreshSelected()
-        } catch { errorMessage=error.localizedDescription }
+        } catch {
+            if !(await recoverAuthentication(from:error)) { errorMessage=error.localizedDescription }
+        }
     }
 
     func pickedUp(_ order:PrintOrder) async {
@@ -774,7 +809,9 @@ final class AppState: ObservableObject {
             let ok:Bool=try await api.rpc("fts_printer_mark_picked_up_v73",body:["p_device_token":dev,"p_session_token":session,"p_order_id":order.order_id])
             if !ok { throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Auftrag ist noch nicht abholbereit."]) }
             await refreshSelected()
-        } catch { errorMessage=error.localizedDescription }
+        } catch {
+            if !(await recoverAuthentication(from:error)) { errorMessage=error.localizedDescription }
+        }
     }
 
     func showReceipt(_ order:PrintOrder) async {
@@ -782,7 +819,9 @@ final class AppState: ObservableObject {
         do {
             let r:Receipt?=try await api.rpc("fts_printer_receipt_v73",body:["p_device_token":dev,"p_session_token":session,"p_order_id":order.order_id],as:Receipt?.self)
             currentReceipt=r
-        } catch { errorMessage=error.localizedDescription }
+        } catch {
+            if !(await recoverAuthentication(from:error)) { errorMessage=error.localizedDescription }
+        }
     }
 
     func adjustStock(kind:String,quantity:Int,code:String,note:String) async -> Bool {
@@ -794,7 +833,10 @@ final class AppState: ObservableObject {
                 "p_event_day":day,"p_kind":kind,"p_quantity":quantity,"p_note":note
             ])
             stock=s;return true
-        } catch { errorMessage=error.localizedDescription;return false }
+        } catch {
+            if !(await recoverAuthentication(from:error)) { errorMessage=error.localizedDescription }
+            return false
+        }
     }
 
     func printLocalPhoto(_ record:ImportRecord) async {
@@ -810,7 +852,9 @@ final class AppState: ObservableObject {
                 "p_event_day":day,"p_quantity":1,"p_file_name":record.originalName
             ])
             stock=s
-        } catch { errorMessage=error.localizedDescription }
+        } catch {
+            if !(await recoverAuthentication(from:error)) { errorMessage=error.localizedDescription }
+        }
     }
 
     func receiptText(_ r:Receipt)->String {
