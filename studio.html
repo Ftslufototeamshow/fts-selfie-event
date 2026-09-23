@@ -103,8 +103,8 @@ input,select,textarea{width:100%;border:1px solid #ffffff18;background:#071b1d;c
       </div>
 
       <div class="panel">
-        <h2>Filter für Gäste</h2>
-        <div class="hint">Haken = beim Event verfügbar. ⭐ = direkt oben sichtbar. Alle weiteren Filter kommen unter „Mehr Filter“. So bleibt es für Gäste einfach.</div>
+        <h2 id="filterPanelTitle">Filter für Gäste</h2>
+        <div class="hint" id="filterPanelHint">Haken = beim Event verfügbar. ⭐ = direkt oben sichtbar. Alle weiteren Filter kommen unter „Mehr Filter“. So bleibt es für Gäste einfach.</div>
         <div id="filters"></div>
         <div class="row">
           <div class="field"><label>Standardfilter beim Öffnen</label><select id="defaultFilter"></select></div>
@@ -216,6 +216,8 @@ async function loadEvent(token){
   studio=mergeDefaults(studio);pendingBanner=null;removeBanner=false;fillControls();
   const printOnly=eventRow?.operation_mode==='print_only';
   $('#openGuestBtn').classList.toggle('hidden',printOnly);
+  $('#filterPanelTitle').textContent=printOnly?'Filter / Looks für Druckfoto':'Filter für Gäste';
+  $('#filterPanelHint').textContent=printOnly?'Diese Looks stehen später in der lokalen Print-App für Kamerafotos zur Auswahl. Die Kamerafotos selbst werden nicht hochgeladen.':'Haken = beim Event verfügbar. ⭐ = direkt oben sichtbar. Alle weiteren Filter kommen unter „Mehr Filter“. So bleibt es für Gäste einfach.';
   const modeLabel=printOnly?'Nur Druck · Kamerafotos lokal':(eventRow?.local_camera_photos?'Selfie + Kamera-Print':'Selfie + Print');
   setStatus('Studio bereit · '+(eventRow?.title||'')+' · '+modeLabel,'ok');
   history.replaceState(null,'','./studio.html?e='+encodeURIComponent(token));
