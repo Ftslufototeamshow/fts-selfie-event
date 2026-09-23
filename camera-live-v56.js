@@ -24,21 +24,21 @@
     const s=document.createElement('style');s.id='ftsLiveCameraStyle';s.textContent=`
 .ftsLiveCamOpen{width:100%;border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);background:linear-gradient(135deg,#15383a,#102628);color:#fff;border-radius:15px;padding:14px 16px;font:inherit;font-weight:900;cursor:pointer;margin-top:14px}
 .ftsLiveCamHint{text-align:center;color:#829592;font-size:.7rem;margin:7px 0 0}
-.ftsCamModal{position:fixed;inset:0;z-index:100000;background:#020808f2;display:none;align-items:center;justify-content:center;padding:max(10px,env(safe-area-inset-top)) 10px max(10px,env(safe-area-inset-bottom))}
-.ftsCamModal.show{display:flex}.ftsCamBox{width:min(680px,100%);max-height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:#071719;border:1px solid #ffffff18;border-radius:20px;overflow:hidden;box-shadow:0 25px 80px #000b}
-.ftsCamHead{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px}.ftsCamHead strong{font-size:.95rem}.ftsCamClose{border:1px solid #ffffff18;background:#15383a;color:#fff;border-radius:10px;padding:8px 10px;font:inherit;font-weight:800}
-.ftsCamBody{min-height:0;overflow:hidden;display:flex;flex-direction:column}.ftsCamStage{position:relative;background:#000;overflow:hidden;min-height:300px;aspect-ratio:var(--fts-camera-ratio,3/4);flex:1 1 auto}.ftsCamStage video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1)}
+.ftsCamModal{position:fixed;inset:0;z-index:100000;background:#020808f2;display:none;align-items:center;justify-content:center;overflow:hidden;overscroll-behavior:none;padding:max(8px,env(safe-area-inset-top)) 8px max(8px,env(safe-area-inset-bottom))}
+.ftsCamModal.show{display:flex}.ftsCamBox{width:min(680px,100%);height:min(900px,calc(100dvh - 16px));max-height:calc(100dvh - 16px);min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:#071719;border:1px solid #ffffff18;border-radius:20px;overflow:hidden;box-shadow:0 25px 80px #000b}
+.ftsCamHead{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px}.ftsCamHead strong{font-size:.95rem}.ftsCamClose{border:1px solid #ffffff18;background:#15383a;color:#fff;border-radius:10px;padding:8px 10px;font:inherit;font-weight:800}
+.ftsCamBody{min-height:0;overflow:hidden;display:flex;flex-direction:column}.ftsCamStage{position:relative;background:#000;overflow:hidden;min-height:0;aspect-ratio:var(--fts-camera-ratio,3/4);flex:1 1 auto}.ftsCamStage video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1)}
 .ftsCamOverlay{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:flex-end}.ftsCamBanner{position:relative;width:100%;padding:5% 4.5% 5.2%;overflow:hidden}.ftsCamBannerBg{position:absolute;inset:0;z-index:0;background:linear-gradient(to bottom,transparent,rgba(7,19,21,.86) 30%,rgba(7,19,21,.95)) center/cover no-repeat}.ftsCamCopy{position:relative;z-index:1;text-shadow:0 3px 14px #000b}.ftsCamTitle{font-weight:900;font-size:clamp(24px,6.2vw,46px);line-height:1.02}.ftsCamSub{font-weight:800;font-size:clamp(16px,3.6vw,28px);margin-top:5px}.ftsCamLine{font-weight:650;font-size:clamp(12px,2.6vw,20px);margin-top:6px;color:#e8efed}.ftsCamBrand{position:absolute;right:4%;bottom:2%;font-size:10px;color:#ffffffaa;z-index:2}.ftsCamPumpkin{position:absolute;inset:6% 8% 24%;border:clamp(12px,4vw,26px) solid #ef7d1a;border-radius:46% 46% 43% 43%;box-shadow:inset 0 0 0 8px #8b3d08aa,0 0 0 1px #0000;display:none}.ftsCamPumpkin.show{display:block}.ftsCamPumpkin:before{content:' ';position:absolute;left:44%;top:-12%;width:12%;height:17%;background:#3b6b27;border-radius:8px}
 .ftsCamNote{text-align:center;color:#91a5a1;font-size:.68rem;padding:7px 10px 0}.ftsCamControls{display:grid;grid-template-columns:auto 1fr;gap:8px;padding:10px 12px 13px}.ftsCamControls button{border:0;border-radius:12px;padding:13px 12px;font:inherit;font-weight:900;cursor:pointer}.ftsCamSwitch{background:#15383a;color:#fff;border:1px solid #ffffff18!important}.ftsCamCapture{background:var(--accent);color:#102020}
 @media(min-width:650px){.ftsCamStage video{object-fit:cover}.ftsCamBanner{padding-top:3%}}
-@media(orientation:landscape) and (max-height:720px){
-  .ftsCamModal{padding:4px max(4px,env(safe-area-inset-right)) 4px max(4px,env(safe-area-inset-left));align-items:stretch}
-  .ftsCamBox{width:min(1180px,100%);height:100%;max-height:none;border-radius:14px;grid-template-rows:auto minmax(0,1fr) auto}
+@media(orientation:landscape){
+  .ftsCamModal{padding:max(4px,env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) max(4px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left));align-items:center}
+  .ftsCamBox{width:min(1180px,100%);height:calc(100dvh - 8px);max-height:calc(100dvh - 8px);border-radius:14px;grid-template-rows:auto minmax(0,1fr) auto}
   .ftsCamHead{padding:5px 10px}.ftsCamHead strong{font-size:.82rem}.ftsCamClose{padding:6px 9px;font-size:.78rem}
-  .ftsCamBody{min-height:0}.ftsCamStage{min-height:0;height:100%;aspect-ratio:auto}
+  .ftsCamBody{min-height:0}.ftsCamStage{min-height:0;height:100%;aspect-ratio:auto!important}
   .ftsCamBanner{padding:2.2% 3.2% 2.4%}.ftsCamTitle{font-size:clamp(17px,3.8vw,34px)}.ftsCamSub{font-size:clamp(12px,2.5vw,22px)}.ftsCamLine{font-size:clamp(10px,1.8vw,16px);margin-top:3px}
   .ftsCamNote{display:none}
-  .ftsCamControls{grid-template-columns:minmax(120px,.55fr) minmax(180px,1fr);gap:6px;padding:5px 10px max(5px,env(safe-area-inset-bottom))}
+  .ftsCamControls{grid-template-columns:minmax(118px,.55fr) minmax(180px,1fr);gap:6px;padding:5px 10px max(5px,env(safe-area-inset-bottom));background:#071719}
   .ftsCamControls button{padding:9px 10px;font-size:.8rem}
 }
 `;document.head.appendChild(s);
@@ -86,9 +86,16 @@
       });
     }
   }
+  function cameraConstraints(){
+    const layout=String(state().layout||'solo');
+    if(layout==='groupwide'){
+      return {facingMode:{ideal:facing},width:{ideal:1920},height:{ideal:1080},aspectRatio:{ideal:1.6}};
+    }
+    return {facingMode:{ideal:facing},width:{ideal:1920},height:{ideal:1440}};
+  }
   async function restartStream(){
-    stopStream();
-    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:facing},width:{ideal:1920},height:{ideal:1440}}});
+    stopStream();syncOrientation();
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:cameraConstraints()});
     video.srcObject=stream;video.style.transform=facing==='user'?'scaleX(-1)':'none';await video.play().catch(()=>{});syncOrientation();
   }
   function richText(el,text,spec){
@@ -121,7 +128,7 @@
   async function openCamera(){
     if(busy)return;busy=true;ensureStyle();buildModal();syncOrientation();updateOverlay();
     if(!navigator.mediaDevices?.getUserMedia){busy=false;alert(t('permission'));return}
-    try{modal.classList.add('show');document.body.style.overflow='hidden';await restartStream();updateOverlay()}
+    try{modal.classList.add('show');document.body.style.overflow='hidden';syncOrientation();await restartStream();updateOverlay();syncOrientation()}
     catch(e){console.warn('FTS Live Kamera',e);closeCamera();alert(t('permission'))}
     finally{busy=false}
   }
@@ -141,7 +148,7 @@
   ensureStyle();buildModal();makeButton();
   const observer=new MutationObserver(()=>{makeButton()});
   observer.observe(document.body,{childList:true,subtree:true});
-  document.addEventListener('click',e=>{if(e.target.closest?.('[data-filter]'))setTimeout(updateOverlay,0)});
+  document.addEventListener('click',e=>{if(e.target.closest?.('[data-filter],[data-layout]'))setTimeout(()=>{updateOverlay();syncOrientation()},0)});
   window.addEventListener('resize',syncOrientation,{passive:true});
   window.addEventListener('orientationchange',()=>setTimeout(syncOrientation,80),{passive:true});
   window.visualViewport?.addEventListener?.('resize',syncOrientation,{passive:true});
