@@ -300,7 +300,7 @@ $('#installBtn').onclick=async()=>{
   }
   alert('Android/Samsung: Browser-Menü → Zum Startbildschirm hinzufügen. iPhone: Teilen → Zum Home-Bildschirm.');
 };
-(async()=>{refreshInstallButton();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});if(await ensureDevice())await loadCore();refreshInstallButton()})();
+(async()=>{refreshInstallButton();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=70',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(()=>{});if(await ensureDevice())await loadCore();refreshInstallButton()})();
 </script>
 <script src="./print-pickup-station-v57.js"></script>
 </body>
