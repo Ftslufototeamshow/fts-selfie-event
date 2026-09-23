@@ -314,6 +314,7 @@ $('#bannerFile').onchange=e=>{pendingBanner=e.target.files?.[0]||null;removeBann
 $('#removeBannerBtn').onclick=()=>{pendingBanner=null;removeBanner=true;studio.overlay.banner.image_path='';$('#bannerFile').value='';$('#bannerPath').textContent='Bild wird beim Speichern entfernt';schedulePreview()};
 $('#previewFile').onchange=e=>{const file=e.target.files?.[0];if(!file)return;const img=new Image();img.onload=()=>{previewImg=img;renderPreview()};img.src=URL.createObjectURL(file)};
 $('#previewFilter').onchange=renderPreview;
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=72',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(()=>{});
 loadEvents().catch(e=>setStatus('Studio konnte nicht geladen werden: '+e.message,'err'));
 </script>
 </body>
