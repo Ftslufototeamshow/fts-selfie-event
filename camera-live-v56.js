@@ -113,14 +113,20 @@
     else if(b.type==='solid')bg.style.background=alpha(color,op);
     else bg.style.background='linear-gradient(to bottom,'+alpha(color,0)+','+alpha(color,op*.72)+' 32%,'+alpha(color,op)+')';
     if(b.image_path){const u=assetUrl(b.image_path);bg.style.backgroundImage=(bg.style.backgroundImage?bg.style.backgroundImage+', ':'')+'url("'+u.replace(/"/g,'%22')+'")';bg.style.backgroundSize='cover';bg.style.backgroundPosition='center'}
-    banner.style.minHeight=Math.max(16,Math.min(45,Number(b.height_pct||30)))+'%';
+    const wideLayout=String(s.layout||'')==='groupwide';
+    const requestedHeight=Math.max(16,Math.min(45,Number(b.height_pct||30)));
+    banner.style.minHeight=(wideLayout?Math.max(16,Math.min(24,requestedHeight)):requestedHeight)+'%';
     const titleText=sourceText(title,e,'title'),subText=sourceText(sub,e,'subtitle'),lineText=sourceText(line,e,'overlay');
-    richText(modal.querySelector('#ftsCamEventTitle'),titleText,title);
-    richText(modal.querySelector('#ftsCamEventSub'),subText,{...sub,color:sub.color||e.accent||'#d9b56d'});
-    richText(modal.querySelector('#ftsCamEventLine'),lineText,line);
-    modal.querySelector('#ftsCamEventTitle').style.display=title.enabled===false?'none':'block';
-    modal.querySelector('#ftsCamEventSub').style.display=sub.enabled===false?'none':'block';
-    modal.querySelector('#ftsCamEventLine').style.display=line.enabled===false?'none':'block';
+    const titleEl=modal.querySelector('#ftsCamEventTitle'),subEl=modal.querySelector('#ftsCamEventSub'),lineEl=modal.querySelector('#ftsCamEventLine');
+    richText(titleEl,titleText,title);
+    richText(subEl,subText,{...sub,color:sub.color||e.accent||'#d9b56d'});
+    richText(lineEl,lineText,line);
+    titleEl.style.display=title.enabled===false?'none':'block';
+    subEl.style.display=sub.enabled===false?'none':'block';
+    lineEl.style.display=line.enabled===false?'none':'block';
+    titleEl.style.fontSize=wideLayout?'clamp(16px,3.6vmin,28px)':'';
+    subEl.style.fontSize=wideLayout?'clamp(12px,2.5vmin,19px)':'';
+    lineEl.style.fontSize=wideLayout?'clamp(10px,1.8vmin,14px)':'';
     const filter=s.filter||'natural';video.style.filter=window.FTS_GUEST_FILTER_CSS?.(filter)||'none';
     modal.querySelector('#ftsCamPumpkin').classList.toggle('show',filter==='pumpkin');
     modal.querySelector('#ftsCamTitle').textContent=t('title');modal.querySelector('#ftsCamClose').textContent=t('close');modal.querySelector('#ftsCamSwitch').textContent='↺ '+t('switch');modal.querySelector('#ftsCamCapture').textContent='● '+t('capture');modal.querySelector('#ftsCamNote').textContent=t('preview');
