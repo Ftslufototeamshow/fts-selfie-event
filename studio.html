@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#071315">
+<title>FTS Selfie Design-Studio</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--bg:#071315;--panel:#0b2022;--panel2:#102d2f;--text:#f5f1e8;--muted:#91a5a1;--accent:#d9b56d}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0,#17484d55,transparent 35%),linear-gradient(145deg,#061012,#10383a);color:var(--text);min-height:100vh}
+.wrap{width:min(1320px,calc(100% - 22px));margin:auto;padding:18px 0 70px}.top{display:flex;gap:14px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;margin-bottom:14px}
+.brand{font-size:.7rem;letter-spacing:.18em;color:var(--accent);font-weight:900}.top h1{margin:4px 0 0;font-size:clamp(2rem,5vw,3.7rem);line-height:1}.top a{color:#fff;text-decoration:none;background:#15383a;border:1px solid #ffffff18;padding:11px 14px;border-radius:11px;font-weight:900}
+.status{padding:10px 12px;border-radius:12px;background:#132b2d;color:#b7c6c3;font-size:.82rem;margin:0 0 14px}.status.ok{background:#17382f;color:#a7f3c3}.status.err{background:#402323;color:#ffc2c2}
+.toolbar{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:8px;margin:0 0 14px}.toolbar select,.toolbar button{min-height:46px}
+button,select,input,textarea{font:inherit}button{border:0;border-radius:11px;padding:11px 14px;background:var(--accent);color:#102020;font-weight:900;cursor:pointer}.secondary{background:#15383a;color:#fff;border:1px solid #ffffff16}.danger{background:#472020;color:#ffd0d0}
+input,select,textarea{width:100%;border:1px solid #ffffff18;background:#071b1d;color:#fff;border-radius:10px;padding:10px 11px}input[type=color]{padding:3px;min-height:42px}input[type=checkbox],input[type=radio]{width:auto;accent-color:var(--accent)}
+.grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(320px,.95fr);gap:14px;align-items:start}.left{display:grid;gap:12px}.panel{background:#08191bdb;border:1px solid #ffffff14;border-radius:18px;padding:15px;box-shadow:0 14px 42px #0003}.panel h2{font-size:1.05rem;margin:0 0 12px}.panel h3{font-size:.9rem;margin:14px 0 8px;color:#dfe8e6}.hint{color:var(--muted);font-size:.78rem;line-height:1.45}
+.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.field label{display:block;color:#aebdb9;font-size:.72rem;margin:0 0 5px}.check{display:flex;align-items:center;gap:8px;padding:9px 0;color:#d9e1df;font-size:.85rem}
+.presets{display:flex;gap:7px;flex-wrap:wrap}.presets button{font-size:.78rem;padding:8px 10px}
+.previewPanel{position:sticky;top:10px}.previewShell{background:#030b0c;border-radius:16px;padding:9px;border:1px solid #ffffff14}.previewShell canvas{width:100%;height:auto;display:block;border-radius:11px;background:#111}.previewActions{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:9px}
+.filterGroup{margin:12px 0}.filterGroupTitle{font-size:.72rem;color:var(--accent);font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin:0 0 6px}.filterGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.filterCard{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start;padding:9px;border-radius:10px;background:#0d2628;border:1px solid #ffffff12}.filterCard b{font-size:.78rem;display:block}.filterCard small{font-size:.66rem;color:#8fa29e;display:block;margin-top:2px}.filterCard .star{grid-column:2;display:flex;align-items:center;gap:5px;font-size:.64rem;color:#aebdb9}
+.palette{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.palette input{width:100%}.saveBar{position:sticky;bottom:8px;z-index:20;display:flex;gap:8px;background:#071719ee;border:1px solid #ffffff14;border-radius:14px;padding:9px;backdrop-filter:blur(10px)}.saveBar button:first-child{flex:1}
+.fileLine{display:flex;gap:8px;align-items:center}.fileLine input[type=file]{padding:7px}.tiny{font-size:.67rem;color:#8ea19d;word-break:break-all}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.previewPanel{position:relative;top:auto;order:-1}.filterGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.toolbar{grid-template-columns:1fr 1fr}.toolbar select{grid-column:1/-1}}
+@media(max-width:520px){.row,.row3{grid-template-columns:1fr}.filterGrid{grid-template-columns:1fr}.wrap{width:min(100% - 14px,1320px)}.panel{padding:12px}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <div><div class="brand">FTS.LU · SELFIE EVENT</div><h1>Design-Studio</h1></div>
+    <a href="./dashboard.html">← Cockpit</a>
+  </header>
+  <div id="status" class="status">Studio wird geladen …</div>
+  <div class="toolbar">
+    <select id="eventSelect"><option value="">Event auswählen …</option></select>
+    <button id="reloadBtn" class="secondary">Neu laden</button>
+    <button id="openGuestBtn" class="secondary">Gastseite</button>
+  </div>
+
+  <div class="grid">
+    <section class="left">
+      <div class="panel">
+        <h2>Vorlagen</h2>
+        <div class="presets">
+          <button data-preset="clean">Clean</button><button data-preset="streetfood">Streetfood</button><button data-preset="rock">Rock</button><button data-preset="retro">Retro</button><button data-preset="pumpkin">Kürbis</button><button data-preset="elegant">Elegant</button>
+        </div>
+        <div class="hint" style="margin-top:8px">Vorlage setzt nur Designwerte. Danach kannst du jedes Detail weiter ändern.</div>
+      </div>
+
+      <div class="panel">
+        <h2>Text & Titel</h2>
+        <div class="row">
+          <div class="field"><label>Haupttitel</label><input id="titleText" placeholder="leer = Eventtitel"></div>
+          <div class="field"><label>Schriftart</label><select id="titleFont"><option value="clean">Clean</option><option value="bold">Bold</option><option value="rock">Rock / Impact</option><option value="pop">Pop</option><option value="elegant">Elegant</option><option value="retro">Retro</option><option value="handwritten">Handschrift</option></select></div>
+        </div>
+        <div class="row3">
+          <div class="field"><label>Größe</label><input id="titleSize" type="range" min="3" max="9" step=".2" value="5.8"></div>
+          <div class="field"><label>Farbe</label><input id="titleColor" type="color" value="#ffffff"></div>
+          <div class="field"><label>Ausrichtung</label><select id="titleAlign"><option value="left">Links</option><option value="center">Mitte</option><option value="right">Rechts</option></select></div>
+        </div>
+        <label class="check"><input id="titleMulti" type="checkbox"> Einzelne Buchstaben mehrfarbig</label>
+        <div class="palette"><input id="pal1" type="color" value="#ffffff"><input id="pal2" type="color" value="#ffcf4a"><input id="pal3" type="color" value="#2ec4b6"><input id="pal4" type="color" value="#ff6b6b"></div>
+
+        <h3>Untertitel</h3>
+        <div class="row">
+          <div class="field"><label>Untertitel</label><input id="subText" placeholder="leer = Event-Untertitel"></div>
+          <div class="field"><label>Schriftart</label><select id="subFont"><option value="clean">Clean</option><option value="bold">Bold</option><option value="rock">Rock</option><option value="pop">Pop</option><option value="elegant">Elegant</option><option value="retro">Retro</option></select></div>
+        </div>
+        <div class="row3">
+          <div class="field"><label>Größe</label><input id="subSize" type="range" min="1.8" max="6" step=".2" value="3.2"></div>
+          <div class="field"><label>Farbe</label><input id="subColor" type="color" value="#d9b56d"></div>
+          <div class="field"><label>Ausrichtung</label><select id="subAlign"><option value="left">Links</option><option value="center">Mitte</option><option value="right">Rechts</option></select></div>
+        </div>
+
+        <h3>Dritte Zeile</h3>
+        <div class="row">
+          <div class="field"><label>Text</label><input id="lineText" placeholder="leer = bisheriger Overlay-Text"></div>
+          <div class="field"><label>Farbe</label><input id="lineColor" type="color" value="#e8efed"></div>
+        </div>
+        <label class="check"><input id="includeDate" type="checkbox" checked> Eventdatum automatisch anhängen</label>
+      </div>
+
+      <div class="panel">
+        <h2>Textbereich / Design-Balken</h2>
+        <div class="row3">
+          <div class="field"><label>Stil</label><select id="bannerType"><option value="gradient">Verlauf</option><option value="solid">Feste Fläche</option></select></div>
+          <div class="field"><label>Farbe</label><input id="bannerColor" type="color" value="#071315"></div>
+          <div class="field"><label>Höhe</label><input id="bannerHeight" type="range" min="16" max="45" step="1" value="30"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Deckkraft</label><input id="bannerOpacity" type="range" min="0" max="1" step=".05" value=".86"></div>
+          <div class="field"><label>Bild-Deckkraft</label><input id="bannerImageOpacity" type="range" min="0" max="1" step=".05" value=".35"></div>
+        </div>
+        <label class="check"><input id="bannerEnabled" type="checkbox" checked> Balken / Verlauf verwenden</label>
+        <div class="field">
+          <label>Eigenes Hintergrundbild für den Balken</label>
+          <div class="fileLine"><input id="bannerFile" type="file" accept="image/png,image/jpeg,image/webp"><button id="removeBannerBtn" type="button" class="secondary">Bild entfernen</button></div>
+          <div id="bannerPath" class="tiny"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Filter für Gäste</h2>
+        <div class="hint">Haken = beim Event verfügbar. ⭐ = direkt oben sichtbar. Alle weiteren Filter kommen unter „Mehr Filter“. So bleibt es für Gäste einfach.</div>
+        <div id="filters"></div>
+        <div class="row">
+          <div class="field"><label>Standardfilter beim Öffnen</label><select id="defaultFilter"></select></div>
+          <div class="field"><label>Max. Favoriten</label><input value="6" disabled></div>
+        </div>
+      </div>
+
+      <div class="saveBar">
+        <button id="saveBtn">Studio für dieses Event speichern</button>
+        <button id="resetBtn" class="secondary">Standard</button>
+      </div>
+    </section>
+
+    <aside class="panel previewPanel">
+      <h2>Live-Vorschau</h2>
+      <div class="previewShell"><canvas id="preview" width="720" height="900"></canvas></div>
+      <div class="previewActions">
+        <input id="previewFile" type="file" accept="image/*">
+        <select id="previewFilter"></select>
+      </div>
+      <div class="hint" style="margin-top:8px">Das Vorschaubild bleibt nur auf diesem Gerät und wird nicht hochgeladen.</div>
+    </aside>
+  </div>
+</main>
+<script src="./config.js"></script>
+<script src="./studio-guest-v56.js"></script>
+<script>
+const cfg=window.FTS_CONFIG, DEVICE_KEY='fts_device_token_v1', LEGACY_CODE_KEY='fts_cockpit_admin_code';
+const $=s=>document.querySelector(s);
+let eventToken=new URLSearchParams(location.search).get('e')||'',eventRow=null,studio={},previewImg=null,pendingBanner=null,oldBannerPath='',removeBanner=false;
+const categoryNames={standard:'Standard',classic:'Klassisch',retro:'Retro / Oldschool',event:'Event / Fun',comic:'Comic'};
+function auth(){return localStorage.getItem(DEVICE_KEY)||localStorage.getItem(LEGACY_CODE_KEY)||''}
+function H(){return {'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':'application/json'}}
+async function rpc(n,b){const r=await fetch(cfg.supabaseUrl+'/rest/v1/rpc/'+n,{method:'POST',headers:H(),body:JSON.stringify(b)});if(!r.ok)throw new Error(await r.text());const t=await r.text();return t?JSON.parse(t):null}
+function setStatus(t,k=''){const e=$('#status');e.textContent=t;e.className='status '+k}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function encodePath(p){return p.split('/').map(encodeURIComponent).join('/')}
+function assetUrl(path){return path?cfg.supabaseUrl+'/storage/v1/object/public/'+encodeURIComponent(cfg.liveBucket)+'/'+encodePath(path):''}
+function loadRemoteImage(url){return new Promise(resolve=>{if(!url)return resolve(null);const i=new Image();i.crossOrigin='anonymous';i.onload=()=>resolve(i);i.onerror=()=>resolve(null);i.src=url})}
+async function adminFiles(action,extra={}){const r=await fetch(cfg.supabaseUrl+'/functions/v1/fts-admin-files',{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({credential:auth(),action,...extra})});const j=await r.json().catch(()=>({}));if(!r.ok||j.ok===false)throw new Error(j.error||'Datei-Aktion fehlgeschlagen');return j}
+function defaultConfig(){
+  return {version:56,overlay:{enabled:true,padding_pct:4.5,banner:{enabled:true,type:'gradient',color:'#071315',opacity:.86,height_pct:30,image_path:'',image_opacity:.35},
+    title:{enabled:true,source:'title',text:'',font:'clean',weight:900,size_pct:5.8,color:'#ffffff',align:'left',shadow:true,multicolor:false,colors:['#ffffff','#ffcf4a','#2ec4b6','#ff6b6b']},
+    subtitle:{enabled:true,source:'subtitle',text:'',font:'clean',weight:800,size_pct:3.2,color:eventRow?.accent||'#d9b56d',align:'left',shadow:true},
+    line:{enabled:true,source:'overlay',text:'',font:'clean',weight:600,size_pct:2.1,color:'#e8efed',align:'left',shadow:true,include_date:true},branding:true},
+    filters:{enabled:['natural','warm','vivid','mono','cool','sepia','oldfilm','fade','retro90','polaroid','comic_soft','comic_pop','sketch','pumpkin'],featured:['natural','warm','mono','oldfilm','comic_soft','pumpkin'],default:'natural'}};
+}
+function mergeDefaults(raw){const d=defaultConfig(),r=raw&&typeof raw==='object'?raw:{};return {...d,...r,overlay:{...d.overlay,...(r.overlay||{}),banner:{...d.overlay.banner,...(r.overlay?.banner||{})},title:{...d.overlay.title,...(r.overlay?.title||{})},subtitle:{...d.overlay.subtitle,...(r.overlay?.subtitle||{})},line:{...d.overlay.line,...(r.overlay?.line||{})}},filters:{...d.filters,...(r.filters||{})}}}
+function setV(id,v){const e=$(id);if(e)e.value=v??''}function setC(id,v){const e=$(id);if(e)e.checked=!!v}
+function fillControls(){
+  studio=mergeDefaults(studio);const o=studio.overlay,b=o.banner,t=o.title,s=o.subtitle,l=o.line;
+  setV('#titleText',t.text);setV('#titleFont',t.font);setV('#titleSize',t.size_pct);setV('#titleColor',t.color);setV('#titleAlign',t.align);setC('#titleMulti',t.multicolor);
+  const colors=Array.isArray(t.colors)?t.colors:[];['#pal1','#pal2','#pal3','#pal4'].forEach((id,i)=>setV(id,colors[i]||['#ffffff','#ffcf4a','#2ec4b6','#ff6b6b'][i]));
+  setV('#subText',s.text);setV('#subFont',s.font);setV('#subSize',s.size_pct);setV('#subColor',s.color);setV('#subAlign',s.align);
+  setV('#lineText',l.text);setV('#lineColor',l.color);setC('#includeDate',l.include_date!==false);
+  setV('#bannerType',b.type);setV('#bannerColor',b.color);setV('#bannerHeight',b.height_pct);setV('#bannerOpacity',b.opacity);setV('#bannerImageOpacity',b.image_opacity);setC('#bannerEnabled',b.enabled!==false);
+  oldBannerPath=b.image_path||'';$('#bannerPath').textContent=oldBannerPath?'Gespeichert: '+oldBannerPath:'Kein Hintergrundbild gespeichert';
+  renderFilters();renderPreview();
+}
+function readControls(){
+  const enabled=[...document.querySelectorAll('[data-filter-on]:checked')].map(x=>x.value);
+  const featured=[...document.querySelectorAll('[data-filter-star]:checked')].map(x=>x.value).filter(x=>enabled.includes(x)).slice(0,6);
+  const def=$('#defaultFilter').value;return {version:56,overlay:{enabled:true,padding_pct:4.5,banner:{enabled:$('#bannerEnabled').checked,type:$('#bannerType').value,color:$('#bannerColor').value,opacity:Number($('#bannerOpacity').value),height_pct:Number($('#bannerHeight').value),image_path:studio?.overlay?.banner?.image_path||'',image_opacity:Number($('#bannerImageOpacity').value)},
+    title:{enabled:true,source:'title',text:$('#titleText').value.trim(),font:$('#titleFont').value,weight:900,size_pct:Number($('#titleSize').value),color:$('#titleColor').value,align:$('#titleAlign').value,shadow:true,multicolor:$('#titleMulti').checked,colors:['#pal1','#pal2','#pal3','#pal4'].map(id=>$(id).value)},
+    subtitle:{enabled:true,source:'subtitle',text:$('#subText').value.trim(),font:$('#subFont').value,weight:800,size_pct:Number($('#subSize').value),color:$('#subColor').value,align:$('#subAlign').value,shadow:true},
+    line:{enabled:true,source:'overlay',text:$('#lineText').value.trim(),font:'clean',weight:600,size_pct:2.1,color:$('#lineColor').value,align:$('#subAlign').value,shadow:true,include_date:$('#includeDate').checked},branding:true},
+    filters:{enabled:enabled.length?enabled:['natural'],featured:featured.length?featured:[enabled[0]||'natural'],default:enabled.includes(def)?def:(enabled[0]||'natural')}};
+}
+function renderFilters(){
+  const cat=window.FTS_STUDIO_V56.catalog,en=new Set(studio.filters.enabled||[]),star=new Set(studio.filters.featured||[]);
+  $('#filters').innerHTML=Object.entries(categoryNames).map(([k,label])=>{
+    const items=Object.entries(cat).filter(([,x])=>x.cat===k);
+    if(!items.length)return'';return '<div class="filterGroup"><div class="filterGroupTitle">'+label+'</div><div class="filterGrid">'+items.map(([id,x])=>'<label class="filterCard"><input type="checkbox" data-filter-on value="'+id+'" '+(en.has(id)?'checked':'')+'><span><b>'+esc(x.de)+'</b><small>'+esc(x.descDe)+'</small><label class="star"><input type="checkbox" data-filter-star value="'+id+'" '+(star.has(id)?'checked':'')+'> ⭐ direkt zeigen</label></span></label>').join('')+'</div></div>';
+  }).join('');
+  document.querySelectorAll('[data-filter-on],[data-filter-star]').forEach(x=>x.onchange=()=>{const stars=[...document.querySelectorAll('[data-filter-star]:checked')];if(stars.length>6){x.checked=false;alert('Maximal 6 Filter direkt zeigen. Die anderen bleiben unter „Mehr Filter“.')}syncFilterSelects();schedulePreview()});
+  syncFilterSelects();
+}
+function syncFilterSelects(){
+  const ids=[...document.querySelectorAll('[data-filter-on]:checked')].map(x=>x.value);const cat=window.FTS_STUDIO_V56.catalog;
+  const cur=$('#defaultFilter').value||studio.filters.default,curP=$('#previewFilter').value||cur;
+  const opts=ids.map(id=>'<option value="'+id+'">'+esc(cat[id]?.de||id)+'</option>').join('');
+  $('#defaultFilter').innerHTML=opts;$('#previewFilter').innerHTML=opts;
+  if(ids.includes(cur))$('#defaultFilter').value=cur;if(ids.includes(curP))$('#previewFilter').value=curP;else if(ids.length)$('#previewFilter').value=ids[0];
+}
+function drawSample(ctx,w,h){
+  const g=ctx.createLinearGradient(0,0,w,h);g.addColorStop(0,'#2f5d62');g.addColorStop(1,'#d49a6a');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+  ctx.fillStyle='rgba(255,255,255,.16)';ctx.beginPath();ctx.arc(w*.5,h*.34,w*.13,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(0,0,0,.18)';ctx.beginPath();ctx.ellipse(w*.5,h*.66,w*.31,h*.28,0,0,Math.PI*2);ctx.fill();
+}
+function drawCover(ctx,img,w,h){const s=Math.max(w/img.naturalWidth,h/img.naturalHeight),dw=img.naturalWidth*s,dh=img.naturalHeight*s;ctx.drawImage(img,(w-dw)/2,(h-dh)/2,dw,dh)}
+let previewTimer;
+function schedulePreview(){clearTimeout(previewTimer);previewTimer=setTimeout(renderPreview,50)}
+async function renderPreview(){
+  if(!eventRow)return;studio=mergeDefaults(readControls());const cv=$('#preview'),ctx=cv.getContext('2d');cv.width=720;cv.height=900;ctx.clearRect(0,0,cv.width,cv.height);
+  if(previewImg)drawCover(ctx,previewImg,cv.width,cv.height);else drawSample(ctx,cv.width,cv.height);
+  const key=$('#previewFilter').value||studio.filters.default||'natural';window.FTS_STUDIO_V56.applyFilter(cv,key);
+  await window.FTS_STUDIO_V56.drawOverlay(ctx,cv,{...eventRow,studio_v56:studio,photo_branding:'bottom'},studio,{selectedFilter:key,photoEventDayText:()=>String(eventRow.event_date||'').split('-').reverse().join('.'),assetUrl,loadRemoteImage});
+}
+async function loadEvents(){
+  if(!auth()){setStatus('Bitte zuerst das FTS Cockpit öffnen und dieses Gerät anmelden.','err');return}
+  const rows=await rpc('fts_admin_dashboard_events',{p_admin_code:auth()})||[];const sel=$('#eventSelect');
+  sel.innerHTML='<option value="">Event auswählen …</option>'+rows.map(e=>'<option value="'+esc(e.event_token)+'">'+esc(e.title||e.short_code||'Event')+' · '+esc(e.short_code||'')+'</option>').join('');
+  if(eventToken){sel.value=eventToken;await loadEvent(eventToken)}else if(rows.length){eventToken=rows[0].event_token;sel.value=eventToken;await loadEvent(eventToken)}
+}
+async function loadEvent(token){
+  if(!token)return;setStatus('Event und Studio werden geladen …');eventToken=token;
+  eventRow=await rpc('fts_admin_get_event_v9',{p_admin_code:auth(),p_event_token:token});
+  studio=await rpc('fts_admin_get_event_studio_v56',{p_admin_code:auth(),p_event_token:token})||{};
+  studio=mergeDefaults(studio);pendingBanner=null;removeBanner=false;fillControls();setStatus('Studio bereit · '+(eventRow?.title||''),'ok');
+  history.replaceState(null,'','./studio.html?e='+encodeURIComponent(token));
+}
+async function uploadBanner(file){
+  const ext=(file.name.split('.').pop()||'webp').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,5)||'webp';
+  const root=eventRow.storage_slug||eventRow.short_code||'event';const path=root+'/assets/studio/banner-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;
+  const r=await fetch(cfg.supabaseUrl+'/storage/v1/object/'+encodeURIComponent(cfg.liveBucket)+'/'+encodePath(path),{method:'POST',headers:{'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':file.type||'application/octet-stream','x-upsert':'false'},body:file});
+  if(!r.ok)throw new Error((await r.text())||'Hintergrundbild konnte nicht hochgeladen werden');return path;
+}
+async function save(){
+  if(!eventRow)return;const btn=$('#saveBtn');btn.disabled=true;setStatus('Studio wird gespeichert …');
+  let newPath='',toDelete='';
+  try{
+    studio=readControls();
+    if(removeBanner){toDelete=oldBannerPath;studio.overlay.banner.image_path=''}
+    if(pendingBanner){newPath=await uploadBanner(pendingBanner);if(oldBannerPath&&oldBannerPath!==newPath)toDelete=oldBannerPath;studio.overlay.banner.image_path=newPath}
+    const saved=await rpc('fts_admin_set_event_studio_v56',{p_admin_code:auth(),p_event_token:eventToken,p_config:studio});studio=mergeDefaults(saved||studio);
+    if(toDelete&&String(toDelete).includes('/assets/studio/'))await adminFiles('delete-paths',{paths:[toDelete]}).catch(console.warn);
+    oldBannerPath=studio.overlay.banner.image_path||'';pendingBanner=null;removeBanner=false;$('#bannerFile').value='';fillControls();setStatus('✓ Studio gespeichert. Gastseite verwendet jetzt dieses Design.','ok');
+  }catch(e){if(newPath)await adminFiles('delete-paths',{paths:[newPath]}).catch(()=>{});setStatus('Speichern fehlgeschlagen: '+e.message,'err')}
+  finally{btn.disabled=false}
+}
+const presets={
+ clean:{font:'clean',color:'#ffffff',sub:'#d9b56d',banner:'#071315',filters:['natural','warm','soft','mono','cool','sepia']},
+ streetfood:{font:'pop',color:'#ffffff',sub:'#ffcf4a',banner:'#30170c',filters:['natural','warm','vivid','festival','retro90','polaroid','comic_pop']},
+ rock:{font:'rock',color:'#ffffff',sub:'#ff3b30',banner:'#080808',filters:['natural','noir','oldfilm','festival','comic_pop','sketch']},
+ retro:{font:'retro',color:'#fff4d6',sub:'#e7a45b',banner:'#2b1a0c',filters:['natural','sepia','oldfilm','fade','retro90','polaroid','mono_warm']},
+ pumpkin:{font:'bold',color:'#ffffff',sub:'#f29a2e',banner:'#241207',filters:['natural','warm','sepia','oldfilm','pumpkin','comic_soft','comic_pop']},
+ elegant:{font:'elegant',color:'#ffffff',sub:'#f2cfbf',banner:'#241b1f',filters:['natural','soft','mono','mono_warm','polaroid','fade']}
+};
+function applyPreset(id){
+  const p=presets[id];if(!p)return;$('#titleFont').value=p.font;$('#titleColor').value=p.color;$('#subColor').value=p.sub;$('#bannerColor').value=p.banner;
+  document.querySelectorAll('[data-filter-on]').forEach(x=>x.checked=p.filters.includes(x.value));document.querySelectorAll('[data-filter-star]').forEach(x=>x.checked=p.filters.slice(0,6).includes(x.value));syncFilterSelects();schedulePreview();
+}
+document.addEventListener('input',e=>{if(e.target.closest('.left')&&!e.target.matches('[type=file]'))schedulePreview()});
+document.addEventListener('change',e=>{if(e.target.closest('.left')&&!e.target.matches('[type=file]'))schedulePreview()});
+$('#eventSelect').onchange=e=>loadEvent(e.target.value).catch(x=>setStatus(x.message,'err'));
+$('#reloadBtn').onclick=()=>loadEvent(eventToken).catch(x=>setStatus(x.message,'err'));
+$('#openGuestBtn').onclick=()=>{if(eventRow)window.open(cfg.baseUrl+'?e='+encodeURIComponent(eventRow.short_code||eventToken),'_blank')};
+$('#saveBtn').onclick=save;$('#resetBtn').onclick=()=>{studio=defaultConfig();fillControls();setStatus('Standardwerte geladen – noch nicht gespeichert.')};
+document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>applyPreset(b.dataset.preset));
+$('#bannerFile').onchange=e=>{pendingBanner=e.target.files?.[0]||null;removeBanner=false;$('#bannerPath').textContent=pendingBanner?'Neu: '+pendingBanner.name:'Kein neues Bild';schedulePreview()};
+$('#removeBannerBtn').onclick=()=>{pendingBanner=null;removeBanner=true;studio.overlay.banner.image_path='';$('#bannerFile').value='';$('#bannerPath').textContent='Bild wird beim Speichern entfernt';schedulePreview()};
+$('#previewFile').onchange=e=>{const file=e.target.files?.[0];if(!file)return;const img=new Image();img.onload=()=>{previewImg=img;renderPreview()};img.src=URL.createObjectURL(file)};
+$('#previewFilter').onchange=renderPreview;
+loadEvents().catch(e=>setStatus('Studio konnte nicht geladen werden: '+e.message,'err'));
+</script>
+</body>
+</html>
