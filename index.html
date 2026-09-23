@@ -916,12 +916,15 @@ function updateRememberButton(){
   }
 }
 function guestPushKey(base64String){const padding='='.repeat((4-base64String.length%4)%4),base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/'),raw=atob(base64);return Uint8Array.from([...raw].map(ch=>ch.charCodeAt(0)))}
+function guestNotifyLocalKey(){return 'fts_guest_notify_v63_'+String(ev?.event_token||eventToken)}
+function guestNotifyChosen(){try{return localStorage.getItem(guestNotifyLocalKey())==='1'}catch{return false}}
+function rememberGuestNotify(){try{localStorage.setItem(guestNotifyLocalKey(),'1')}catch{}}
 async function currentGuestPushSubscription(){if(!('serviceWorker'in navigator)||!('PushManager'in window))return null;const reg=await navigator.serviceWorker.ready;return reg.pushManager.getSubscription()}
 async function refreshGuestNotifyButton(){
   const btn=document.getElementById('guestNotifyBtn'),hint=document.getElementById('guestNotifyHint');if(!btn)return;
   if(!('Notification'in window)||!('serviceWorker'in navigator)||!('PushManager'in window)){btn.textContent=tr('notifyUnsupported');btn.disabled=true;return}
   const sub=await currentGuestPushSubscription().catch(()=>null);
-  const on=Notification.permission==='granted'&&!!sub;
+  const on=guestNotifyChosen()&&Notification.permission==='granted'&&!!sub;
   btn.textContent=on?tr('notifyOn'):tr('notifyButton');btn.disabled=on;
   if(hint&&on){hint.textContent=tr('notifyHint');hint.classList.add('show')}
 }
@@ -936,6 +939,7 @@ async function enableGuestNotifications(){
     if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:guestPushKey(GUEST_VAPID_PUBLIC_KEY)});
     const j=sub.toJSON();
     await rpc('fts_guest_save_push_subscription_v63',{p_event_token:ev.event_token,p_guest_session_id:guestSessionId(),p_endpoint:j.endpoint,p_p256dh:j.keys?.p256dh||'',p_auth:j.keys?.auth||'',p_user_agent:navigator.userAgent});
+    rememberGuestNotify();
     if(hint){hint.textContent=tr('notifyHint');hint.classList.add('show')}
     await refreshGuestNotifyButton();
   }catch(e){console.warn('Gast-Push',e);if(hint){hint.textContent=String(e?.message||e);hint.classList.add('show')}}
