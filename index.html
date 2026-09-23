@@ -122,7 +122,7 @@ let ev=null,selectedFile=null,designedBlob=null,selectedLayout='solo',selectedFi
 const BASE_PRIVACY_VERSION='FTS-BASE-PRIVACY-V62-2026-09-23';
 let basePrivacyAccepted=false;
 let onlineDecision=null,peopleRightsConfirmed=false,publicationPrep=null;
-let lang='de',routeMode='closed',routeDay=null,routeNext=null,adTimer=null,adIndex=0,keepAdsVisible=false,lastSuccessUrl='',deferredInstallPrompt=null;
+let lang='de',routeMode='closed',routeDay=null,routeNext=null,adTimer=null,adIndex=0,keepAdsVisible=false,lastSuccessUrl='',deferredInstallPrompt=null,selfiesReturnToSuccess=false;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e});
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateRememberButton()});
 const LIFECYCLE_TAG_PREFIX='__FTS_LIFECYCLE_V11__:';
@@ -701,7 +701,7 @@ function render(){
  document.getElementById('rememberEventBtn').addEventListener('click',rememberEventOnDevice);
  document.getElementById('guestNotifyBtn').addEventListener('click',enableGuestNotifications);
  updateRememberButton();refreshGuestNotifyButton();
- document.getElementById('closeSelfiesBtn').addEventListener('click',()=>{document.getElementById('mySelfiesPanel').classList.remove('show');document.getElementById('successPanel')?.scrollIntoView({behavior:'smooth',block:'start'})});
+ document.getElementById('closeSelfiesBtn').addEventListener('click',closeMySelfies);
  refreshMySelfiesAccess();
 }
 function layoutButton(key){const x=layoutInfo[key];return `<button type="button" class="choice ${key===selectedLayout?'active':''}" data-layout="${key}"><div class="frameMini ${x.mini}">${key==='solo'?'1':key==='duo'?'2':key.includes('group')?'3–5':'↔'}</div>${esc(tr(x.label))}<small>${esc(tr(x.desc))}</small></button>`}
@@ -1016,7 +1016,7 @@ async function rememberEventOnDevice(){
 }
 function resetForNewSelfie(){
   if(lastSuccessUrl){URL.revokeObjectURL(lastSuccessUrl);lastSuccessUrl=''}
-  selectedFile=null;designedBlob=null;publicationPrep=null;onlineDecision=null;peopleRightsConfirmed=false;keepAdsVisible=false;
+  selectedFile=null;designedBlob=null;publicationPrep=null;onlineDecision=null;peopleRightsConfirmed=false;keepAdsVisible=false;selfiesReturnToSuccess=false;
   document.getElementById('successPanel')?.classList.remove('show');
   document.getElementById('successUtilities')?.classList.remove('show');
   document.getElementById('mySelfiesPanel')?.classList.remove('show');
@@ -1030,7 +1030,7 @@ function resetForNewSelfie(){
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function showSuccessPanel(offline=false,previewBlob=null){
-  keepAdsVisible=true;
+  keepAdsVisible=true;selfiesReturnToSuccess=false;
   saveCurrentEventLink();
   document.getElementById('captureFlow')?.classList.add('hiddenFlow');
   document.getElementById('sendFlow')?.classList.add('hiddenFlow');
@@ -1061,6 +1061,15 @@ async function openLatestPrint(){
   await showMySelfies();
   showPrintReceipt(null);
   document.getElementById('mySelfiesGrid')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function closeMySelfies(){
+  document.getElementById('mySelfiesPanel')?.classList.remove('show');
+  if(selfiesReturnToSuccess){
+    document.getElementById('successPanel')?.classList.add('show');
+    document.getElementById('successUtilities')?.classList.add('show');
+    document.getElementById('successPanel')?.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  selfiesReturnToSuccess=false;
 }
 function clearMySelfieTempUrls(){for(const u of mySelfieTempUrls)try{URL.revokeObjectURL(u)}catch{}mySelfieTempUrls=[]}
 async function loadPhotoPrintStatus(){
@@ -1342,6 +1351,10 @@ function bindPrintControls(rows){
 }
 async function showMySelfies(){
   const panel=document.getElementById('mySelfiesPanel'),grid=document.getElementById('mySelfiesGrid');if(!panel||!grid)return;
+  const success=document.getElementById('successPanel');
+  if(success?.classList.contains('show'))selfiesReturnToSuccess=true;
+  success?.classList.remove('show');
+  document.getElementById('successUtilities')?.classList.remove('show');
   panel.classList.add('show');setMySelfieHint('');const postText=document.getElementById('mySelfiesPostText');if(postText&&!postText.value)postText.value=mySelfieSocialText();grid.innerHTML='<div class="emptySelfies">…</div>';
   clearMySelfieTempUrls();
   const [rows,cfgPrint,printStates]=await Promise.all([loadMySelfieRows(),loadPrintConfig(),loadPhotoPrintStatus()]);
