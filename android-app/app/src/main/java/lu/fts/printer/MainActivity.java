@@ -32,6 +32,7 @@ public class MainActivity extends Activity {
 
     final ExecutorService io = Executors.newFixedThreadPool(4);
     final Handler handler = new Handler(Looper.getMainLooper());
+    final ArrayList<Staff> deviceAdmins = new ArrayList<>();
     final ArrayList<Staff> staff = new ArrayList<>();
     final ArrayList<EventModel> events = new ArrayList<>();
     final ArrayList<OrderModel> orders = new ArrayList<>();
@@ -83,7 +84,7 @@ public class MainActivity extends Activity {
     }
 
     void bootstrap() {
-        if (deviceToken.isEmpty()) { showDeviceSetup(); return; }
+        if (deviceToken.isEmpty()) { loadDeviceAdmins(); return; }
         if (!sessionToken.isEmpty()) {
             rpc("fts_printer_validate_session_v72", obj(
                     "p_device_token",deviceToken,
@@ -103,21 +104,57 @@ public class MainActivity extends Activity {
         } else loadStaff();
     }
 
+    void loadDeviceAdmins() {
+        status("Printer-Administratoren werden geladen …");
+        rpc("fts_printer_device_admin_choices_v75",obj(), result -> {
+            deviceAdmins.clear();
+            if(result instanceof JSONArray){
+                JSONArray arr=(JSONArray)result;
+                for(int i=0;i<arr.length();i++){
+                    JSONObject o=arr.optJSONObject(i);if(o==null)continue;
+                    deviceAdmins.add(new Staff(o.optString("user_id"),o.optString("display_name"),"printer_admin"));
+                }
+            }
+            showDeviceSetup();
+        });
+    }
+
     void showDeviceSetup() {
         onMain=false; clear();
         addHeading("Samsung einmalig freischalten");
-        addNote("Einmal deinen FTS Admin-Code eingeben. Danach arbeiten die Mitarbeiter nur noch mit ihrem persönlichen Printer-Code.");
-        EditText code=input("FTS Admin-Code", true);
+        addNote("Printer-Administrator auswählen und dessen persönlichen Printer-Code eingeben. Der alte globale FTS Admin-Code wird hier nicht mehr benötigt.");
+
+        if(deviceAdmins.isEmpty()){
+            content.addView(noteView("Kein aktiver Printer-Administrator gefunden. Im FTS Cockpit zuerst einen Printer-Administrator anlegen."));
+            Button reload=button("Administratoren neu laden");
+            content.addView(reload);
+            reload.setOnClickListener(v->loadDeviceAdmins());
+            return;
+        }
+
+        Spinner admins=new Spinner(this);
+        ArrayList<String> names=new ArrayList<>();
+        for(Staff s:deviceAdmins)names.add(s.name+" · Printer-Administrator");
+        admins.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names));
+
+        EditText code=input("Persönlicher Administrator-Code", true);
+        code.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_VARIATION_PASSWORD);
         Button go=button("Samsung freischalten");
-        content.addView(code); content.addView(go);
+        Button reload=secondaryButton("Administratoren aktualisieren");
+        content.addView(admins);content.addView(space(8));content.addView(code);content.addView(go);content.addView(reload);
+
         go.setOnClickListener(v -> {
+            int pos=admins.getSelectedItemPosition();
+            if(pos<0||pos>=deviceAdmins.size()){toast("Printer-Administrator auswählen.");return;}
+            Staff admin=deviceAdmins.get(pos);
             String c=code.getText().toString().trim();
-            if(c.isEmpty()){toast("Admin-Code eingeben.");return;}
+            if(c.isEmpty()){toast("Persönlichen Administrator-Code eingeben.");return;}
             go.setEnabled(false);
-            rpc("fts_admin_register_device",obj(
-                    "p_admin_code",c,
+            rpc("fts_printer_register_device_v75",obj(
+                    "p_user_id",admin.id,
+                    "p_code",c,
                     "p_label","FTS Printer · Samsung Android",
-                    "p_user_agent","FTS Printer Android 0.1"
+                    "p_user_agent","FTS Printer Android 0.1.1"
             ), result -> {
                 go.setEnabled(true);
                 if(result instanceof String){
@@ -127,13 +164,14 @@ public class MainActivity extends Activity {
                 } else toast("Gerätefreigabe konnte nicht gespeichert werden.");
             });
         });
+        reload.setOnClickListener(v->loadDeviceAdmins());
     }
 
     void loadStaff() {
         if(deviceToken.isEmpty()){showDeviceSetup();return;}
         status("Mitarbeiter werden geladen …");
         rpc("fts_printer_login_choices_v72",obj("p_device_token",deviceToken), result -> {
-            if(!(result instanceof JSONArray)){showDeviceSetup();return;}
+            if(!(result instanceof JSONArray)){deviceToken="";prefs.edit().remove("device_token").apply();loadDeviceAdmins();return;}
             staff.clear();
             JSONArray a=(JSONArray)result;
             for(int i=0;i<a.length();i++){
@@ -172,7 +210,7 @@ public class MainActivity extends Activity {
                     "p_user_id",s.id,
                     "p_code",code,
                     "p_device_label","FTS Printer · Samsung Android",
-                    "p_user_agent","FTS Printer Android 0.1"
+                    "p_user_agent","FTS Printer Android 0.1.1"
             ), result -> {
                 login.setEnabled(true);
                 if(result instanceof JSONObject){
@@ -187,7 +225,7 @@ public class MainActivity extends Activity {
         });
         refresh.setOnClickListener(v->loadStaff());
         reset.setOnClickListener(v->{
-            prefs.edit().clear().apply();deviceToken="";sessionToken="";showDeviceSetup();
+            prefs.edit().clear().apply();deviceToken="";sessionToken="";loadDeviceAdmins();
         });
     }
 
