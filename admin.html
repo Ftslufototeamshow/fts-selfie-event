@@ -1351,7 +1351,7 @@ async function loadModeEvent(token,duplicate=false){
 async function initMode(){if(modeLoaded||!authCredential())return;modeLoaded=true;try{if(EDIT_TOKEN)await loadModeEvent(EDIT_TOKEN,false);else if(DUP_TOKEN)await loadModeEvent(DUP_TOKEN,true)}catch(e){alert('Event konnte nicht geladen werden: '+e.message)}}
 
 
-if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js?v=71',{updateViaCache:'none'}).then(reg=>reg.update().catch(()=>{})).catch(()=>{});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js?v=72',{updateViaCache:'none'}).then(reg=>reg.update().catch(()=>{})).catch(()=>{});
 renderCustomers();
 addEventDay('');
 $('#fakeQr').innerHTML='<i></i>'.repeat(49)+'<img id="previewQrLogo" class="qrPreviewLogo" alt="">';
