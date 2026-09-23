@@ -66,7 +66,12 @@ struct ProductionQueueContent: View {
             ScrollView {
                 LazyVStack(alignment:.leading,spacing:10) {
                     if groupedOrders.isEmpty && core.localQueue.jobs.filter({$0.status != .archived && $0.status != .cancelled}).isEmpty {
-                        ContentUnavailableView("Keine Druckaufträge",systemImage:"printer",description:Text("Sobald ein Selfie bezahlt oder ein lokaler Auftrag freigegeben ist, erscheint er hier."))
+                        VStack(spacing:10){
+                            Image(systemName:"printer").font(.system(size:34)).foregroundStyle(.secondary)
+                            Text("Keine Druckaufträge").font(.headline)
+                            Text("Sobald ein Selfie bezahlt oder ein lokaler Auftrag freigegeben ist, erscheint er hier.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }.frame(maxWidth:.infinity).padding(40)
                     }
 
                     ForEach(groupedOrders,id:\.0) { orderID,units in
