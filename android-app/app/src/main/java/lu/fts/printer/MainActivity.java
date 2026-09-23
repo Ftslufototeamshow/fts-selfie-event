@@ -51,6 +51,7 @@ public class MainActivity extends Activity {
     boolean onMain = false;
     boolean recoveringAuth = false;
     String activeScreen = "orders";
+    String pickupFilter = "";
     TextView eventInfoText;
     Uri selectedLocalPhoto = null;
     String selectedLocalName = null;
@@ -349,7 +350,7 @@ public class MainActivity extends Activity {
             EventModel current=events.get(selectedIndex);
             eventInfoText.setText(current.title+(current.location.isEmpty()?"":" · "+current.location)+(current.date.isEmpty()?"":" · "+current.date));
             refreshSelected();
-            if("camera".equals(activeScreen))renderCamera(body);else renderOrders(body);
+            renderActive(body);
         });
     }
 
@@ -359,7 +360,8 @@ public class MainActivity extends Activity {
             if(result instanceof JSONObject){
                 stock=(JSONObject)result;
                 int available=stock.optInt("safe_available",0);
-                stockText.setText("Bestand: "+available+" sicher");
+                int cameraWaiting=stock.optInt("camera_waiting",0);
+                stockText.setText("Bestand: "+available+" sicher"+(cameraWaiting>0?" · Kamera wartet "+cameraWaiting:""));
                 stockText.setTextColor(available<=0?Color.rgb(255,120,120):Color.WHITE);
             }
         });
@@ -367,30 +369,86 @@ public class MainActivity extends Activity {
             if(!(result instanceof JSONArray))return;
             orders.clear(); JSONArray a=(JSONArray)result;
             for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)orders.add(new OrderModel(o));}
-            View b=findTagged(content,"body");
-            if(b instanceof LinearLayout){
-                if("camera".equals(activeScreen))renderCamera((LinearLayout)b);
-                else renderOrders((LinearLayout)b);
-            }
+            renderActiveBody();
             status("Aktuell · "+new SimpleDateFormat("HH:mm",Locale.GERMANY).format(new Date()));
         });
+        rpc("fts_printer_queue_v80",obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken), result -> {
+            if(result instanceof JSONArray){
+                workUnits.clear();JSONArray a=(JSONArray)result;
+                for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)workUnits.add(o);}
+                renderActiveBody();
+            }
+        });
+        rpc("fts_printer_pickups_v80",obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken), result -> {
+            if(result instanceof JSONArray){
+                pickupRows.clear();JSONArray a=(JSONArray)result;
+                for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)pickupRows.add(o);}
+                renderActiveBody();
+            }
+        });
+        rpc("fts_printer_nodes_v80",obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken), result -> {
+            if(result instanceof JSONArray){
+                printerNodes.clear();JSONArray a=(JSONArray)result;
+                for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)printerNodes.add(o);}
+                renderActiveBody();
+            }
+        });
+        rpc("fts_printer_archived_v80",obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken,"p_limit",100), result -> {
+            if(result instanceof JSONArray){
+                archiveRows.clear();JSONArray a=(JSONArray)result;
+                for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)archiveRows.add(o);}
+                renderActiveBody();
+            }
+        });
+    }
+
+    void renderActiveBody(){
+        View b=findTagged(content,"body");
+        if(b instanceof LinearLayout)renderActive((LinearLayout)b);
+    }
+
+    void renderActive(LinearLayout body){
+        if("camera".equals(activeScreen))renderCamera(body);
+        else if("pickup".equals(activeScreen))renderPickups(body,pickupFilter);
+        else if("printers".equals(activeScreen))renderPrinters(body);
+        else renderOrders(body);
     }
 
     void renderOrders(LinearLayout body) {
         activeScreen="orders";
         body.removeAllViews();
-        TextView h=txt("Aktuelle Druckaufträge",20,Color.WHITE,true);body.addView(h);
+        TextView h=txt("Automatische Druckaufträge",20,Color.WHITE,true);body.addView(h);
+        body.addView(noteView("Der Mac-Print-Host verteilt jedes bezahlte Exemplar automatisch auf den nächsten freien Drucker. Das Samsung löst keinen zweiten Druck aus."));
         if(orders.isEmpty()){body.addView(noteView("Keine aktuellen Druckaufträge."));return;}
         for(OrderModel o:orders) body.addView(orderCard(o));
     }
 
     View orderCard(OrderModel o) {
         LinearLayout card=card();
-        TextView status=txt(o.ready?"DRUCKBEREIT":safe(o.printStatus,"—"),12,o.ready?Color.rgb(80,220,140):Color.rgb(180,190,188),true);
-        card.addView(status);
-        TextView pickup=txt("Abholcode "+safe(o.pickupCode,"------"),24,Color.WHITE,true);
-        card.addView(pickup);
+        int totalUnits=0, printedUnits=0, uncertainUnits=0;
+        ArrayList<JSONObject> uncertain=new ArrayList<>();
+        for(JSONObject u:workUnits){
+            if(!o.id.equals(u.optString("order_id")))continue;
+            totalUnits++;
+            String us=u.optString("unit_status");
+            if("PRINTED".equals(us))printedUnits++;
+            if("UNCERTAIN".equals(us)){uncertainUnits++;uncertain.add(u);}
+        }
+
+        String top;
+        int topColor=Color.rgb(180,190,188);
+        if("PRINTED".equalsIgnoreCase(o.printStatus)&&"READY_FOR_PICKUP".equalsIgnoreCase(o.pickupStatus)){
+            top="ABHOLBEREIT";topColor=Color.rgb(80,220,140);
+        } else if(uncertainUnits>0){
+            top="PRÜFEN";topColor=Color.rgb(255,180,60);
+        } else if(o.ready){
+            top="IN WARTESCHLANGE";topColor=Color.rgb(80,220,140);
+        } else top=safe(o.printStatus,"—");
+
+        card.addView(txt(top,12,topColor,true));
+        card.addView(txt("Abholcode "+safe(o.pickupCode,"------"),24,Color.WHITE,true));
         card.addView(txt((o.qty)+" × 10×15 · Zahlung "+safe(o.paymentStatus,"—"),14,Color.rgb(170,185,182),false));
+        if(totalUnits>0)card.addView(txt("Druckfortschritt: "+printedUnits+"/"+totalUnits,14,Color.rgb(190,205,202),true));
         if(o.test)card.addView(txt("TEST / SANDBOX",12,Color.rgb(255,190,70),true));
 
         if(o.firstPath!=null&&!o.firstPath.isEmpty()){
@@ -399,21 +457,117 @@ public class MainActivity extends Activity {
             loadImage(o.firstPath,img);
         }
 
-        LinearLayout buttons=row();
-        if(o.ready){
-            Button p=button("Druckdialog öffnen");
-            Button done=secondaryButton("Druck erfolgreich");
-            buttons.addView(p);buttons.addView(done);
-            p.setOnClickListener(v->printOrderImage(o));
-            done.setOnClickListener(v->confirmPrinted(o));
-        } else if("PRINTED".equalsIgnoreCase(o.printStatus)&&"READY_FOR_PICKUP".equalsIgnoreCase(o.pickupStatus)){
-            Button pick=button("Abgeholt bestätigen");buttons.addView(pick);pick.setOnClickListener(v->markPickedUp(o));
+        for(JSONObject u:uncertain){
+            LinearLayout warn=row();
+            warn.addView(txt("Status unklar · Exemplar "+u.optInt("copy_index",1),12,Color.rgb(255,190,70),true),new LinearLayout.LayoutParams(0,-2,1));
+            Button retry=secondaryButton("Nicht gedruckt · erneut");
+            warn.addView(retry);
+            retry.setOnClickListener(v->requeueUncertain(u));
+            card.addView(warn);
         }
+
+        LinearLayout buttons=row();
         if(o.receiptNumber!=null&&!o.receiptNumber.isEmpty()){
-            Button receipt=secondaryButton("Kundenbeleg");buttons.addView(receipt);receipt.setOnClickListener(v->showReceipt(o));
+            Button receipt=secondaryButton("Beleg für Kunden");buttons.addView(receipt);receipt.setOnClickListener(v->showReceipt(o));
+        }
+        if("PRINTED".equalsIgnoreCase(o.printStatus)&&"READY_FOR_PICKUP".equalsIgnoreCase(o.pickupStatus)){
+            Button openPickup=button("Zur Abholung");buttons.addView(openPickup);
+            openPickup.setOnClickListener(v->{activeScreen="pickup";pickupFilter=safe(o.pickupCode,"");renderPickups((LinearLayout)findTagged(content,"body"),pickupFilter);});
         }
         card.addView(buttons);
         return card;
+    }
+
+    void requeueUncertain(JSONObject unit){
+        String unitId=unit.optString("unit_id","");
+        if(unitId.isEmpty())return;
+        new AlertDialog.Builder(this).setTitle("Druck wirklich nicht erfolgt?")
+                .setMessage("Nur erneut freigeben, wenn am Drucker geprüft wurde, dass dieses Exemplar NICHT herausgekommen ist. Sonst entsteht ein Doppelprint.")
+                .setNegativeButton("Abbrechen",null)
+                .setPositiveButton("Nicht gedruckt · erneut",(d,w)->rpc("fts_printer_fail_unit_v80",obj(
+                        "p_device_token",deviceToken,"p_session_token",sessionToken,"p_unit_id",unitId,
+                        "p_error","Samsung: Mitarbeiter bestätigt nicht gedruckt","p_confirm_not_printed",true
+                ),r->{toast("Exemplar wieder freigegeben.");refreshSelected();}))
+                .show();
+    }
+
+    void renderPickups(LinearLayout body,String filter){
+        activeScreen="pickup";
+        pickupFilter=filter==null?"":filter;
+        body.removeAllViews();
+        body.addView(txt("Kundenabholung",20,Color.WHITE,true));
+        body.addView(noteView(pickupRows.size()+" Auftrag"+(pickupRows.size()==1?"":"e")+" warten auf Abholung."));
+
+        LinearLayout searchRow=row();
+        EditText search=input("Abholcode / A001 / B002",false);search.setText(pickupFilter);
+        Button go=button("Suchen");
+        searchRow.addView(search,new LinearLayout.LayoutParams(0,dp(52),1));searchRow.addView(go);
+        body.addView(searchRow);
+        go.setOnClickListener(v->{pickupFilter=search.getText().toString().trim();renderPickups(body,pickupFilter);});
+
+        String q=pickupFilter.toUpperCase(Locale.ROOT);
+        int shown=0;
+        for(JSONObject p:pickupRows){
+            String code=p.optString("customer_code","");
+            if(!q.isEmpty()&&!code.toUpperCase(Locale.ROOT).contains(q))continue;
+            shown++;
+            LinearLayout card=card();
+            card.addView(txt(code,26,Color.WHITE,true));
+            String kind=p.optString("kind","SELFIE");
+            int qty=p.optInt("quantity",0);
+            card.addView(txt(kind+" · "+qty+" Ausdruck"+(qty==1?"":"e"),13,Color.rgb(170,185,182),false));
+            LinearLayout actions=row();
+            if("SELFIE".equalsIgnoreCase(kind)){
+                OrderModel found=null;
+                String id=p.optString("id","");
+                for(OrderModel o:orders)if(o.id.equals(id)){found=o;break;}
+                if(found!=null&&found.receiptNumber!=null&&!found.receiptNumber.isEmpty()){
+                    OrderModel receiptOrder=found;
+                    Button receipt=secondaryButton("Beleg für Kunden");actions.addView(receipt);receipt.setOnClickListener(v->showReceipt(receiptOrder));
+                }
+            }
+            Button done=button("Foto abgeholt");actions.addView(done);
+            done.setOnClickListener(v->markPickupRow(p));
+            card.addView(actions);
+            body.addView(card);
+        }
+        if(shown==0)body.addView(noteView("Keine passende Abholung gefunden."));
+        body.addView(txt("Archiv · "+archiveRows.size(),16,Color.WHITE,true));
+        int n=Math.min(20,archiveRows.size());
+        for(int i=0;i<n;i++){
+            JSONObject a=archiveRows.get(i);
+            body.addView(txt(a.optString("customer_code","—")+" · "+a.optString("kind","")+" · "+a.optInt("quantity",0)+" ×",12,Color.rgb(150,170,167),false));
+        }
+    }
+
+    void markPickupRow(JSONObject p){
+        String kind=p.optString("kind","SELFIE");
+        String id=p.optString("id","");
+        String rpcName="LOCAL".equalsIgnoreCase(kind)?"fts_printer_mark_local_picked_up_archive_v80":"fts_printer_mark_picked_up_archive_v80";
+        JSONObject args="LOCAL".equalsIgnoreCase(kind)
+                ?obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_local_job_id",id)
+                :obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_order_id",id);
+        rpc(rpcName,args,r->{toast(Boolean.TRUE.equals(r)?"Abgeholt und archiviert.":"Auftrag ist nicht abholbereit.");pickupFilter="";refreshSelected();});
+    }
+
+    void renderPrinters(LinearLayout body){
+        activeScreen="printers";
+        body.removeAllViews();
+        body.addView(txt("Printer-Aktivität",20,Color.WHITE,true));
+        body.addView(noteView("Die physischen Druckjobs werden vom Mac-Print-Host parallel auf die freigegebenen Drucker verteilt."));
+        if(printerNodes.isEmpty()){body.addView(noteView("Noch kein aktiver Mac-Printer gemeldet."));return;}
+        for(JSONObject n:printerNodes){
+            LinearLayout card=card();
+            card.addView(txt(n.optString("display_name",n.optString("printer_key","Printer")),18,Color.WHITE,true));
+            String st=n.optString("state","—");
+            int eta=n.optInt("eta_seconds",0);
+            card.addView(txt(st+(eta>0?" · ca. "+eta+" Sek.":""),14,"ERROR".equals(st)?Color.rgb(255,120,120):Color.rgb(130,220,170),true));
+            String dev=n.optString("device_label","");
+            if(!dev.isEmpty())card.addView(txt(dev,12,Color.rgb(150,170,167),false));
+            String err=n.optString("last_error","");
+            if(!err.isEmpty())card.addView(txt(err,12,Color.rgb(255,170,80),true));
+            body.addView(card);
+        }
     }
 
     void renderCamera(LinearLayout body) {
