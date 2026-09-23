@@ -3,7 +3,7 @@ name: Build FTS Printer macOS
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, printer-core-v1]
     paths:
       - 'macos-app/**'
       - '.github/workflows/build-macos-printer.yml'
@@ -29,6 +29,7 @@ jobs:
             dist/FTS-Printer-macOS-v0.1.4.dmg
           if-no-files-found: error
       - name: Publish downloadable release
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
