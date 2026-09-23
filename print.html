@@ -162,5 +162,6 @@ $('#receiptCloseBtn').onclick=()=>$('#receiptModal').classList.add('hidden');$('
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e});$('#installBtn').onclick=async()=>{if(matchMedia('(display-mode: standalone)').matches||navigator.standalone===true)return toast('Print Station ist bereits als App geöffnet.');if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null}else alert('Android/Samsung: Browser-Menü → Zum Startbildschirm hinzufügen. iPhone: Teilen → Zum Home-Bildschirm.')};
 (async()=>{if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});if(await ensureDevice())await loadCore()})();
 </script>
+<script src="./print-pickup-station-v57.js"></script>
 </body>
 </html>
