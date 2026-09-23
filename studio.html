@@ -204,15 +204,20 @@ async function renderPreview(){
 }
 async function loadEvents(){
   if(!auth()){setStatus('Bitte zuerst das FTS Cockpit öffnen und dieses Gerät anmelden.','err');return}
-  const rows=await rpc('fts_admin_dashboard_events',{p_admin_code:auth()})||[];const sel=$('#eventSelect');
-  sel.innerHTML='<option value="">Event auswählen …</option>'+rows.map(e=>'<option value="'+esc(e.event_token)+'">'+esc(e.title||e.short_code||'Event')+' · '+esc(e.short_code||'')+'</option>').join('');
+  const [rows,modes]=await Promise.all([rpc('fts_admin_dashboard_events',{p_admin_code:auth()}).catch(()=>[]),rpc('fts_admin_event_modes_v58',{p_admin_code:auth()}).catch(()=>[])]);
+  const modeMap=new Map((modes||[]).map(x=>[String(x.event_token),x]));const sel=$('#eventSelect');
+  sel.innerHTML='<option value="">Event auswählen …</option>'+(rows||[]).map(e=>{const m=modeMap.get(String(e.event_token))||{operation_mode:'selfie_print',local_camera_photos:false};const badge=m.operation_mode==='print_only'?'NUR DRUCK':(m.local_camera_photos?'SELFIE + KAMERA':'SELFIE');return '<option value="'+esc(e.event_token)+'">'+esc(e.title||e.short_code||'Event')+' · '+badge+'</option>'}).join('');
   if(eventToken){sel.value=eventToken;await loadEvent(eventToken)}else if(rows.length){eventToken=rows[0].event_token;sel.value=eventToken;await loadEvent(eventToken)}
 }
 async function loadEvent(token){
   if(!token)return;setStatus('Event und Studio werden geladen …');eventToken=token;
   eventRow=await rpc('fts_admin_get_event_v9',{p_admin_code:auth(),p_event_token:token});
   studio=await rpc('fts_admin_get_event_studio_v56',{p_admin_code:auth(),p_event_token:token})||{};
-  studio=mergeDefaults(studio);pendingBanner=null;removeBanner=false;fillControls();setStatus('Studio bereit · '+(eventRow?.title||''),'ok');
+  studio=mergeDefaults(studio);pendingBanner=null;removeBanner=false;fillControls();
+  const printOnly=eventRow?.operation_mode==='print_only';
+  $('#openGuestBtn').classList.toggle('hidden',printOnly);
+  const modeLabel=printOnly?'Nur Druck · Kamerafotos lokal':(eventRow?.local_camera_photos?'Selfie + Kamera-Print':'Selfie + Print');
+  setStatus('Studio bereit · '+(eventRow?.title||'')+' · '+modeLabel,'ok');
   history.replaceState(null,'','./studio.html?e='+encodeURIComponent(token));
 }
 async function uploadBanner(file){
@@ -297,7 +302,7 @@ document.addEventListener('input',e=>{if(e.target.closest('.left')&&!e.target.ma
 document.addEventListener('change',e=>{if(e.target.closest('.left')&&!e.target.matches('[type=file]'))schedulePreview()});
 $('#eventSelect').onchange=e=>loadEvent(e.target.value).catch(x=>setStatus(x.message,'err'));
 $('#reloadBtn').onclick=()=>loadEvent(eventToken).catch(x=>setStatus(x.message,'err'));
-$('#openGuestBtn').onclick=()=>{if(eventRow)window.open(cfg.baseUrl+'?e='+encodeURIComponent(eventRow.short_code||eventToken),'_blank')};
+$('#openGuestBtn').onclick=()=>{if(eventRow&&eventRow.operation_mode!=='print_only')window.open(cfg.baseUrl+'?e='+encodeURIComponent(eventRow.short_code||eventToken),'_blank')};
 $('#saveBtn').onclick=save;$('#resetBtn').onclick=()=>{studio=defaultConfig();fillControls();setStatus('Standardwerte geladen – noch nicht gespeichert.')};
 document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>applyPreset(b.dataset.preset));
 $('#bannerFile').onchange=e=>{pendingBanner=e.target.files?.[0]||null;removeBanner=false;$('#bannerPath').textContent=pendingBanner?'Neu: '+pendingBanner.name:'Kein neues Bild';schedulePreview()};
