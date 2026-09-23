@@ -1,6 +1,6 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v56-design-studio-camera-20260923';
+const CACHE='fts-selfie-v56-studio-accordion-20260923';
 const CORE=['./','./index.html','./dashboard.html','./studio.html','./print.html','./config.js','./print-billing-v47.js','./print-billing-v47-fix.js','./print-billing-guest-v54.js','./gallery-links-v48.js','./guest-runtime-v52.js','./dashboard-stats-v49.js','./dashboard-stats-v52.js','./social-share.js','./studio-guest-v56.js','./camera-live-v56.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
