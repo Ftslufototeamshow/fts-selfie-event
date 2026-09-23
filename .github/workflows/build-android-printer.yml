@@ -34,20 +34,20 @@ jobs:
           cd android-app
           /tmp/gradle-8.10.2/bin/gradle --no-daemon assembleDebug
           mkdir -p ../dist-android
-          cp app/build/outputs/apk/debug/app-debug.apk ../dist-android/FTS-Printer-Samsung-v0.1.1.apk
+          cp app/build/outputs/apk/debug/app-debug.apk ../dist-android/FTS-Printer-Samsung-v0.1.2.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: FTS-Printer-Samsung
-          path: dist-android/FTS-Printer-Samsung-v0.1.1.apk
+          path: dist-android/FTS-Printer-Samsung-v0.1.2.apk
           if-no-files-found: error
       - name: Publish downloadable test release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-android-v0.1.1-test"
+          TAG="fts-printer-android-v0.1.2-test"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist-android/FTS-Printer-Samsung-v0.1.1.apk --clobber
+            gh release upload "$TAG" dist-android/FTS-Printer-Samsung-v0.1.2.apk --clobber
           else
-            gh release create "$TAG" dist-android/FTS-Printer-Samsung-v0.1.1.apk               --target "$GITHUB_SHA"               --title "FTS Printer Samsung / Android v0.1.1 TEST"               --prerelease               --notes "Installierbare interne Test-APK. Mitarbeiter-Login, Printer-Events, Selfie-Druckaufträge, Kundenbelege, Materialbestand, Mitarbeiterwechsel und lokaler Foto-Druck über Android Print Service."
+            gh release create "$TAG" dist-android/FTS-Printer-Samsung-v0.1.2.apk               --target "$GITHUB_SHA"               --title "FTS Printer Samsung / Android v0.1.2 TEST"               --prerelease               --notes "Installierbare interne Test-APK. Mitarbeiter-Login, Printer-Events, Selfie-Druckaufträge, Kundenbelege, Materialbestand, Mitarbeiterwechsel und lokaler Foto-Druck über Android Print Service."
           fi
