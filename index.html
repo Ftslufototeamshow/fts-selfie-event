@@ -605,6 +605,8 @@ function roundRect(c,x,y,w,h,r){const rr=Math.min(r,w/2,h/2);c.beginPath();c.mov
 async function acceptPhotoFile(file){if(!file)return;keepAdsVisible=false;selectedFile=file;document.getElementById('originalPreview').src=URL.createObjectURL(file);await makeDesign(file);document.getElementById('compare').style.display='grid';document.getElementById('message').className='msg';startAds()}
 async function onPhoto(){const file=document.getElementById('photo').files?.[0];return acceptPhotoFile(file)}
 window.FTS_ACCEPT_CAMERA_FILE=acceptPhotoFile;
+window.FTS_GUEST_CAMERA_STATE=()=>({event:ev,filter:selectedFilter,layout:selectedLayout,routeMode,lang});
+window.FTS_GUEST_FILTER_CSS=(key)=>filterCss(key);
 function themeLabel(){return ({standard:'FTS Standard',autumn:'Kürbis / Herbst',halloween:'Halloween',streetfood:'Streetfood',cars:'Auto / Motorsport',neon:'Party / Neon',winter:'Winter / Weihnachten',spring:'Frühling',summer:'Sommer',wedding:'Hochzeit',sports:'Sport',business:'Firmen / Business',festival:'Festival',carnival:'Karneval'})[ev?.theme||'standard']||'FTS Event'}
 function eventMotif(){return ev?.motif||({standard:'✦',autumn:'🎃',halloween:'👻',streetfood:'🍔',cars:'🏎️',neon:'✦',winter:'❄',spring:'🌸',summer:'☀️',wedding:'♥',sports:'⚽',business:'◆',festival:'🎪',carnival:'🎭'})[ev?.theme||'standard']||'✦'}
 function filterCss(key){return window.FTS_STUDIO_V56?.filterCss?.(key)||({natural:'none',warm:'saturate(1.08) sepia(.14) contrast(1.03)',vivid:'saturate(1.38) contrast(1.10)',mono:'grayscale(1) contrast(1.09)',cool:'saturate(.96) hue-rotate(10deg) brightness(1.03)'})[key]||'none'}
