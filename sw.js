@@ -1,13 +1,18 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
-const CACHE='fts-selfie-v69-clean-runtime-20260923';
+const CACHE_PREFIX='fts-selfie-';
+const CACHE='fts-selfie-v70-current-only-20260923';
 const CORE=['./','./index.html','./dashboard.html','./studio.html','./print.html','./config.js','./social-share.js','./studio-guest-v56.js','./camera-live-v56.js','./print-pickup-guest-v57.js','./print-pickup-station-v57.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
+async function purgeOldFtsCaches(){
+  const keys=await caches.keys();
+  await Promise.all(keys.filter(k=>k.startsWith(CACHE_PREFIX)&&k!==CACHE).map(k=>caches.delete(k)));
+}
 self.addEventListener('install',event=>{
-  event.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(purgeOldFtsCaches).then(()=>self.skipWaiting()));
 });
 self.addEventListener('activate',event=>{
-  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));
+  event.waitUntil(purgeOldFtsCaches().then(()=>self.clients.claim()));
 });
 self.addEventListener('fetch',event=>{
   const req=event.request;
@@ -47,7 +52,7 @@ async function persistGuestPrivacy(item){if(!item?.basePrivacyAccepted||!item?.g
 async function reportIssue(item,type,message,error,resolved=false){if(!item?.eventToken)return;try{await fetch(`${cfg.supabaseUrl}/functions/v1/fts-client-issue`,{method:'POST',headers:{'apikey':cfg.publishableKey,'Content-Type':'application/json'},body:JSON.stringify({event_token:item.eventToken,issue_type:type,severity:resolved?'info':'error',message,details:error?{error:String(error).slice(0,500)}:{},session_id:item.guestSessionId||'',issue_key:item.id||'background',resolved})})}catch{}}
 async function flush(){const items=await allItems();for(const item of items){try{await persistGuestPrivacy(item);await uploadObject(item.originalPath,item.originalBlob,item.originalType);await uploadObject(item.designedPath,item.designedBlob,'image/jpeg');if(item.onlinePublicationConsent&&item.publicationPath&&item.publicationBlob)await uploadObject(item.publicationPath,item.publicationBlob,'image/jpeg');await register(item);await del(item.id);await reportIssue(item,'background_upload_failed','Hintergrund-Upload wurde erfolgreich nachgeholt.','',true)}catch(e){console.warn('FTS background upload stopped',e);await reportIssue(item,'background_upload_failed','Hintergrund-Upload konnte nicht abgeschlossen werden.',e,false);throw e}}const clients=await self.clients.matchAll({includeUncontrolled:true,type:'window'});clients.forEach(c=>c.postMessage({type:'FTS_QUEUE_FLUSHED'}))}
 self.addEventListener('sync',event=>{if(event.tag==='fts-upload-queue')event.waitUntil(flush())});
-self.addEventListener('message',event=>{if(event.data?.type==='FTS_FLUSH_QUEUE')event.waitUntil(flush());if(event.data?.type==='FTS_CLEAR_PHOTO_NOTIFICATIONS')event.waitUntil(clearPhotoNotifications(String(event.data?.eventToken||'')))});
+self.addEventListener('message',event=>{if(event.data?.type==='FTS_FLUSH_QUEUE')event.waitUntil(flush());if(event.data?.type==='FTS_CLEAR_PHOTO_NOTIFICATIONS')event.waitUntil(clearPhotoNotifications(String(event.data?.eventToken||'')));if(event.data?.type==='FTS_PURGE_OLD_CACHES')event.waitUntil(purgeOldFtsCaches())});
 
 self.addEventListener('push', event => {
   let data = {};try {data = event.data ? event.data.json() : {}} catch {data = { body: event.data ? event.data.text() : '' }}
