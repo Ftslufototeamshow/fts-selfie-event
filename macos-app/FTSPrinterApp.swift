@@ -978,6 +978,13 @@ struct MainView: View {
     @EnvironmentObject var state:AppState
     @State private var tab=0
     @State private var showStock=false
+    @State private var updatePrompt=false
+    @State private var updateInstalling=false
+    @State private var postponedUpdateBuild:Int?=nil
+
+    var printingActive:Bool {
+        state.production.printerSlots.contains{["PREPARING","TRANSFER","PRINTING"].contains($0.state)}
+    }
     var body:some View {
         VStack(spacing:0){
             HStack(spacing:14){
@@ -1024,6 +1031,27 @@ struct MainView: View {
         .alert("FTS Printer",isPresented:Binding(get:{state.errorMessage != nil},set:{if !$0{state.errorMessage=nil}})){
             Button("OK"){state.errorMessage=nil}
         } message:{Text(state.errorMessage ?? "")}
+        .alert("Neue FTS Printer Version verfügbar",isPresented:$updatePrompt){
+            Button("Jetzt aktualisieren"){
+                guard !printingActive else{return}
+                updateInstalling=true
+                Task{
+                    if let url=await state.production.downloadUpdate(){NSWorkspace.shared.open(url)}
+                    updateInstalling=false
+                }
+            }
+            if state.production.updateRelease?.mandatory != true {
+                Button("Später",role:.cancel){
+                    postponedUpdateBuild=state.production.updateRelease?.build_number
+                }
+            }
+        } message:{
+            if let release=state.production.updateRelease {
+                Text("Installiert: \(AppState.appVersion) · Neu: \(release.version)\n\n\(release.notes ?? "")")
+            } else {
+                Text("Eine neue FTS Printer Version ist verfügbar.")
+            }
+        }
         .task(id:state.selectedEventToken){
             state.production.discoverPrinters()
             if let e=state.selectedEvent {
@@ -1031,10 +1059,22 @@ struct MainView: View {
                 state.production.loadLocalQueue(folderPath:state.mediaIngest.activation?.folderPath)
             }
             await state.production.checkUpdate(platform:"macos")
+            if state.production.updateAvailable,
+               state.production.updateRelease?.build_number != postponedUpdateBuild,
+               !printingActive {
+                updatePrompt=true
+            }
             while !Task.isCancelled {
                 if !Task.isCancelled {
                     await state.refreshSelected()
                     await state.production.refresh(state:state)
+                    if state.production.updateAvailable,
+                       state.production.updateRelease?.build_number != postponedUpdateBuild,
+                       !printingActive,
+                       !updatePrompt,
+                       !updateInstalling {
+                        updatePrompt=true
+                    }
                 }
                 try? await Task.sleep(for:.seconds(2))
             }
