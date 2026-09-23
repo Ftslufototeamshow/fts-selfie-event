@@ -45,6 +45,8 @@ public class MainActivity extends Activity {
     Spinner eventSpinner;
     TextView statusText, stockText, userText;
     boolean onMain = false;
+    String activeScreen = "orders";
+    TextView eventInfoText;
     Uri selectedLocalPhoto = null;
     String selectedLocalName = null;
 
@@ -154,7 +156,7 @@ public class MainActivity extends Activity {
                     "p_user_id",admin.id,
                     "p_code",c,
                     "p_label","FTS Printer · Samsung Android",
-                    "p_user_agent","FTS Printer Android 0.1.1"
+                    "p_user_agent","FTS Printer Android 0.1.2"
             ), result -> {
                 go.setEnabled(true);
                 if(result instanceof String){
@@ -210,7 +212,7 @@ public class MainActivity extends Activity {
                     "p_user_id",s.id,
                     "p_code",code,
                     "p_device_label","FTS Printer · Samsung Android",
-                    "p_user_agent","FTS Printer Android 0.1.1"
+                    "p_user_agent","FTS Printer Android 0.1.2"
             ), result -> {
                 login.setEnabled(true);
                 if(result instanceof JSONObject){
@@ -230,7 +232,7 @@ public class MainActivity extends Activity {
     }
 
     void showMain() {
-        onMain=true; clear();
+        onMain=true; activeScreen="orders"; clear();
         LinearLayout top=row();
         LinearLayout left=new LinearLayout(this);left.setOrientation(LinearLayout.VERTICAL);
         userText=txt("FTS Printer",22,Color.WHITE,true);
@@ -243,14 +245,22 @@ public class MainActivity extends Activity {
         switcher.setOnClickListener(v->logoutAndSwitch());
 
         addNote("Die App zeigt nur Printer-Funktionen. Firmenbuchhaltung und Umsätze anderer Events sind nicht freigegeben.");
+        Button reloadEvents=secondaryButton("Events neu laden");
+        content.addView(reloadEvents);
 
         eventSpinner=new Spinner(this);
+        eventSpinner.setPopupBackgroundResource(android.R.color.white);
         content.addView(eventSpinner);
+        eventInfoText=txt("Event wird geladen …",14,Color.WHITE,true);
+        eventInfoText.setPadding(0,dp(4),0,dp(8));
+        content.addView(eventInfoText);
         eventSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
             public void onNothingSelected(android.widget.AdapterView<?> p){}
             public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){
                 if(pos>=0 && pos<events.size()){
-                    selectedEventToken=events.get(pos).token;
+                    EventModel e=events.get(pos);
+                    selectedEventToken=e.token;
+                    eventInfoText.setText(e.title+(e.location.isEmpty()?"":" · "+e.location)+(e.date.isEmpty()?"":" · "+e.date));
                     refreshSelected();
                 }
             }
@@ -263,6 +273,7 @@ public class MainActivity extends Activity {
         stockRow.addView(stockBtn);
         content.addView(stockRow);
         stockBtn.setOnClickListener(v->showStockDialog());
+        reloadEvents.setOnClickListener(v->{View b=findTagged(content,"body");if(b instanceof LinearLayout)loadEvents((LinearLayout)b);});
 
         LinearLayout tab=row();
         Button ordersBtn=button("Selfie-Aufträge");
@@ -273,8 +284,8 @@ public class MainActivity extends Activity {
 
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setTag("body");
         content.addView(body);
-        ordersBtn.setOnClickListener(v->renderOrders(body));
-        cameraBtn.setOnClickListener(v->renderCamera(body));
+        ordersBtn.setOnClickListener(v->{activeScreen="orders";renderOrders(body);});
+        cameraBtn.setOnClickListener(v->{activeScreen="camera";renderCamera(body);});
 
         loadEvents(body);
         handler.removeCallbacksAndMessages(null);
@@ -297,11 +308,36 @@ public class MainActivity extends Activity {
             }
             ArrayList<String> labels=new ArrayList<>();
             for(EventModel e:events)labels.add(e.title+(e.date.isEmpty()?"":" · "+e.date));
-            eventSpinner.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,labels));
-            if(events.isEmpty()){body.removeAllViews();body.addView(noteView("Kein Printer-Event freigegeben."));return;}
-            selectedEventToken=events.get(0).token;
+            ArrayAdapter<String> eventAdapter=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,labels){
+                @Override public View getView(int position,View convertView,android.view.ViewGroup parent){
+                    TextView v=(TextView)super.getView(position,convertView,parent);
+                    v.setTextColor(Color.WHITE);v.setTextSize(15);v.setPadding(dp(8),dp(10),dp(8),dp(10));
+                    return v;
+                }
+                @Override public View getDropDownView(int position,View convertView,android.view.ViewGroup parent){
+                    TextView v=(TextView)super.getDropDownView(position,convertView,parent);
+                    v.setTextColor(Color.BLACK);v.setBackgroundColor(Color.WHITE);v.setPadding(dp(12),dp(12),dp(12),dp(12));
+                    return v;
+                }
+            };
+            eventAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            eventSpinner.setAdapter(eventAdapter);
+            if(events.isEmpty()){
+                selectedEventToken="";
+                eventInfoText.setText("Kein freigegebenes Printer-Event gefunden.");
+                body.removeAllViews();
+                body.addView(noteView("Kein Printer-Event freigegeben. Mit „Aktualisieren“ erneut laden."));
+                Button retry=button("Events neu laden");body.addView(retry);retry.setOnClickListener(v->loadEvents(body));
+                return;
+            }
+            int selectedIndex=0;
+            for(int i=0;i<events.size();i++)if(events.get(i).token.equals(selectedEventToken)){selectedIndex=i;break;}
+            selectedEventToken=events.get(selectedIndex).token;
+            eventSpinner.setSelection(selectedIndex,false);
+            EventModel current=events.get(selectedIndex);
+            eventInfoText.setText(current.title+(current.location.isEmpty()?"":" · "+current.location)+(current.date.isEmpty()?"":" · "+current.date));
             refreshSelected();
-            renderOrders(body);
+            if("camera".equals(activeScreen))renderCamera(body);else renderOrders(body);
         });
     }
 
@@ -320,12 +356,16 @@ public class MainActivity extends Activity {
             orders.clear(); JSONArray a=(JSONArray)result;
             for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)orders.add(new OrderModel(o));}
             View b=findTagged(content,"body");
-            if(b instanceof LinearLayout)renderOrders((LinearLayout)b);
+            if(b instanceof LinearLayout){
+                if("camera".equals(activeScreen))renderCamera((LinearLayout)b);
+                else renderOrders((LinearLayout)b);
+            }
             status("Aktuell · "+new SimpleDateFormat("HH:mm",Locale.GERMANY).format(new Date()));
         });
     }
 
     void renderOrders(LinearLayout body) {
+        activeScreen="orders";
         body.removeAllViews();
         TextView h=txt("Aktuelle Druckaufträge",20,Color.WHITE,true);body.addView(h);
         if(orders.isEmpty()){body.addView(noteView("Keine aktuellen Druckaufträge."));return;}
@@ -365,6 +405,7 @@ public class MainActivity extends Activity {
     }
 
     void renderCamera(LinearLayout body) {
+        activeScreen="camera";
         body.removeAllViews();
         body.addView(txt("Kamera / Handyfoto",20,Color.WHITE,true));
         body.addView(noteView("Fotos bleiben auf diesem Samsung lokal. Es wird nichts in die öffentliche Selfie-Galerie hochgeladen."));
@@ -395,6 +436,7 @@ public class MainActivity extends Activity {
             selectedLocalPhoto=data.getData();
             try{getContentResolver().takePersistableUriPermission(selectedLocalPhoto,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}
             selectedLocalName=queryName(selectedLocalPhoto);
+            activeScreen="camera";
             View b=findTagged(content,"body");if(b instanceof LinearLayout)renderCamera((LinearLayout)b);
         }
     }
