@@ -90,18 +90,18 @@
   function resetStock70(message='Event auswählen, um Bestand und Tagesverbrauch zu sehen.'){
     currentStock70=null;
     $('#stockInfo').textContent=message;$('#stockAvailable').textContent='—';$('#stockBig').classList.remove('blocked');
-    $('#stockPrinted').textContent='0';$('#stockWaiting').textContent='0';$('#stockCamera').textContent='0';$('#stockLoss').textContent='0';
+    $('#stockPrinted').textContent='0';$('#stockWaiting').textContent='0';$('#stockCamera').textContent='0';$('#stockTest').textContent='0';$('#stockMisprint').textContent='0';$('#stockReprint').textContent='0';
     $('#stockUnknown').classList.add('hidden');$('#stockDays').innerHTML='<div class="stockEmpty">'+esc(message)+'</div>';
     $('#stockAdjustBtn').disabled=true;
   }
   function renderStock70(s){
     currentStock70=s||null;
     if(!s||s.managed!==true){resetStock70('Materialbestand ist für dieses Event noch nicht eingerichtet. Mit „Bestand hinzufügen“ kann die Print Station ihn starten.');$('#stockAdjustBtn').disabled=false;return}
-    const available=n70(s.safe_available),loss=n70(s.test_prints)+n70(s.misprints)+n70(s.reprints);
+    const available=n70(s.safe_available);
     $('#stockAvailable').textContent=String(available);$('#stockBig').classList.toggle('blocked',available<=0);
     $('#stockPrinted').textContent=String(n70(s.selfie_printed));$('#stockWaiting').textContent=String(n70(s.selfie_waiting)+n70(s.active_reservations));
-    $('#stockCamera').textContent=String(n70(s.camera_prints));$('#stockLoss').textContent=String(loss);
-    $('#stockInfo').textContent='Start sicher '+n70(s.safe_start_qty)+' · hinzugefügt '+n70(s.added_stock)+' · Korrektur '+(n70(s.correction_delta)>=0?'+':'')+n70(s.correction_delta)+(available<=0?' · VERKAUF GESPERRT':'');
+    $('#stockCamera').textContent=String(n70(s.camera_prints));$('#stockTest').textContent=String(n70(s.test_prints));$('#stockMisprint').textContent=String(n70(s.misprints));$('#stockReprint').textContent=String(n70(s.reprints));
+    $('#stockInfo').textContent='Start sicher '+n70(s.safe_start_qty)+' · hinzugefügt '+n70(s.added_stock)+' · Korrektur '+(n70(s.correction_delta)>=0?'+':'')+n70(s.correction_delta)+' · verbraucht gesamt '+n70(s.total_consumed)+(available<=0?' · VERKAUF GESPERRT':'');
     $('#stockUnknown').classList.toggle('hidden',s.open_stock_unknown!==true);
     if(s.open_stock_unknown===true){
       const est=s.open_stock_estimate==null?'':' · Schätzung '+n70(s.open_stock_estimate);
@@ -109,8 +109,7 @@
     }
     const days=Array.isArray(s.days)?s.days:[];
     $('#stockDays').innerHTML=days.length?days.map(d=>{
-      const losses=n70(d.test_prints)+n70(d.misprints)+n70(d.reprints);
-      return '<div class="stockDay"><strong>'+esc(date70(d.event_day))+'</strong><span>Selfie gedruckt <b>'+n70(d.selfie_printed)+'</b></span><span>wartend <b>'+n70(d.selfie_waiting)+'</b></span><span>Kamera <b>'+n70(d.camera_prints)+'</b></span><span>Test/Fehler/Nachdruck <b>'+losses+'</b></span><span>Verbrauch <b>'+n70(d.consumed_total)+'</b></span></div>';
+      return '<div class="stockDay"><strong>'+esc(date70(d.event_day))+'</strong><span>Selfie <b>'+n70(d.selfie_printed)+'</b></span><span>wartend <b>'+n70(d.selfie_waiting)+'</b></span><span>Kamera <b>'+n70(d.camera_prints)+'</b></span><span>Test <b>'+n70(d.test_prints)+'</b> · Fehler <b>'+n70(d.misprints)+'</b> · Nachdruck <b>'+n70(d.reprints)+'</b></span><span>Verbrauch <b>'+n70(d.consumed_total)+'</b></span></div>';
     }).join(''):'<div class="stockEmpty">Noch keine Tagesbewegungen.</div>';
     if(!$('#stockDay').value&&days[0]?.event_day)$('#stockDay').value=String(days[0].event_day);
     $('#stockAdjustBtn').disabled=false;
