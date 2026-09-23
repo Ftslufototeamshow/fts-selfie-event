@@ -1437,7 +1437,7 @@ window.addEventListener('online',()=>{updateNet();processQueue()});
 window.addEventListener('fts:pickup-status-changed',()=>{if(document.getElementById('mySelfiesPanel')?.classList.contains('show'))setTimeout(()=>showMySelfies(),250)});
 navigator.serviceWorker?.addEventListener?.('message',e=>{if(e.data?.type==='FTS_QUEUE_FLUSHED'){refreshMySelfiesAccess();if(document.getElementById('mySelfiesPanel')?.classList.contains('show'))showMySelfies()}});
 window.addEventListener('offline',updateNet);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)processQueue()});
-if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=70',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(console.warn);boot();
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=71',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(console.warn);boot();
 </script>
 <script src="./print-pickup-guest-v57.js"></script>
 <script src="./camera-live-v56.js"></script>
