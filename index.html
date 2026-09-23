@@ -77,7 +77,7 @@ button.main{width:100%;border:0;border-radius:15px;padding:16px;font:inherit;fon
 <body>
 <main class="wrap"><section class="card" id="card"><div class="loading">Event wird geladen …</div></section></main>
 <script src="./config.js"></script>
-<script src="./social-share.js"></script>\n<script src="./studio-guest-v56.js"></script>
+<script src="./social-share.js"></script>\n<script src="./fts-photo-engine.js"></script>
 <script>
 const cfg=window.FTS_CONFIG;
 const GUEST_VAPID_PUBLIC_KEY='BA4ooYZBIcpChVCyvDWS-ovJF6I6VFJ5UVOrDdv0EoDHJ7hCUOQXxShbV9VJ-KPKAKVXdiYDaZ4bLOwidSUSgtA';
@@ -143,7 +143,7 @@ const filterInfo={
  mono:{label:'mono',desc:'monoDesc'},
  cool:{label:'cool',desc:'coolDesc'}
 };
-if(window.FTS_STUDIO_V56?.filterInfo)Object.assign(filterInfo,window.FTS_STUDIO_V56.filterInfo);
+if(window.FTS_PHOTO_ENGINE?.filterInfo)Object.assign(filterInfo,window.FTS_PHOTO_ENGINE.filterInfo);
 
 const I18N={
  de:{
@@ -542,7 +542,7 @@ async function boot(){
        if(ads?.length){merged.ads_enabled=boolish(ads[0].ads_enabled);merged.ad_items=ads[0].ad_items||[]}
      }catch(adErr){console.warn('Werbung online load',adErr)}
      try{const social=await rpc('fts_get_event_social_copy_v36',{p_event_token:eventToken});if(social?.length)merged.social_v36=social[0]}catch(socialErr){console.warn('Social-Daten online load',socialErr)}
-     try{const studio=await rpc('fts_get_event_studio_v56',{p_event_token:eventToken});if(studio&&typeof studio==='object'&&Object.keys(studio).length)merged.studio_v56=studio}catch(studioErr){console.warn('Studio-Daten online load',studioErr)}
+     try{const studio=await rpc('fts_get_event_studio',{p_event_token:eventToken});if(studio&&typeof studio==='object'&&Object.keys(studio).length)merged.studio_config=studio}catch(studioErr){console.warn('Studio-Daten online load',studioErr)}
      data=[merged];localStorage.setItem(EVENT_CACHE_KEY,JSON.stringify(merged));
    }
  }}catch(e){console.warn('Event online load',e)}
@@ -557,13 +557,13 @@ function render(){
  document.documentElement.style.setProperty('--bg2',ev.bg2||'#10383a');
 
  const layouts=asArray(ev.available_layouts,DEFAULT_LAYOUTS).filter(x=>layoutInfo[x]);
- const studioFilters=ev?.studio_v56?.filters?.enabled;
+ const studioFilters=ev?.studio_config?.filters?.enabled;
  const filters=asArray(studioFilters,asArray(ev.available_filters,DEFAULT_FILTERS)).filter(x=>filterInfo[x]);
- const preferred=asArray(ev?.studio_v56?.filters?.featured,filters.slice(0,6)).filter(x=>filters.includes(x)).slice(0,6);
+ const preferred=asArray(ev?.studio_config?.filters?.featured,filters.slice(0,6)).filter(x=>filters.includes(x)).slice(0,6);
  const primaryFilters=filters.filter(x=>preferred.includes(x));
  const moreFilters=filters.filter(x=>!preferred.includes(x));
  selectedLayout=layouts[0]||'solo';
- const studioDefault=String(ev?.studio_v56?.filters?.default||'');
+ const studioDefault=String(ev?.studio_config?.filters?.default||'');
  selectedFilter=filters.includes(studioDefault)?studioDefault:(filters[0]||'natural');
  resolveRoute();
 
@@ -703,7 +703,7 @@ function render(){
  refreshMySelfiesAccess();
 }
 function layoutButton(key){const x=layoutInfo[key];return `<button type="button" class="choice ${key===selectedLayout?'active':''}" data-layout="${key}"><div class="frameMini ${x.mini}">${key==='solo'?'1':key==='duo'?'2':key.includes('group')?'3–5':'↔'}</div>${esc(tr(x.label))}<small>${esc(tr(x.desc))}</small></button>`}
-function filterButton(key){const x=filterInfo[key];const label=x?.labelText?.[lang]||tr(x.label);const desc=x?.descText?.[lang]||tr(x.desc);const css=window.FTS_STUDIO_V56?.filterCss?.(key)||'none';return `<button type="button" class="choice ${key===selectedFilter?'active':''}" data-filter="${key}" style="--filter-preview:${esc(css)}">${esc(label)}<small>${esc(desc)}</small></button>`}
+function filterButton(key){const x=filterInfo[key];const label=x?.labelText?.[lang]||tr(x.label);const desc=x?.descText?.[lang]||tr(x.desc);const css=window.FTS_PHOTO_ENGINE?.filterCss?.(key)||'none';return `<button type="button" class="choice ${key===selectedFilter?'active':''}" data-filter="${key}" style="--filter-preview:${esc(css)}">${esc(label)}<small>${esc(desc)}</small></button>`}
 function bindLanguages(){
  document.querySelectorAll('[data-lang]').forEach(b=>{
    b.classList.toggle('active',b.dataset.lang===lang);
@@ -776,10 +776,10 @@ window.FTS_GUEST_CAMERA_STATE=()=>({event:ev,filter:selectedFilter,layout:select
 window.FTS_GUEST_FILTER_CSS=(key)=>filterCss(key);
 function themeLabel(){return ({standard:'FTS Standard',autumn:'Kürbis / Herbst',halloween:'Halloween',streetfood:'Streetfood',cars:'Auto / Motorsport',neon:'Party / Neon',winter:'Winter / Weihnachten',spring:'Frühling',summer:'Sommer',wedding:'Hochzeit',sports:'Sport',business:'Firmen / Business',festival:'Festival',carnival:'Karneval'})[ev?.theme||'standard']||'FTS Event'}
 function eventMotif(){return ev?.motif||({standard:'✦',autumn:'🎃',halloween:'👻',streetfood:'🍔',cars:'🏎️',neon:'✦',winter:'❄',spring:'🌸',summer:'☀️',wedding:'♥',sports:'⚽',business:'◆',festival:'🎪',carnival:'🎭'})[ev?.theme||'standard']||'✦'}
-function filterCss(key){return window.FTS_STUDIO_V56?.filterCss?.(key)||({natural:'none',warm:'saturate(1.08) sepia(.14) contrast(1.03)',vivid:'saturate(1.38) contrast(1.10)',mono:'grayscale(1) contrast(1.09)',cool:'saturate(.96) hue-rotate(10deg) brightness(1.03)'})[key]||'none'}
+function filterCss(key){return window.FTS_PHOTO_ENGINE?.filterCss?.(key)||({natural:'none',warm:'saturate(1.08) sepia(.14) contrast(1.03)',vivid:'saturate(1.38) contrast(1.10)',mono:'grayscale(1) contrast(1.09)',cool:'saturate(.96) hue-rotate(10deg) brightness(1.03)'})[key]||'none'}
 function clamp255(v){return v<0?0:v>255?255:v}
 function applyPixelFilter(canvas,key){
- if(window.FTS_STUDIO_V56?.applyFilter?.(canvas,key))return;
+ if(window.FTS_PHOTO_ENGINE?.applyFilter?.(canvas,key))return;
  if(!canvas||key==='natural')return;
  const c=canvas.getContext('2d',{willReadFrequently:true}),im=c.getImageData(0,0,canvas.width,canvas.height),d=im.data;
  for(let i=0;i<d.length;i+=4){
@@ -917,24 +917,33 @@ function photoEventDayText(){
   return m?`${m[3]}.${m[2]}.${m[1].slice(2)}`:'';
 }
 async function makeDesign(file){
- const img=await loadImageFile(file),canvas=document.getElementById('designCanvas'),ctx=canvas.getContext('2d'),spec=layoutCanvas(img,selectedLayout);
- canvas.width=spec.w;canvas.height=spec.h;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle=ev.bg1||'#071315';ctx.fillRect(0,0,canvas.width,canvas.height);
- if(spec.mode==='contain')drawContainWithBlur(ctx,img,canvas.width,canvas.height);else drawFilteredCover(ctx,img,canvas.width,canvas.height,spec.zoom||1,selectedFilter)
- if(ev?.studio_v56&&window.FTS_STUDIO_V56?.drawOverlay){
-   await window.FTS_STUDIO_V56.drawOverlay(ctx,canvas,ev,ev.studio_v56,{selectedFilter,selectedLayout,drawEventLogos,drawEventDecorations,photoEventDayText,assetUrl,loadRemoteImage});
- }else{
-   const top=ctx.createLinearGradient(0,0,0,canvas.height*.28);top.addColorStop(0,'rgba(0,0,0,.48)');top.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=top;ctx.fillRect(0,0,canvas.width,canvas.height*.32);
-   const bottom=ctx.createLinearGradient(0,canvas.height*.48,0,canvas.height);bottom.addColorStop(0,'rgba(3,14,15,0)');bottom.addColorStop(.3,'rgba(3,14,15,.64)');bottom.addColorStop(1,'rgba(3,14,15,.96)');ctx.fillStyle=bottom;ctx.fillRect(0,canvas.height*.48,canvas.width,canvas.height*.52);
-   const scaleBase=Math.min(canvas.width,canvas.height),pad=Math.max(24,canvas.width*.045);
-   const maxW=canvas.width-pad*2,y=canvas.height-pad*2.35,title=String(ev.title||'');ctx.textBaseline='alphabetic';ctx.fillStyle='#fff';
-   const titleSize=fitText(ctx,title,maxW,Math.max(32,scaleBase*.055),Math.max(22,scaleBase*.032),900);ctx.font=`900 ${titleSize}px system-ui`;ctx.fillText(title,pad,y-Math.max(40,scaleBase*.052));
-   ctx.fillStyle=ev.accent;const sub=String(ev.subtitle||'');const subSize=fitText(ctx,sub,maxW,Math.max(22,scaleBase*.032),Math.max(16,scaleBase*.021),800);ctx.font=`800 ${subSize}px system-ui`;ctx.fillText(sub,pad,y);
-   ctx.fillStyle='rgba(255,255,255,.88)';const overBase=String(ev.overlay_text||ev.title||''),photoDay=photoEventDayText(),over=photoDay?(overBase?overBase+' · '+photoDay:photoDay):overBase;const overSize=fitText(ctx,over,maxW,Math.max(16,scaleBase*.021),Math.max(12,scaleBase*.015),600);ctx.font=`600 ${overSize}px system-ui`;ctx.fillText(over,pad,y+Math.max(26,scaleBase*.03));
-   if((ev.photo_branding||'bottom')!=='none'){ctx.save();ctx.textAlign='right';ctx.textBaseline='alphabetic';ctx.fillStyle='rgba(255,255,255,.72)';ctx.font=`600 ${Math.max(12,scaleBase*.015)}px system-ui`;ctx.fillText('FTS.lu · Selfie Event',canvas.width-pad,canvas.height-Math.max(16,canvas.height*.018));ctx.restore()}
-   await drawEventLogos(ctx,canvas.width,canvas.height,'photo');
-   await Promise.resolve(drawEventDecorations(ctx,canvas.width,canvas.height,'photo'));
+ const img=await loadImageFile(file),engine=window.FTS_PHOTO_ENGINE;
+ if(!engine)throw new Error('FTS Foto-Motor ist nicht geladen.');
+ const conf=ev?.studio_config||{};
+ let faces=[];
+ try{if(window.FTS_SOCIAL?.detectFaces)faces=await window.FTS_SOCIAL.detectFaces(img)}catch(faceErr){console.warn('FTS Layout-Gesichtserkennung',faceErr)}
+ const plan=engine.buildPlan(img,selectedLayout,conf,faces);
+ const canvas=document.getElementById('designCanvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
+ canvas.width=plan.w;canvas.height=plan.h;ctx.clearRect(0,0,canvas.width,canvas.height);
+ ctx.fillStyle=ev.bg1||'#071315';ctx.fillRect(0,0,canvas.width,canvas.height);
+ engine.drawPhoto(ctx,img,plan);
+ engine.applyFilter(canvas,selectedFilter);
+ await engine.drawOverlay(ctx,canvas,ev,conf,{
+   selectedFilter,selectedLayout,
+   adaptiveState:{...plan.adaptive,orientation:plan.orientation},
+   drawEventLogos,drawEventDecorations,photoEventDayText,assetUrl,loadRemoteImage
+ });
+ designedBlob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('Event-Foto konnte nicht erstellt werden.')),'image/jpeg',.94));
+ window.FTS_LAST_PHOTO_PLAN={
+   orientation:plan.orientation,
+   faceCount:plan.adaptive?.faceCount||0,
+   bannerPct:Number(plan.adaptive?.bannerPct||0),
+   textScale:Number(plan.adaptive?.textScale||1),
+   unresolved:!!plan.adaptive?.unresolved
+ };
+ if(plan.adaptive?.unresolved){
+   showMessage('Motiv liegt sehr tief. Banner und Schrift wurden automatisch maximal verkleinert; bitte Vorschau kurz prüfen.','warn');
  }
- designedBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',.91));
 }
 function standaloneMode(){return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}
 function iosDevice(){return /iphone|ipad|ipod/i.test(navigator.userAgent||'')}
