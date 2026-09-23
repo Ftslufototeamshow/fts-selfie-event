@@ -285,7 +285,7 @@ final class MediaIngestV80: ObservableObject {
                 writable:rv?.isWritable ?? fm.isWritableFile(atPath:v.path)
             ))
         }
-        return out.sorted{$0.volumeName.localizedCaseInsensitiveCompare($1.volumeName)==.orderedAscending}
+        return out.sorted{$0.volumeName.localizedCaseInsensitiveCompare($1.volumeName) == .orderedAscending}
     }
 
     nonisolated private static func mediaFiles(on volume:URL) -> [URL] {
