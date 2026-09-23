@@ -32,9 +32,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.1.1"
+          TAG="fts-printer-mac-v0.1.2"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/FTS-Printer-macOS.zip dist/FTS-Printer-macOS.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS.zip dist/FTS-Printer-macOS.dmg               --target "$GITHUB_SHA"               --title "FTS Printer macOS v0.1.1"               --notes "Erste installierbare FTS Printer Version für MacBook und iMac. Native Mitarbeiter-Anmeldung, Selfie-Druckaufträge, Kundenbelege, Materialbestand, lokaler Eventordner und automatische Kartenimporte mit SHA-256-Dublettenprüfung."
+            gh release create "$TAG" dist/FTS-Printer-macOS.zip dist/FTS-Printer-macOS.dmg               --target "$GITHUB_SHA"               --title "FTS Printer macOS v0.1.2"               --notes "Erste installierbare FTS Printer Version für MacBook und iMac. Native Mitarbeiter-Anmeldung, Selfie-Druckaufträge, Kundenbelege, Materialbestand, lokaler Eventordner und automatische Kartenimporte mit SHA-256-Dublettenprüfung."
           fi
