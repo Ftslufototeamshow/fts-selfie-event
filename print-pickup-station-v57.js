@@ -84,6 +84,64 @@
       if(matchMedia('(display-mode: standalone)').matches||navigator.standalone===true)localStorage.setItem('fts_admin_surface_v1','print');
     }catch{}
   }
+  let currentStock70=null,stockLoadSeq70=0;
+  function n70(v){const n=Number(v||0);return Number.isFinite(n)?Math.trunc(n):0}
+  function date70(v){if(!v)return'—';const d=new Date(String(v)+'T12:00:00');return Number.isNaN(d.getTime())?String(v):d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'})}
+  function resetStock70(message='Event auswählen, um Bestand und Tagesverbrauch zu sehen.'){
+    currentStock70=null;
+    $('#stockInfo').textContent=message;$('#stockAvailable').textContent='—';$('#stockBig').classList.remove('blocked');
+    $('#stockPrinted').textContent='0';$('#stockWaiting').textContent='0';$('#stockCamera').textContent='0';$('#stockLoss').textContent='0';
+    $('#stockUnknown').classList.add('hidden');$('#stockDays').innerHTML='<div class="stockEmpty">'+esc(message)+'</div>';
+    $('#stockAdjustBtn').disabled=true;
+  }
+  function renderStock70(s){
+    currentStock70=s||null;
+    if(!s||s.managed!==true){resetStock70('Materialbestand ist für dieses Event noch nicht eingerichtet. Mit „Bestand hinzufügen“ kann die Print Station ihn starten.');$('#stockAdjustBtn').disabled=false;return}
+    const available=n70(s.safe_available),loss=n70(s.test_prints)+n70(s.misprints)+n70(s.reprints);
+    $('#stockAvailable').textContent=String(available);$('#stockBig').classList.toggle('blocked',available<=0);
+    $('#stockPrinted').textContent=String(n70(s.selfie_printed));$('#stockWaiting').textContent=String(n70(s.selfie_waiting)+n70(s.active_reservations));
+    $('#stockCamera').textContent=String(n70(s.camera_prints));$('#stockLoss').textContent=String(loss);
+    $('#stockInfo').textContent='Start sicher '+n70(s.safe_start_qty)+' · hinzugefügt '+n70(s.added_stock)+' · Korrektur '+(n70(s.correction_delta)>=0?'+':'')+n70(s.correction_delta)+(available<=0?' · VERKAUF GESPERRT':'');
+    $('#stockUnknown').classList.toggle('hidden',s.open_stock_unknown!==true);
+    if(s.open_stock_unknown===true){
+      const est=s.open_stock_estimate==null?'':' · Schätzung '+n70(s.open_stock_estimate);
+      $('#stockUnknown').textContent='Geöffneter Bestand ist unbekannt'+est+' und wird nicht für neue Zahlungen mitgerechnet.';
+    }
+    const days=Array.isArray(s.days)?s.days:[];
+    $('#stockDays').innerHTML=days.length?days.map(d=>{
+      const losses=n70(d.test_prints)+n70(d.misprints)+n70(d.reprints);
+      return '<div class="stockDay"><strong>'+esc(date70(d.event_day))+'</strong><span>Selfie gedruckt <b>'+n70(d.selfie_printed)+'</b></span><span>wartend <b>'+n70(d.selfie_waiting)+'</b></span><span>Kamera <b>'+n70(d.camera_prints)+'</b></span><span>Test/Fehler/Nachdruck <b>'+losses+'</b></span><span>Verbrauch <b>'+n70(d.consumed_total)+'</b></span></div>';
+    }).join(''):'<div class="stockEmpty">Noch keine Tagesbewegungen.</div>';
+    if(!$('#stockDay').value&&days[0]?.event_day)$('#stockDay').value=String(days[0].event_day);
+    $('#stockAdjustBtn').disabled=false;
+  }
+  async function loadStock70(silent=true){
+    const token=$('#eventFilter')?.value||'';
+    const seq=++stockLoadSeq70;
+    if(!token){resetStock70();return}
+    if(!silent)$('#stockInfo').textContent='Materialbestand wird geladen …';
+    try{
+      const s=await rpc('fts_admin_get_print_stock_v70',{p_admin_code:credential(),p_event_token:token});
+      if(seq!==stockLoadSeq70)return;
+      renderStock70(s);
+    }catch(e){
+      if(seq!==stockLoadSeq70)return;
+      console.warn('Materialbestand',e);resetStock70('Materialbestand konnte nicht geladen werden.');
+    }
+  }
+  async function bookStock70(){
+    const token=$('#eventFilter')?.value||'';if(!token)return alert('Bitte zuerst ein Event auswählen.');
+    const kind=$('#stockKind').value,qty=Math.trunc(Number($('#stockQty').value||0)),day=$('#stockDay').value||null,note=$('#stockNoteAdjust').value.trim()||null;
+    if(!qty)return alert('Bitte eine Menge eintragen.');
+    if(kind!=='CORRECTION'&&qty<0)return alert('Bei dieser Buchung bitte eine positive Menge eingeben.');
+    const btn=$('#stockAdjustBtn');btn.disabled=true;
+    try{
+      const s=await rpc('fts_admin_adjust_print_stock_v70',{p_admin_code:credential(),p_event_token:token,p_event_day:day,p_kind:kind,p_quantity:qty,p_note:note});
+      $('#stockNoteAdjust').value='';$('#stockQty').value='1';toast(kind==='ADD_STOCK'?'Bestand hinzugefügt.':'Materialverbrauch gebucht.');
+      await loadStock70(false);
+    }catch(e){alert('Bestand konnte nicht gebucht werden: '+String(e?.message||e))}
+    finally{btn.disabled=false}
+  }
   renderOrders=function(){
     const evf=$('#eventFilter').value;
     let live=sortNew(orders.filter(o=>o.pickup_status!=='ARCHIVED'&&(!evf||o.event_token===evf)));
@@ -111,7 +169,7 @@
       if(savedState)onlyReady=!!savedState.onlyReady;
       $('#onlyReadyBtn').textContent=onlyReady?'Alle Aufträge anzeigen':'Nur druckbereit';
       if(savedState?.tab&&['live','archive','revenue'].includes(savedState.tab))setTab(savedState.tab);
-      renderOrders();renderYears();$('#statusText').textContent='Aktuell · '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+      renderOrders();renderYears();await loadStock70(true);$('#statusText').textContent='Aktuell · '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
       const targetOrder=launchOrder||savedState?.openOrder||'';
       if(targetOrder){
         const el=document.querySelector('[data-order-card="'+CSS.escape(String(targetOrder))+'"]');
@@ -210,9 +268,10 @@
   setTimeout(()=>{upgradeCompactOrders(document.getElementById('liveOrders'));upgradeCompactOrders(document.getElementById('archiveOrders'))},0);
 
   addCss();viewer();
-  $('#eventFilter').onchange=()=>{renderOrders();saveStationState58()};
+  $('#eventFilter').onchange=()=>{renderOrders();saveStationState58();loadStock70(false)};
   $('#archiveEventFilter').onchange=()=>{renderOrders();saveStationState58()};
   $('#onlyReadyBtn').onclick=()=>{onlyReady=!onlyReady;$('#onlyReadyBtn').textContent=onlyReady?'Alle Aufträge anzeigen':'Nur druckbereit';renderOrders();saveStationState58()};
+  $('#stockAdjustBtn').onclick=bookStock70;
   document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>setTimeout(()=>saveStationState58(),0)));
   window.addEventListener('pagehide',()=>saveStationState58());
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveStationState58()});
