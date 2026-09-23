@@ -240,7 +240,7 @@ function guestSessionId(){
   if(!id){id='g_'+crypto.randomUUID().replace(/-/g,'');localStorage.setItem(key,id)}
   return id;
 }
-async function registerPhoto(item){await rpc('fts_register_photo_v11',{p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath,p_guest_session_id:item.guestSessionId||guestSessionId(),p_captured_at:new Date(item.createdAt||Date.now()).toISOString()})}
+async function registerPhoto(item){await rpc('fts_register_photo_v60',{p_event_token:item.eventToken,p_original_path:item.originalPath,p_designed_path:item.designedPath,p_publication_designed_path:item.onlinePublicationConsent?item.publicationPath:null,p_guest_session_id:item.guestSessionId||guestSessionId(),p_captured_at:new Date(item.createdAt||Date.now()).toISOString(),p_online_publication_consent:item.onlinePublicationConsent===true,p_people_rights_confirmed:item.onlinePublicationConsent===true&&item.peopleRightsConfirmed===true,p_online_consent_locale:item.onlineConsentLocale||'de'})}
 async function reportClientIssue(eventTok,issueType,message,details={},severity='warning',issueKey='default',resolved=false,sessionId=''){
   if(!navigator.onLine||!eventTok)return;
   try{
@@ -292,7 +292,7 @@ async function recordScan(){
     sessionStorage.setItem(key,'1');
   }catch(e){console.warn('Scan-Statistik',e)}
 }
-async function uploadItem(item){await uploadObject(item.originalPath,item.originalBlob,item.originalType);await uploadObject(item.designedPath,item.designedBlob,'image/jpeg');await registerPhoto(item)}
+async function uploadItem(item){await uploadObject(item.originalPath,item.originalBlob,item.originalType);await uploadObject(item.designedPath,item.designedBlob,'image/jpeg');if(item.onlinePublicationConsent&&item.publicationPath&&item.publicationBlob)await uploadObject(item.publicationPath,item.publicationBlob,'image/jpeg');await registerPhoto(item)}
 async function processQueue(){if(!navigator.onLine)return updateNet();const items=await queueAll();await syncQueueIssues(items);for(const item of items){try{await uploadItem(item);await queueDelete(item.id);await reportClientIssue(item.eventToken,'upload_failed','Upload-Problem wurde erfolgreich nachgeholt.',{},'info',item.id,true,item.guestSessionId||'')}catch(e){console.warn('Queue upload',e);await reportClientIssue(item.eventToken,'upload_failed','Foto-Upload konnte nicht abgeschlossen werden.',{error:String(e?.message||e).slice(0,500)},'error',item.id,false,item.guestSessionId||'');break}}await syncQueueIssues(items);updateNet();updateQueueCount()}
 function updateNet(){const el=document.getElementById('net');if(!el)return;el.className='net '+(navigator.onLine?'online':'offline');el.textContent=navigator.onLine?tr('online'):tr('offline')}
 function assetUrl(path){if(!path)return'';return `${cfg.supabaseUrl}/storage/v1/object/public/${encodeURIComponent(cfg.liveBucket)}/${encodePath(path)}`}
@@ -917,13 +917,13 @@ async function rememberEventOnDevice(){
 }
 function resetForNewSelfie(){
   if(lastSuccessUrl){URL.revokeObjectURL(lastSuccessUrl);lastSuccessUrl=''}
-  selectedFile=null;designedBlob=null;keepAdsVisible=false;
+  selectedFile=null;designedBlob=null;publicationPrep=null;onlineDecision=null;peopleRightsConfirmed=false;keepAdsVisible=false;
   document.getElementById('successPanel')?.classList.remove('show');
   document.getElementById('mySelfiesPanel')?.classList.remove('show');
   document.getElementById('captureFlow')?.classList.remove('hiddenFlow');
   document.getElementById('sendFlow')?.classList.remove('hiddenFlow');
   const p=document.getElementById('photo');if(p)p.value='';
-  const c=document.getElementById('consent');if(c)c.checked=false;
+  const c=document.getElementById('consent');if(c)c.checked=false;syncOnlineDecisionUi();
   const cmp=document.getElementById('compare');if(cmp)cmp.style.display='none';
   const msg=document.getElementById('message');if(msg)msg.className='msg';
   stopAds();const ad=document.getElementById('adSlot'),send=document.getElementById('sendFlow');if(ad&&send)send.parentNode.insertBefore(ad,send);ad?.classList.remove('show');
@@ -956,15 +956,17 @@ async function loadMySelfieRows(){
   const rows=[];
   if(navigator.onLine&&routeMode!=='expired'){
     try{
-      let online=[];try{online=await rpc('fts_get_guest_selfies_v45',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}catch(_e){online=await rpc('fts_get_guest_selfies_v10',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}
-      for(const p of online)rows.push({photo_id:p.photo_id||null,url:assetUrl(p.designed_path),created_at:p.created_at,pending:false});
+      let online=[];
+      try{online=await rpc('fts_get_guest_selfies_v59',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}
+      catch(_e){try{online=await rpc('fts_get_guest_selfies_v45',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}catch(_e2){online=await rpc('fts_get_guest_selfies_v10',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}}
+      for(const p of online)rows.push({photo_id:p.photo_id||null,url:assetUrl(p.designed_path),created_at:p.created_at,pending:false,online_publication_consent:p.online_publication_consent===true,customer_portal_allowed:p.customer_portal_allowed===true});
     }catch(e){console.warn('Meine Selfies online',e)}
   }
   try{
     const queued=await queueAll();
     queued.filter(q=>q.eventToken===ev.event_token&&q.guestSessionId===sessionId&&q.designedBlob&&!q.isTest).forEach(q=>{
       const url=URL.createObjectURL(q.designedBlob);mySelfieTempUrls.push(url);
-      rows.push({url,created_at:new Date(q.createdAt).toISOString(),pending:true,temp:true});
+      rows.push({url,created_at:new Date(q.createdAt).toISOString(),pending:true,temp:true,online_publication_consent:q.onlinePublicationConsent===true,customer_portal_allowed:q.onlinePublicationConsent===true});
     });
   }catch{}
   rows.sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
@@ -1032,9 +1034,17 @@ async function paypalPrintApi(action,extra={}){
   if(!r.ok||j.ok===false)throw new Error(j.error||('HTTP '+r.status));
   return j;
 }
+function printConfigCacheKey(){return 'fts_print_config_v60_'+String(ev?.event_token||eventToken)}
 async function loadPrintConfig(){
-  if(!navigator.onLine||!existingGuestSessionId())return null;
-  try{return await paypalPrintApi('config')}catch(e){console.warn('Fotodruck-Konfiguration',e);return null}
+  if(navigator.onLine&&existingGuestSessionId()){
+    try{
+      const value=await paypalPrintApi('config');
+      try{localStorage.setItem(printConfigCacheKey(),JSON.stringify(value))}catch{}
+      return value;
+    }catch(e){console.warn('Fotodruck-Konfiguration',e)}
+  }
+  try{const cached=JSON.parse(localStorage.getItem(printConfigCacheKey())||'null');if(cached)return cached}catch{}
+  return {enabled:true,configured:false,unknown:true};
 }
 function printStatus(text,kind=''){
   const el=document.getElementById('selfiePrintStatus');if(!el)return;
@@ -1193,9 +1203,17 @@ async function showMySelfies(){
   const [rows,cfgPrint]=await Promise.all([loadMySelfieRows(),loadPrintConfig()]);
   printConfig=cfgPrint;
   if(!rows.length){grid.innerHTML=`<div class="emptySelfies">${esc(tr('noMySelfies'))}</div>`;document.getElementById('selfiePrintCheckout')?.classList.remove('show');return}
+  const printActive=printConfig?.enabled!==false;
+  const digitalUnlocked=!printActive;
+  const anySocial=digitalUnlocked&&rows.some(r=>r.online_publication_consent===true);
+  const postBox=document.querySelector('.mySelfiesPostCopy');if(postBox)postBox.style.display=anySocial?'block':'none';
   grid.innerHTML=rows.map((r,i)=>{
+    const onlineYes=r.online_publication_consent===true;
     const printUi=printConfig?.enabled&&r.photo_id?`<div class="mySelfiePrintChoice"><label><input type="checkbox" data-print-select="${i}"><span>${esc(ptr('select'))} · 2,00 €</span></label><div class="mySelfiePrintQty"><span>${esc(ptr('qty'))}</span><input type="number" min="1" max="20" step="1" value="1" disabled data-print-qty="${i}"></div></div>`:'';
-    return `<article class="mySelfieCard"><img src="${esc(r.url)}" alt="Event-Selfie"><small>${new Date(r.created_at).toLocaleString(lang==='de'?'de-DE':lang==='fr'?'fr-FR':'en-GB')}${r.pending?' · '+esc(tr('pending')):''}</small><div class="mySelfieActions"><button type="button" class="mySelfiePrivacy" data-my-privacy="${i}">${esc(tr('privacyReview'))}</button><button type="button" class="mySelfieDownload" data-my-download="${i}">${esc(tr('downloadSelfie'))}</button><button type="button" class="mySelfieFacebook" data-my-facebook="${i}">${esc(tr('facebookShare'))}</button><button type="button" class="mySelfieInstagram" data-my-instagram="${i}">${esc(tr('instagramShare'))}</button></div>${printUi}</article>`;
+    const digitalUi=digitalUnlocked
+      ? `<button type="button" class="mySelfieDownload" data-my-download="${i}">${esc(tr('downloadSelfie'))}</button>${onlineYes?`<button type="button" class="mySelfieFacebook" data-my-facebook="${i}">${esc(tr('facebookShare'))}</button><button type="button" class="mySelfieInstagram" data-my-instagram="${i}">${esc(tr('instagramShare'))}</button>`:''}`
+      : `<div class="digitalLocked">${esc(tr('digitalLockedPrint'))}</div>`;
+    return `<article class="mySelfieCard"><img src="${esc(r.url)}" alt="Event-Selfie"><small>${new Date(r.created_at).toLocaleString(lang==='de'?'de-DE':lang==='fr'?'fr-FR':'en-GB')}${r.pending?' · '+esc(tr('pending')):''}</small><span class="onlineStatus ${onlineYes?'yes':'no'}">${esc(onlineYes?tr('onlineReleased'):tr('onlinePrivate'))}</span><div class="mySelfieActions"><button type="button" class="mySelfiePrivacy" data-my-privacy="${i}">${esc(tr('privacyReview'))}</button>${digitalUi}</div>${printUi}</article>`;
   }).join('');
   grid.querySelectorAll('[data-my-privacy]').forEach(b=>b.onclick=()=>toggleMySelfiePrivacy(rows[Number(b.dataset.myPrivacy)],b));
   grid.querySelectorAll('.mySelfieCard img').forEach((img,i)=>{img.style.cursor='zoom-in';img.onclick=()=>toggleMySelfiePrivacy(rows[i],grid.querySelector('[data-my-privacy="'+i+'"]'))});
@@ -1208,33 +1226,45 @@ async function showMySelfies(){
 async function submitPhoto(){
  if(!['day','test'].includes(routeMode))return showMessage(routeMode==='too-early'?tr('tooEarly'):routeMode==='expired'?tr('expired'):tr('ended'));
  if(!selectedFile)return showMessage(tr('noPhoto'));
+ if(onlineDecision===null)return showMessage(tr('noOnlineDecision'));
+ if(onlineDecision===true&&!peopleRightsConfirmed)return showMessage(tr('noPeopleRights'));
  if(!document.getElementById('consent').checked)return showMessage(tr('noConsent'));
  if(selectedFile.size>15*1024*1024)return showMessage(tr('tooBig'));
  if(!designedBlob)await makeDesign(selectedFile);
 
- const btn=document.getElementById('uploadBtn');btn.disabled=true;const queueId=`${Date.now()}_${crypto.randomUUID()}`;const originalId=`${Date.now()}_${crypto.randomUUID()}`;const designId=`${Date.now()}_${crypto.randomUUID()}`;const ext=(selectedFile.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
- const storageSlug=String(ev.storage_slug||'event').replace(/[^a-z0-9-]/gi,'-').replace(/-+/g,'-');
- const routeBase=routeMode==='test'
-   ? `${ev.event_token}/${storageSlug}/test`
-   : `${ev.event_token}/${storageSlug}/days/${routeDay}`;
- const item={
-   id:queueId,createdAt:Date.now(),eventToken:ev.event_token,
-   originalPath:`${routeBase}/original/${originalId}.${ext}`,
-   designedPath:`${routeBase}/designed/${designId}.jpg`,
-   originalBlob:selectedFile,designedBlob,originalType:selectedFile.type||'image/jpeg',
-   guestSessionId:guestSessionId(),isTest:routeMode==='test'
- };
+ const btn=document.getElementById('uploadBtn');btn.disabled=true;
  try{
-  const previewBlob=designedBlob;let offlineResult=false;
-  if(navigator.onLine){
-    btn.textContent=tr('uploading');
-    try{await uploadItem(item)}
-    catch(e){await queuePut(item);offlineResult=true;await reportClientIssue(item.eventToken,'upload_failed','Foto-Upload fehlgeschlagen und wurde für später gespeichert.',{error:String(e?.message||e).slice(0,500)},'error',item.id,false,item.guestSessionId);await syncQueueIssues();registerBackgroundSync()}
-  }else{
-    btn.textContent=tr('offlineSaving');await queuePut(item);offlineResult=true;registerBackgroundSync()
-  }
-  showSuccessPanel(offlineResult,previewBlob);
-  selectedFile=null;designedBlob=null;document.getElementById('photo').value='';document.getElementById('consent').checked=false;await updateQueueCount();await refreshMySelfiesAccess();
+   let publication=onlineDecision===true?publicationPrep:null;
+   if(onlineDecision===true&&!publication)publication=await preparePublicationCopy(false);
+   if(onlineDecision===true&&publication?.detected>=5){
+     const proceed=window.confirm(tr('manyFacesWarning'));
+     if(!proceed){showMessage(tr('manyFacesWarning'),'warn');return}
+   }
+
+   const queueId=`${Date.now()}_${crypto.randomUUID()}`,originalId=`${Date.now()}_${crypto.randomUUID()}`,designId=`${Date.now()}_${crypto.randomUUID()}`,publicationId=`${Date.now()}_${crypto.randomUUID()}`;
+   const ext=(selectedFile.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+   const storageSlug=String(ev.storage_slug||'event').replace(/[^a-z0-9-]/gi,'-').replace(/-+/g,'-');
+   const routeBase=routeMode==='test'?`${ev.event_token}/${storageSlug}/test`:`${ev.event_token}/${storageSlug}/days/${routeDay}`;
+   const item={
+     id:queueId,createdAt:Date.now(),eventToken:ev.event_token,
+     originalPath:`${routeBase}/original/${originalId}.${ext}`,
+     designedPath:`${routeBase}/designed/${designId}.jpg`,
+     publicationPath:onlineDecision===true?`${routeBase}/publication/${publicationId}.jpg`:null,
+     originalBlob:selectedFile,designedBlob,publicationBlob:onlineDecision===true?publication?.blob:null,originalType:selectedFile.type||'image/jpeg',
+     onlinePublicationConsent:onlineDecision===true,peopleRightsConfirmed:onlineDecision===true&&peopleRightsConfirmed===true,onlineConsentLocale:lang,
+     guestSessionId:guestSessionId(),isTest:routeMode==='test'
+   };
+   const previewBlob=designedBlob;let offlineResult=false;
+   if(navigator.onLine){
+     btn.textContent=tr('uploading');
+     try{await uploadItem(item)}
+     catch(e){await queuePut(item);offlineResult=true;await reportClientIssue(item.eventToken,'upload_failed','Foto-Upload fehlgeschlagen und wurde für später gespeichert.',{error:String(e?.message||e).slice(0,500)},'error',item.id,false,item.guestSessionId);await syncQueueIssues();registerBackgroundSync()}
+   }else{
+     btn.textContent=tr('offlineSaving');await queuePut(item);offlineResult=true;registerBackgroundSync()
+   }
+   showSuccessPanel(offlineResult,previewBlob);
+   selectedFile=null;designedBlob=null;publicationPrep=null;onlineDecision=null;peopleRightsConfirmed=false;
+   document.getElementById('photo').value='';document.getElementById('consent').checked=false;syncOnlineDecisionUi();await updateQueueCount();await refreshMySelfiesAccess();
  }catch(e){console.error(e);showMessage(tr('saveError')+': '+(e?.message||'Error'),'err')}
  finally{btn.disabled=false;btn.textContent=tr('send')}
 }
