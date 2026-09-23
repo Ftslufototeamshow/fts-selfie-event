@@ -30,11 +30,12 @@
     const p=host();if(!p)return;
     if(!rows?.length){p.classList.remove('show');p.innerHTML='';return}
     const key=JSON.stringify(rows.map(x=>[x.order_id,x.pickup_status,x.print_status,x.payment_status,x.pickup_code]));
-    if(key===last&&p.innerHTML)return;last=key;
+    if(key===last&&p.innerHTML)return;const changed=key!==last;last=key;
     p.innerHTML='<div class="ftsPickupHead"><strong>'+txt('title')+'</strong>'+(rows.some(x=>x.is_test)?'<span class="ftsPickupTest">'+txt('test')+'</span>':'')+'</div><div class="ftsPickupRows">'+rows.map(o=>{
       const st=stateText(o),showCode=!['PICKED_UP','ARCHIVED'].includes(o.pickup_status);
       return '<div class="ftsPickupRow"><div class="ftsPickupState">'+st.a+'</div>'+(st.b?'<div class="ftsPickupSub">'+st.b+'</div>':'')+(showCode?'<div class="ftsPickupCode"><span>'+txt('code')+'</span><b>'+String(o.pickup_code||'------')+'</b></div>':'')+'<div class="ftsPickupMeta">'+Number(o.quantity_total||0)+' '+txt('prints')+' · Auftrag '+String(o.order_id||'').slice(0,8).toUpperCase()+'</div></div>'
     }).join('')+'</div>';p.classList.add('show');
+    if(changed)window.dispatchEvent(new CustomEvent('fts:pickup-status-changed',{detail:{rows}}));
   }
   async function refresh(){
     if(busy||document.visibilityState==='hidden')return;
