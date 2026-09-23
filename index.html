@@ -50,9 +50,9 @@ button.main{width:100%;border:0;border-radius:15px;padding:16px;font:inherit;fon
 const cfg=window.FTS_CONFIG;
 const PAYPAL_PRINT_URL=`${cfg.supabaseUrl}/functions/v1/paypal-selfie-checkout`;
 const PRINT_I18N={
- de:{title:'Fotodruck vor Ort',sandbox:'PayPal Sandbox · Testzahlung',intro:'Wähle deine Fotos und die Anzahl. 1 Ausdruck = 2,00 €. Der Druck wird erst nach serverseitig bestätigter Zahlung freigegeben.',select:'Dieses Foto drucken',qty:'Anzahl',total:'Gesamt',prints:'Ausdrucke',choose:'Bitte mindestens einen Ausdruck auswählen.',preparing:'PayPal Sandbox wird vorbereitet …',approved:'Zahlung bestätigt · Druckauftrag freigegeben ✓',pending:'Zahlung ist noch ausstehend. Noch nicht drucken.',cancelled:'Zahlung abgebrochen · kein Druckauftrag.',error:'PayPal-Testzahlung konnte nicht abgeschlossen werden.',notConfigured:'PayPal Sandbox ist für dieses Event aktiviert, aber die Server-Zugangsdaten fehlen noch.',receipt:'Beleg ansehen · drucken · als PDF speichern',receiptTitle:'Zahlungsbeleg',paid:'Bezahlt',paymentMethod:'Zahlungsart',paypalRef:'PayPal-Referenz',totalPaid:'Bezahlt',receiptFoot:'Fotoprint bei FTS'},
- en:{title:'Print photos on site',sandbox:'PayPal Sandbox · test payment',intro:'Select your photos and quantity. One print = €2.00. Printing is released only after the server confirms the payment.',select:'Print this photo',qty:'Quantity',total:'Total',prints:'prints',choose:'Please select at least one print.',preparing:'Preparing PayPal Sandbox …',approved:'Payment confirmed · print order released ✓',pending:'Payment is still pending. Do not print yet.',cancelled:'Payment cancelled · no print order.',error:'The PayPal test payment could not be completed.',notConfigured:'PayPal Sandbox is enabled for this event, but the server credentials are still missing.',receipt:'View receipt · print · save as PDF',receiptTitle:'Payment receipt',paid:'Paid',paymentMethod:'Payment method',paypalRef:'PayPal reference',totalPaid:'Paid',receiptFoot:'Photo print by FTS'},
- fr:{title:'Impression photo sur place',sandbox:'PayPal Sandbox · paiement test',intro:'Sélectionnez vos photos et la quantité. Une impression = 2,00 €. L’impression n’est libérée qu’après confirmation du paiement par le serveur.',select:'Imprimer cette photo',qty:'Quantité',total:'Total',prints:'tirages',choose:'Sélectionnez au moins une impression.',preparing:'Préparation de PayPal Sandbox …',approved:'Paiement confirmé · impression autorisée ✓',pending:'Le paiement est encore en attente. Ne pas imprimer.',cancelled:'Paiement annulé · aucune impression.',error:'Le paiement test PayPal n’a pas pu être terminé.',notConfigured:'PayPal Sandbox est activé pour cet événement, mais les identifiants serveur manquent encore.',receipt:'Voir le reçu · imprimer · enregistrer en PDF',receiptTitle:'Reçu de paiement',paid:'Payé',paymentMethod:'Mode de paiement',paypalRef:'Référence PayPal',totalPaid:'Payé',receiptFoot:'Impression photo par FTS'}
+ de:{title:'Fotodruck vor Ort',sandbox:'PayPal Sandbox · Testzahlung',intro:'Nimm dein Selfie direkt mit! Ein echter Fotoprint vor Ort kostet nur 2,00 €. Foto auswählen, Anzahl wählen und bezahlen – danach wird dein Ausdruck vorbereitet.',select:'Dieses Foto drucken',qty:'Anzahl',total:'Gesamt',prints:'Ausdrucke',choose:'Bitte mindestens einen Ausdruck auswählen.',preparing:'PayPal Sandbox wird vorbereitet …',approved:'Zahlung bestätigt · Druckauftrag freigegeben ✓',pending:'Zahlung ist noch ausstehend. Noch nicht drucken.',cancelled:'Zahlung abgebrochen · kein Druckauftrag.',error:'PayPal-Testzahlung konnte nicht abgeschlossen werden.',notConfigured:'PayPal Sandbox ist für dieses Event aktiviert, aber die Server-Zugangsdaten fehlen noch.',receipt:'Beleg ansehen · drucken · als PDF speichern',receiptTitle:'Zahlungsbeleg',paid:'Bezahlt',paymentMethod:'Zahlungsart',paypalRef:'PayPal-Referenz',totalPaid:'Bezahlt',receiptFoot:'Fotoprint bei FTS'},
+ en:{title:'Print photos on site',sandbox:'PayPal Sandbox · test payment',intro:'Take your selfie home with you! An on-site photo print costs only €2.00. Select the photo and quantity, pay, and your print will be prepared.',select:'Print this photo',qty:'Quantity',total:'Total',prints:'prints',choose:'Please select at least one print.',preparing:'Preparing PayPal Sandbox …',approved:'Payment confirmed · print order released ✓',pending:'Payment is still pending. Do not print yet.',cancelled:'Payment cancelled · no print order.',error:'The PayPal test payment could not be completed.',notConfigured:'PayPal Sandbox is enabled for this event, but the server credentials are still missing.',receipt:'View receipt · print · save as PDF',receiptTitle:'Payment receipt',paid:'Paid',paymentMethod:'Payment method',paypalRef:'PayPal reference',totalPaid:'Paid',receiptFoot:'Photo print by FTS'},
+ fr:{title:'Impression photo sur place',sandbox:'PayPal Sandbox · paiement test',intro:'Emportez votre selfie avec vous ! Une impression photo sur place coûte seulement 2,00 €. Choisissez la photo et la quantité, payez, puis votre tirage sera préparé.',select:'Imprimer cette photo',qty:'Quantité',total:'Total',prints:'tirages',choose:'Sélectionnez au moins une impression.',preparing:'Préparation de PayPal Sandbox …',approved:'Paiement confirmé · impression autorisée ✓',pending:'Le paiement est encore en attente. Ne pas imprimer.',cancelled:'Paiement annulé · aucune impression.',error:'Le paiement test PayPal n’a pas pu être terminé.',notConfigured:'PayPal Sandbox est activé pour cet événement, mais les identifiants serveur manquent encore.',receipt:'Voir le reçu · imprimer · enregistrer en PDF',receiptTitle:'Reçu de paiement',paid:'Payé',paymentMethod:'Mode de paiement',paypalRef:'Référence PayPal',totalPaid:'Payé',receiptFoot:'Impression photo par FTS'}
 };
 function ptr(k){return PRINT_I18N[lang]?.[k]||PRINT_I18N.de[k]||k}
 const params=new URLSearchParams(location.search);
@@ -114,13 +114,13 @@ const I18N={
   layoutTitle:'1. Foto-Layout wählen',filterTitle:'2. Look / Filter wählen',photoTitle:'📸 3. Selfie aufnehmen',
   photoSub:'oder ein Foto vom Handy auswählen · Layout und Filter kannst du danach noch ändern',
   original:'Original',design:'Dein Event-Design',privacyTitle:'Datenschutz & Einwilligung',
-  privacy:'FTS.lu verarbeitet und speichert dein Foto zeitlich begrenzt für dieses Selfie-Event und – falls gewählt – für den Fotoprint. Bei „Online NEIN“ bleibt das Foto aus dem Veranstalter-Kundenportal und wird nicht für eine Veröffentlichung durch FTS oder den Veranstalter freigegeben. Es wird kein Name abgefragt oder zusammen mit dem Foto gespeichert.',
+  privacy:'FTS.lu verarbeitet und speichert dein Foto zeitlich begrenzt für dieses Selfie-Event und – falls gewählt – für den Fotoprint. Es wird kein Name abgefragt oder zusammen mit dem Foto gespeichert.',
   consent:'Ich habe die Datenschutzhinweise gelesen und stimme dieser internen Verarbeitung für Selfie und gegebenenfalls Fotoprint zu.',
-  onlinePublishTitle:'Online-Veröffentlichung',
-  onlinePublishText:'Dürfen FTS.lu und der Veranstalter dieses Events dieses Foto im Event-Kundenportal und für die Eventkommunikation online verwenden bzw. veröffentlichen – einschließlich Website sowie Social-Media-Kanälen wie Facebook und Instagram?',
-  onlineYes:'JA · online freigeben',onlineNo:'NEIN · nur privat / Print',
-  onlineYesInfo:'JA: Die Freigabe wird mit Zeitpunkt und Textversion protokolliert. Für die Online-Version wird ein separater Hintergrundschutz erzeugt. Die Einwilligung kann für die Zukunft widerrufen werden.',
-  onlineNoInfo:'NEIN: Das Foto bleibt für FTS-internen Selfie-/Printbetrieb verfügbar, erscheint aber nicht im Kundenportal des Veranstalters und ist nicht für FTS-/Veranstalter-Social freigegeben.',
+  onlinePublishTitle:'Möchten Sie Ihr Foto online sehen?',
+  onlinePublishText:'JA bedeutet: Dieses Foto darf später im Event-Kundenportal und für die Eventkommunikation von FTS.lu bzw. dem Veranstalter online verwendet werden. NEIN bedeutet: Dieses Foto wird dafür nicht online freigegeben.',
+  onlineYes:'JA',onlineNo:'NEIN',
+  onlineYesInfo:'Online-Freigabe für dieses Foto ausgewählt.',
+  onlineNoInfo:'Dieses Foto wird nicht für das Veranstalter-Kundenportal oder FTS-/Veranstalter-Social freigegeben.',
   peopleRights:'Ich bestätige, dass ich die Online-Veröffentlichung für alle erkennbaren Personen auf diesem Foto erlauben darf. Bei erkennbaren Minderjährigen liegt die erforderliche Zustimmung der Sorgeberechtigten vor. Unbeteiligte Hintergrundpersonen sollen unkenntlich gemacht werden.',
   noOnlineDecision:'Bitte „Online JA“ oder „Online NEIN“ auswählen.',noPeopleRights:'Für „Online JA“ bitte die Bestätigung zu den erkennbaren Personen setzen.',
   manyFacesWarning:'Mehrere Gesichter wurden erkannt. Bitte prüfe, ob alle zur Gruppe gehören bzw. eine Freigabe vorliegt. Unbeteiligte Hintergrundpersonen werden in der Online-Version automatisch geschützt; im Zweifel Foto neu aufnehmen.',
@@ -148,13 +148,13 @@ const I18N={
   layoutTitle:'1. Choose photo layout',filterTitle:'2. Choose look / filter',photoTitle:'📸 3. Take a selfie',
   photoSub:'or choose a photo from your phone · you can change layout and filter afterwards',
   original:'Original',design:'Your event design',privacyTitle:'Privacy & consent',
-  privacy:'FTS.lu processes and stores your photo for a limited time for this selfie event and, if selected, for photo printing. If you choose “Online NO”, the photo stays out of the organizer customer portal and is not released for publication by FTS or the organizer. No name is requested or stored with the photo.',
+  privacy:'FTS.lu processes and stores your photo for a limited time for this selfie event and, where selected, for photo printing. No name is requested or stored with the photo.',
   consent:'I have read the privacy information and agree to this internal processing for the selfie service and, where applicable, photo printing.',
-  onlinePublishTitle:'Online publication',
-  onlinePublishText:'May FTS.lu and the organizer of this event use or publish this photo in the event customer portal and for online event communication, including website and social-media channels such as Facebook and Instagram?',
-  onlineYes:'YES · release online',onlineNo:'NO · private / print only',
-  onlineYesInfo:'YES: The decision is logged with time and text version. A separate background-protected copy is created for online use. Consent can be withdrawn for the future.',
-  onlineNoInfo:'NO: The photo remains available for the internal FTS selfie/print workflow but will not appear in the organizer customer portal and is not released for FTS/organizer social media.',
+  onlinePublishTitle:'Would you like to see your photo online?',
+  onlinePublishText:'YES means this photo may later be used online in the event customer portal and for event communication by FTS.lu or the organizer. NO means this photo is not released for that online use.',
+  onlineYes:'YES',onlineNo:'NO',
+  onlineYesInfo:'Online release selected for this photo.',
+  onlineNoInfo:'This photo is not released for the organizer customer portal or FTS/organizer social media.',
   peopleRights:'I confirm that I am entitled to allow online publication for all identifiable people in this photo. Where identifiable minors are shown, the required consent of their legal guardian is available. Uninvolved background people should be anonymised.',
   noOnlineDecision:'Please choose “Online YES” or “Online NO”.',noPeopleRights:'For “Online YES”, please confirm the rights for identifiable people.',
   manyFacesWarning:'Several faces were detected. Please check that everyone belongs to the group or that permission is available. Uninvolved background people are automatically protected in the online copy; when in doubt, take a new photo.',
@@ -182,13 +182,13 @@ const I18N={
   layoutTitle:'1. Choisir la mise en page',filterTitle:'2. Choisir le style / filtre',photoTitle:'📸 3. Prendre un selfie',
   photoSub:'ou choisir une photo du téléphone · la mise en page et le filtre restent modifiables ensuite',
   original:'Original',design:'Votre design événement',privacyTitle:'Confidentialité & consentement',
-  privacy:'FTS.lu traite et conserve votre photo pendant une durée limitée pour cet événement selfie et, si choisi, pour l’impression photo. Avec « En ligne NON », la photo reste hors du portail client de l’organisateur et n’est pas autorisée pour une publication par FTS ou l’organisateur. Aucun nom n’est demandé ni enregistré avec la photo.',
+  privacy:'FTS.lu traite et conserve votre photo pendant une durée limitée pour cet événement selfie et, le cas échéant, pour l’impression photo. Aucun nom n’est demandé ni enregistré avec la photo.',
   consent:'J’ai lu les informations de confidentialité et j’accepte ce traitement interne pour le service selfie et, le cas échéant, l’impression photo.',
-  onlinePublishTitle:'Publication en ligne',
-  onlinePublishText:'FTS.lu et l’organisateur de cet événement peuvent-ils utiliser ou publier cette photo dans le portail client de l’événement et pour la communication en ligne de l’événement, y compris le site web et des réseaux sociaux tels que Facebook et Instagram ?',
-  onlineYes:'OUI · autoriser en ligne',onlineNo:'NON · privé / impression',
-  onlineYesInfo:'OUI : la décision est enregistrée avec l’heure et la version du texte. Une copie séparée avec protection de l’arrière-plan est créée pour l’utilisation en ligne. Le consentement peut être retiré pour l’avenir.',
-  onlineNoInfo:'NON : la photo reste disponible pour le fonctionnement interne selfie/impression de FTS, mais n’apparaît pas dans le portail client de l’organisateur et n’est pas autorisée pour les réseaux sociaux de FTS/de l’organisateur.',
+  onlinePublishTitle:'Souhaitez-vous voir votre photo en ligne ?',
+  onlinePublishText:'OUI signifie que cette photo pourra ensuite être utilisée en ligne dans le portail client de l’événement et pour la communication de l’événement par FTS.lu ou l’organisateur. NON signifie que cette photo n’est pas autorisée pour cet usage en ligne.',
+  onlineYes:'OUI',onlineNo:'NON',
+  onlineYesInfo:'Autorisation en ligne sélectionnée pour cette photo.',
+  onlineNoInfo:'Cette photo n’est pas autorisée pour le portail client de l’organisateur ni pour les réseaux sociaux de FTS/de l’organisateur.',
   peopleRights:'Je confirme pouvoir autoriser la publication en ligne pour toutes les personnes identifiables sur cette photo. Si des mineurs identifiables apparaissent, le consentement requis de leur représentant légal est disponible. Les personnes non concernées en arrière-plan doivent être anonymisées.',
   noOnlineDecision:'Veuillez choisir « En ligne OUI » ou « En ligne NON ».',noPeopleRights:'Pour « En ligne OUI », veuillez confirmer les droits concernant les personnes identifiables.',
   manyFacesWarning:'Plusieurs visages ont été détectés. Vérifiez que toutes les personnes font partie du groupe ou qu’une autorisation existe. Les personnes non concernées en arrière-plan sont automatiquement protégées dans la copie en ligne ; en cas de doute, reprenez la photo.',
@@ -588,7 +588,10 @@ function render(){
    <div class="adSlot" id="adSlot"><div class="adLabel">Werbung</div><a class="adFrame" id="adLink"><img id="adImage" alt="Werbung"></a></div>
 
    <div class="sendFlow ${uploadOpen?'':'hiddenFlow'}" id="sendFlow">
-     <div class="privacyInfo"><strong id="privacyTitle">${tr('privacyTitle')}</strong><span id="privacyText">${tr('privacy')}</span></div>
+     <div id="basePrivacyBlock" ${basePrivacyAccepted?'hidden':''}>
+       <div class="privacyInfo"><strong id="privacyTitle">${tr('privacyTitle')}</strong><span id="privacyText">${tr('privacy')}</span></div>
+       <label class="consent"><input id="consent" type="checkbox" ${uploadOpen?'':'disabled'}><span id="consentText">${tr('consent')}</span></label>
+     </div>
      <div class="onlineConsentBox">
        <strong>${tr('onlinePublishTitle')}</strong>
        <p>${tr('onlinePublishText')}</p>
@@ -603,7 +606,6 @@ function render(){
          <div class="tiny" id="onlinePrivacyState" style="margin-top:7px"></div>
        </div>
      </div>
-     <label class="consent"><input id="consent" type="checkbox" ${uploadOpen?'':'disabled'}><span id="consentText">${tr('consent')}</span></label>
      <button class="main" id="uploadBtn" ${uploadOpen?'':'disabled'}>${tr('send')}</button>
      <div id="message" class="msg"></div>
    </div>
@@ -650,7 +652,7 @@ function render(){
  document.getElementById('onlineNoBtn').addEventListener('click',()=>setOnlineDecision(false));
  document.getElementById('peopleRights').addEventListener('change',e=>{peopleRightsConfirmed=e.target.checked===true});
  document.getElementById('reviewOnlinePrivacyBtn').addEventListener('click',reviewOnlinePrivacy);
- syncOnlineDecisionUi();
+ syncOnlineDecisionUi();syncBasePrivacyUi();
  document.getElementById('uploadBtn').addEventListener('click',submitPhoto);
  document.getElementById('newSelfieBtn').addEventListener('click',resetForNewSelfie);
  document.getElementById('mySelfiesBtn').addEventListener('click',showMySelfies);
