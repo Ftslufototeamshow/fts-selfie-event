@@ -399,7 +399,7 @@ $('#bannerFile').onchange=e=>{pendingBanner=e.target.files?.[0]||null;removeBann
 $('#removeBannerBtn').onclick=()=>{pendingBanner=null;removeBanner=true;studio.overlay.banner.image_path='';$('#bannerFile').value='';$('#bannerPath').textContent='Bild wird beim Speichern entfernt';schedulePreview()};
 $('#previewFile').onchange=e=>{const file=e.target.files?.[0];if(!file)return;const url=URL.createObjectURL(file),img=new Image();img.onload=async()=>{previewImg=img;previewFaces=[];setStatus('Vorschaubild wird analysiert …');try{previewFaces=await window.FTS_SOCIAL?.detectFaces?.(img)||[]}catch(err){console.warn('Studio Gesichtserkennung',err)}finally{URL.revokeObjectURL(url)};await renderPreview();setStatus('Studio bereit · '+(eventRow?.title||''),'ok')};img.onerror=()=>URL.revokeObjectURL(url);img.src=url};
 $('#previewFilter').onchange=renderPreview;
-if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=72',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(()=>{});
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=76',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(()=>{});
 loadEvents().catch(e=>setStatus('Studio konnte nicht geladen werden: '+e.message,'err'));
 </script>
 </body>
