@@ -155,142 +155,255 @@ struct ProductionMediaContent: View {
     @State private var lastCode=""
 
     var event:EventRow? { state.selectedEvent }
+
     var sourceChoices:[String] {
-        var s=Set(ingest.items.map(\.sourceLabel))
-        for c in ingest.detectedCards.compactMap(\.label){s.insert(c)}
-        s.insert("W")
-        return s.sorted()
+        var result=Set<String>()
+        for item in ingest.items { result.insert(item.sourceLabel) }
+        for card in ingest.detectedCards {
+            if let label=card.label { result.insert(label) }
+        }
+        result.insert("W")
+        return result.sorted()
     }
+
     var visibleItems:[V80MediaItem] {
-        Array(ingest.items.filter{$0.sourceLabel==sourceLabel}.prefix(120))
+        var result:[V80MediaItem]=[]
+        for item in ingest.items where item.sourceLabel==sourceLabel {
+            result.append(item)
+            if result.count>=120 { break }
+        }
+        return result
     }
-    var total:Int { visibleItems.reduce(0){$0+(quantities[$1.id] ?? 0)} }
-    var usedCardLabels:Set<String> { Set(ingest.detectedCards.compactMap(\.label)) }
+
+    var total:Int {
+        var value=0
+        for item in visibleItems { value += quantities[item.id] ?? 0 }
+        return value
+    }
+
+    var usedCardLabels:Set<String> {
+        var result=Set<String>()
+        for card in ingest.detectedCards {
+            if let label=card.label { result.insert(label) }
+        }
+        return result
+    }
 
     var body: some View {
         VStack(alignment:.leading,spacing:12) {
-            HStack {
-                VStack(alignment:.leading) {
-                    Text("SD-Karte / WLAN-Kamera").font(.title3.bold())
-                    Text(ingest.status).font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                if ingest.activation != nil {
-                    Button("Eventordner"){ingest.revealEventFolder()}
-                    Button("WLAN-Eingang"){ingest.revealWLANFolder()}
-                    Button(ingest.scanning ? "Prüfe …":"Jetzt prüfen"){if let e=event{Task{await ingest.scan(event:e)}}}.disabled(ingest.scanning)
-                }
-            }
-
+            headerView
             if ingest.activation == nil {
-                VStack(spacing:12) {
-                    Text("Das lokale Event-Album ist noch nicht freigegeben.")
-                    Button("Event-Album aktivieren"){
-                        guard let e=event else{return}
-                        do {
-                            try ingest.activate(event:e)
-                            core.loadLocalQueue(folderPath:ingest.activation?.folderPath)
-                        } catch { core.lastError=error.localizedDescription }
-                    }.buttonStyle(.borderedProminent)
-                }.frame(maxWidth:.infinity,maxHeight:.infinity)
+                inactiveView
             } else {
-                GroupBox("SD-Karten A / B / C / D") {
-                    VStack(alignment:.leading,spacing:8) {
-                        if ingest.detectedCards.isEmpty {
-                            Text("Keine SD-Karte eingesteckt.").font(.caption).foregroundStyle(.secondary)
-                        }
-                        ForEach(ingest.detectedCards) { card in
-                            HStack {
-                                Image(systemName:"sdcard")
-                                VStack(alignment:.leading) {
-                                    Text(card.marker?.label.map{"Karte \($0)"} ?? "Unbekannte Karte").bold()
-                                    Text(card.volumeName).font(.caption).foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if card.marker == nil {
-                                    ForEach(["A","B","C","D"],id:\.self) { label in
-                                        Button(label) {
-                                            if let e=event{Task{await ingest.register(card:card,label:label,event:e)}}
-                                        }.disabled(usedCardLabels.contains(label))
-                                    }
-                                } else {
-                                    Text("erkannt").font(.caption.bold()).foregroundStyle(.green)
-                                }
-                            }
-                        }
-                    }.padding(.vertical,4)
-                }
-
-                HStack {
-                    Picker("Quelle",selection:$sourceLabel) {
-                        ForEach(sourceChoices,id:\.self){s in Text(s=="W" ? "WLAN" : "Karte \(s)").tag(s)}
-                    }.frame(width:220)
-                    Spacer()
-                    if total>0 { Text("\(total) Ausdruck\(total==1 ? "" : "e") ausgewählt").font(.headline) }
-                    Button("GO · Zum Druck") {
-                        guard total>0 else{return}
-                        let selection=Dictionary(uniqueKeysWithValues:visibleItems.compactMap { item in
-                            let q=quantities[item.id] ?? 0
-                            return q>0 ? (item,q) : nil
-                        })
-                        let type=sourceLabel=="W" ? "WIFI":"SD"
-                        Task {
-                            if let code=await core.createLocalJob(state:state,media:selection,sourceType:type,sourceLabel:sourceLabel) {
-                                lastCode=code
-                                quantities.removeAll()
-                                if core.autoDispatch{core.dispatchAvailable(state:state)}
-                            }
-                        }
-                    }.buttonStyle(.borderedProminent).disabled(total==0)
-                }
-
-                if !lastCode.isEmpty {
-                    Text("Auftrag angelegt: \(lastCode) · diese Nummer auf den Kundenzettel schreiben.")
-                        .font(.headline.monospacedDigit()).foregroundStyle(.green)
-                }
-
-                ScrollView {
-                    LazyVGrid(columns:[GridItem(.adaptive(minimum:180),spacing:10)],spacing:10) {
-                        ForEach(visibleItems) { item in
-                            VStack(alignment:.leading,spacing:7) {
-                                if let im=NSImage(contentsOfFile:item.importedPath) {
-                                    Image(nsImage:im).resizable().scaledToFill()
-                                        .frame(height:145).frame(maxWidth:.infinity).clipped()
-                                        .clipShape(RoundedRectangle(cornerRadius:8))
-                                }
-                                Text(item.originalName).font(.caption.bold()).lineLimit(1)
-                                Text(item.sourceType=="WIFI" ? "WLAN" : "Karte \(item.sourceLabel)")
-                                    .font(.caption2).foregroundStyle(.secondary)
-                                Stepper(value:Binding(
-                                    get:{quantities[item.id] ?? 0},
-                                    set:{quantities[item.id]=$0}
-                                ),in:0...20) {
-                                    Text("Anzahl: \(quantities[item.id] ?? 0)").font(.caption.bold())
-                                }
-                            }
-                            .padding(9).background(Color(nsColor:.controlBackgroundColor)).clipShape(RoundedRectangle(cornerRadius:12))
-                        }
-                    }.padding(4)
-                }
+                registeredCardsView
+                sourceToolbar
+                lastCodeView
+                mediaGrid
             }
-        }.padding(8)
-        .onAppear {
-            if let e=event {
-                ingest.load(event:e)
-                core.loadLocalQueue(folderPath:ingest.activation?.folderPath)
-            }
-            if !sourceChoices.contains(sourceLabel){sourceLabel=sourceChoices.first ?? "A"}
         }
-        .onChange(of:ingest.items){_ in if !sourceChoices.contains(sourceLabel){sourceLabel=sourceChoices.first ?? "A"}}
-        .task(id:event?.event_token) {
-            guard let e=event else{return}
-            ingest.load(event:e)
+        .padding(8)
+        .onAppear { prepareForEvent() }
+        .onChange(of:ingest.items) { _ in normalizeSource() }
+        .task(id:event?.event_token) { await monitorEvent() }
+    }
+
+    private var headerView: some View {
+        HStack {
+            VStack(alignment:.leading) {
+                Text("SD-Karte / WLAN-Kamera").font(.title3.bold())
+                Text(ingest.status).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if ingest.activation != nil {
+                Button("Eventordner"){ingest.revealEventFolder()}
+                Button("WLAN-Eingang"){ingest.revealWLANFolder()}
+                Button(ingest.scanning ? "Prüfe …":"Jetzt prüfen"){
+                    if let e=event { Task{await ingest.scan(event:e)} }
+                }
+                .disabled(ingest.scanning)
+            }
+        }
+    }
+
+    private var inactiveView: some View {
+        VStack(spacing:12) {
+            Text("Das lokale Event-Album ist noch nicht freigegeben.")
+            Button("Event-Album aktivieren"){activateAlbum()}
+                .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth:.infinity,maxHeight:.infinity)
+    }
+
+    private var registeredCardsView: some View {
+        GroupBox("SD-Karten A / B / C / D") {
+            VStack(alignment:.leading,spacing:8) {
+                if ingest.detectedCards.isEmpty {
+                    Text("Keine SD-Karte eingesteckt.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                ForEach(ingest.detectedCards) { card in
+                    V80CardRegistrationRow(
+                        card:card,
+                        usedLabels:usedCardLabels,
+                        onRegister:{ label in
+                            guard let e=event else{return}
+                            Task{await ingest.register(card:card,label:label,event:e)}
+                        }
+                    )
+                }
+            }.padding(.vertical,4)
+        }
+    }
+
+    private var sourceToolbar: some View {
+        HStack {
+            Picker("Quelle",selection:$sourceLabel) {
+                ForEach(sourceChoices,id:\.self) { source in
+                    Text(source=="W" ? "WLAN" : "Karte \(source)").tag(source)
+                }
+            }
+            .frame(width:220)
+            Spacer()
+            if total>0 {
+                Text("\(total) Ausdruck\(total==1 ? "" : "e") ausgewählt").font(.headline)
+            }
+            Button("GO · Zum Druck"){submitSelection()}
+                .buttonStyle(.borderedProminent)
+                .disabled(total==0)
+        }
+    }
+
+    @ViewBuilder private var lastCodeView: some View {
+        if !lastCode.isEmpty {
+            Text("Auftrag angelegt: \(lastCode) · diese Nummer auf den Kundenzettel schreiben.")
+                .font(.headline.monospacedDigit()).foregroundStyle(.green)
+        }
+    }
+
+    private var mediaGrid: some View {
+        ScrollView {
+            LazyVGrid(columns:[GridItem(.adaptive(minimum:180),spacing:10)],spacing:10) {
+                ForEach(visibleItems) { item in
+                    V80MediaItemCell(
+                        item:item,
+                        quantity:Binding(
+                            get:{quantities[item.id] ?? 0},
+                            set:{quantities[item.id]=$0}
+                        )
+                    )
+                }
+            }
+            .padding(4)
+        }
+    }
+
+    private func activateAlbum() {
+        guard let e=event else{return}
+        do {
+            try ingest.activate(event:e)
             core.loadLocalQueue(folderPath:ingest.activation?.folderPath)
-            while !Task.isCancelled {
-                if ingest.activation != nil { await ingest.scan(event:e) }
-                try? await Task.sleep(for:.seconds(3))
+        } catch {
+            core.lastError=error.localizedDescription
+        }
+    }
+
+    private func submitSelection() {
+        guard total>0 else{return}
+        var selection:[V80MediaItem:Int]=[:]
+        for item in visibleItems {
+            let q=quantities[item.id] ?? 0
+            if q>0 { selection[item]=q }
+        }
+        let selectedType = sourceLabel=="W" ? "WIFI":"SD"
+        let selectedLabel = sourceLabel
+        Task {
+            if let code=await core.createLocalJob(
+                state:state,
+                media:selection,
+                sourceType:selectedType,
+                sourceLabel:selectedLabel
+            ) {
+                lastCode=code
+                quantities.removeAll()
+                if core.autoDispatch { core.dispatchAvailable(state:state) }
             }
         }
+    }
+
+    private func prepareForEvent() {
+        guard let e=event else{return}
+        ingest.load(event:e)
+        core.loadLocalQueue(folderPath:ingest.activation?.folderPath)
+        normalizeSource()
+    }
+
+    private func normalizeSource() {
+        if !sourceChoices.contains(sourceLabel) {
+            sourceLabel=sourceChoices.first ?? "A"
+        }
+    }
+
+    private func monitorEvent() async {
+        guard let e=event else{return}
+        ingest.load(event:e)
+        core.loadLocalQueue(folderPath:ingest.activation?.folderPath)
+        while !Task.isCancelled {
+            if ingest.activation != nil { await ingest.scan(event:e) }
+            try? await Task.sleep(for:.seconds(3))
+        }
+    }
+}
+
+struct V80CardRegistrationRow: View {
+    let card:V80DetectedCard
+    let usedLabels:Set<String>
+    let onRegister:(String)->Void
+
+    var body: some View {
+        HStack {
+            Image(systemName:"sdcard")
+            VStack(alignment:.leading) {
+                Text(card.label.map{"Karte \($0)"} ?? "Unbekannte Karte").bold()
+                Text(card.volumeName).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if card.marker == nil {
+                ForEach(["A","B","C","D"],id:\.self) { label in
+                    Button(label){onRegister(label)}
+                        .disabled(usedLabels.contains(label))
+                }
+            } else {
+                Text("erkannt").font(.caption.bold()).foregroundStyle(.green)
+            }
+        }
+    }
+}
+
+struct V80MediaItemCell: View {
+    let item:V80MediaItem
+    @Binding var quantity:Int
+
+    var body: some View {
+        VStack(alignment:.leading,spacing:7) {
+            if let image=NSImage(contentsOfFile:item.importedPath) {
+                Image(nsImage:image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height:145)
+                    .frame(maxWidth:.infinity)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius:8))
+            }
+            Text(item.originalName).font(.caption.bold()).lineLimit(1)
+            Text(item.sourceType=="WIFI" ? "WLAN" : "Karte \(item.sourceLabel)")
+                .font(.caption2).foregroundStyle(.secondary)
+            Stepper(value:$quantity,in:0...20) {
+                Text("Anzahl: \(quantity)").font(.caption.bold())
+            }
+        }
+        .padding(9)
+        .background(Color(nsColor:.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius:12))
     }
 }
 
