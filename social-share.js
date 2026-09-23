@@ -142,6 +142,16 @@ function imageFromBlob(blob){
     img.onload=()=>{URL.revokeObjectURL(u);resolve(img)};img.onerror=e=>{URL.revokeObjectURL(u);reject(e)};img.src=u;
   });
 }
+async function resizeBlob(blob,maxLongEdge=0,quality=.8){
+  const max=Math.max(0,Number(maxLongEdge)||0);
+  if(!max)return blob;
+  const img=await imageFromBlob(blob),w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,long=Math.max(w,h);
+  if(!w||!h||long<=max)return blob;
+  const scale=max/long,nw=Math.max(1,Math.round(w*scale)),nh=Math.max(1,Math.round(h*scale));
+  const c=document.createElement('canvas');c.width=nw;c.height=nh;
+  const x=c.getContext('2d');x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(img,0,0,nw,nh);
+  return await new Promise((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(new Error('Web-Version konnte nicht erzeugt werden.')),'image/jpeg',Math.max(.45,Math.min(.95,Number(quality)||.8))));
+}
 function normBox(b,w,h){
   if(!b)return null;
   if(Number.isFinite(b.x)&&Number.isFinite(b.y)&&Number.isFinite(b.width)&&Number.isFinite(b.height))return{x:b.x,y:b.y,w:b.width,h:b.height};
@@ -243,11 +253,12 @@ function filename(name='FTS-Selfie.jpg'){return clean(name).replace(/[^a-zA-Z0-9
 function saveBlob(blob,name){
   const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=filename(name);document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2500);
 }
-async function download(url,name,privacy=false){const blob=await blobFor(url,privacy);saveBlob(blob,name);return true}
+async function download(url,name,privacy=false,options={}){let blob=await blobFor(url,privacy);blob=await resizeBlob(blob,options?.maxLongEdge||0,options?.quality??.8);saveBlob(blob,name);return true}
 function canShareFiles(files){try{return !!navigator.share&&(!navigator.canShare||navigator.canShare({files}))}catch{return false}}
-async function shareOne({url,name='FTS-Selfie.jpg',text='',privacy=false}){
+async function shareOne({url,name='FTS-Selfie.jpg',text='',privacy=false,maxLongEdge=0,quality=.8}){
   const copied=await copyText(text);
-  const blob=await blobFor(url,privacy),file=new File([blob],filename(name),{type:blob.type||'image/jpeg'});
+  let blob=await blobFor(url,privacy);blob=await resizeBlob(blob,maxLongEdge,quality);
+  const file=new File([blob],filename(name),{type:blob.type||'image/jpeg'});
   if(canShareFiles([file])){
     await navigator.share({files:[file],title:'MySelfie',text});
     return{shared:true,copied};
