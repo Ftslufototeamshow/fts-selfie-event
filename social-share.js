@@ -167,12 +167,14 @@ async function detectFaces(img){
       const d=new window.FaceDetector({fastMode:false,maxDetectedFaces:30});
       const rows=await d.detect(img);
       boxes.push(...rows.map(x=>normBox(x.boundingBox,w,h)).filter(Boolean));
+      if(boxes.length)return mergeFaceBoxes(boxes);
     }catch(e){console.warn('Native face detection',e)}
   }
+  if(navigator.onLine===false)return mergeFaceBoxes(boxes);
   try{
     await ensureMediaPipe();
     const run=()=>new Promise(async(resolve,reject)=>{
-      const timer=setTimeout(()=>{mpResolve=null;reject(new Error('Gesichtserkennung Timeout'))},18000);
+      const timer=setTimeout(()=>{mpResolve=null;reject(new Error('Gesichtserkennung Timeout'))},6000);
       mpResolve=results=>{
         clearTimeout(timer);
         const out=(results?.detections||[]).map(d=>normBox(d.boundingBox||d.locationData?.relativeBoundingBox,w,h)).filter(Boolean);
