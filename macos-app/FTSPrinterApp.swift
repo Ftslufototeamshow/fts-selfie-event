@@ -173,8 +173,9 @@ struct Receipt: Codable, Identifiable, Hashable {
 // MARK: - Keychain
 
 enum Keychain {
-    private static let service = "lu.fts.printer"
-    static func set(_ value: String, key: String) {
+    private static let service = "lu.fts.printer.secure.v2"
+    @discardableResult
+    static func set(_ value: String, key: String) -> Bool {
         let data = Data(value.utf8)
         let q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -184,7 +185,9 @@ enum Keychain {
         SecItemDelete(q as CFDictionary)
         var add = q
         add[kSecValueData as String] = data
-        SecItemAdd(add as CFDictionary, nil)
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        let status = SecItemAdd(add as CFDictionary, nil)
+        return status == errSecSuccess
     }
     static func get(_ key: String) -> String? {
         let q: [String: Any] = [
@@ -617,15 +620,19 @@ final class AppState: ObservableObject {
 
     let localImport = LocalImportManager()
     private let api = FTSAPI.shared
+    private var liveDeviceToken: String?
+    private var liveSessionToken: String?
+    static let appVersion = "0.1.4"
 
-    var deviceToken: String? { Keychain.get("deviceToken") }
-    var sessionToken: String? { Keychain.get("staffSession") }
+    var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
+    var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
     var selectedEvent: EventRow? { events.first(where: {$0.event_token == selectedEventToken}) }
 
     @discardableResult
     func recoverAuthentication(from error: Error) async -> Bool {
         let message=error.localizedDescription
         if message.localizedCaseInsensitiveContains("Printer-Gerät nicht freigeschaltet") {
+            liveSessionToken=nil;liveDeviceToken=nil
             Keychain.remove("staffSession")
             Keychain.remove("deviceToken")
             currentUser=nil
@@ -636,6 +643,7 @@ final class AppState: ObservableObject {
             return true
         }
         if message.localizedCaseInsensitiveContains("Printer-Sitzung ist nicht gültig") {
+            liveSessionToken=nil
             Keychain.remove("staffSession")
             currentUser=nil
             orders=[];stock=nil
@@ -648,6 +656,8 @@ final class AppState: ObservableObject {
     }
 
     func bootstrap() async {
+        if liveDeviceToken == nil { liveDeviceToken = Keychain.get("deviceToken") }
+        if liveSessionToken == nil { liveSessionToken = Keychain.get("staffSession") }
         guard let dev = deviceToken, !dev.isEmpty else { await loadDeviceAdmins(); return }
         if let session = sessionToken, !session.isEmpty {
             do {
@@ -688,9 +698,10 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.1.3"
+                "p_user_agent":"FTS Printer macOS 0.1.4"
             ])
-            Keychain.set(token,key:"deviceToken")
+            liveDeviceToken=token
+            _ = Keychain.set(token,key:"deviceToken")
             await loadChoices()
         } catch { errorMessage=error.localizedDescription }
     }
@@ -715,10 +726,11 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.1.3"
+                "p_user_agent":"FTS Printer macOS 0.1.4"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
-            Keychain.set(session,key:"staffSession")
+            liveSessionToken=session
+            _ = Keychain.set(session,key:"staffSession")
             currentUser=info
             if await loadEvents() {
                 phase = .main
@@ -732,11 +744,13 @@ final class AppState: ObservableObject {
         if let dev=deviceToken,let session=sessionToken {
             let _:Bool? = try? await api.rpc("fts_printer_logout_v72",body:["p_device_token":dev,"p_session_token":session],as:Bool.self)
         }
+        liveSessionToken=nil
         Keychain.remove("staffSession");currentUser=nil;orders=[];stock=nil
         await loadChoices()
     }
 
     func resetDevice() {
+        liveSessionToken=nil;liveDeviceToken=nil
         Keychain.remove("staffSession");Keychain.remove("deviceToken");currentUser=nil;events=[];orders=[];phase = .deviceSetup
     }
 
@@ -890,7 +904,7 @@ struct DeviceSetupView: View {
     var body:some View {
         VStack(spacing:22){
             Image(systemName:"printer.fill").font(.system(size:52)).foregroundStyle(.teal)
-            Text("FTS Printer").font(.largeTitle.bold())
+            Text("FTS Printer v\(AppState.appVersion)").font(.largeTitle.bold())
             Text("Diesen Mac einmalig mit einem Printer-Administrator freischalten. Administrator auswählen und dessen persönlichen Printer-Code eingeben.")
                 .multilineTextAlignment(.center).foregroundStyle(.secondary).frame(maxWidth:600)
             if state.deviceAdmins.isEmpty {
@@ -922,6 +936,7 @@ struct StaffLoginView: View {
     var choice:StaffChoice?{state.staffChoices.first{$0.user_id==selected}}
     var body:some View {
         VStack(spacing:18){
+            Text("FTS Printer v\(AppState.appVersion)").font(.caption.bold()).foregroundStyle(.secondary)
             Text("Wer arbeitet am Printer?").font(.largeTitle.bold())
             Text("Mitarbeiter auswählen und persönlichen Code eingeben. Jeder Druck wird dieser Person zugeordnet.").foregroundStyle(.secondary)
             Picker("Mitarbeiter",selection:$selected){
@@ -946,7 +961,7 @@ struct MainView: View {
         VStack(spacing:0){
             HStack(spacing:14){
                 VStack(alignment:.leading,spacing:3){
-                    Text("FTS Printer").font(.title.bold())
+                    Text("FTS Printer v\(AppState.appVersion)").font(.title.bold())
                     Text("\(state.currentUser?.display_name ?? "") · \(state.currentUser?.roleLabel ?? "")").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -1200,7 +1215,7 @@ struct FTSPrinterApp: App {
         .windowStyle(.titleBar)
         .commands{
             CommandGroup(replacing:.appInfo){
-                Button("Über FTS Printer"){NSApp.orderFrontStandardAboutPanel(options:[.applicationName:"FTS Printer",.applicationVersion:"0.1.0"])}
+                Button("Über FTS Printer"){NSApp.orderFrontStandardAboutPanel(options:[.applicationName:"FTS Printer",.applicationVersion:AppState.appVersion])}
             }
         }
     }
