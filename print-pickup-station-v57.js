@@ -107,5 +107,8 @@
     return test+base.replace('<div class="receiptItems">',pickup+'<div class="receiptItems">');
   };
   addCss();viewer();
+  $('#eventFilter').onchange=renderOrders;
+  $('#archiveEventFilter').onchange=renderOrders;
+  $('#onlyReadyBtn').onclick=()=>{onlyReady=!onlyReady;$('#onlyReadyBtn').textContent=onlyReady?'Alle Aufträge anzeigen':'Nur druckbereit';renderOrders()};
   setTimeout(()=>{if(credential())loadCore(false)},250);
 })();
