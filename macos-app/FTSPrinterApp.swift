@@ -629,8 +629,11 @@ final class AppState: ObservableObject {
                 let info: SessionInfo = try await api.rpc("fts_printer_validate_session_v72", body: ["p_device_token":dev,"p_session_token":session])
                 if info.valid == true {
                     currentUser = info
-                    phase = .main
-                    await loadEvents()
+                    if await loadEvents() {
+                        phase = .main
+                        return
+                    }
+                    await loadChoices()
                     return
                 }
             } catch {}
@@ -660,7 +663,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.1.1"
+                "p_user_agent":"FTS Printer macOS 0.1.2"
             ])
             Keychain.set(token,key:"deviceToken")
             await loadChoices()
@@ -682,11 +685,16 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.1.1"
+                "p_user_agent":"FTS Printer macOS 0.1.2"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
-            Keychain.set(session,key:"staffSession");currentUser=info;phase = .main
-            await loadEvents()
+            Keychain.set(session,key:"staffSession")
+            currentUser=info
+            if await loadEvents() {
+                phase = .main
+            } else {
+                phase = .staffLogin
+            }
         } catch { errorMessage=error.localizedDescription }
     }
 
@@ -702,16 +710,27 @@ final class AppState: ObservableObject {
         Keychain.remove("staffSession");Keychain.remove("deviceToken");currentUser=nil;events=[];orders=[];phase = .deviceSetup
     }
 
-    func loadEvents() async {
-        guard let dev=deviceToken,let session=sessionToken else{return}
+    @discardableResult
+    func loadEvents() async -> Bool {
+        guard let dev=deviceToken,let session=sessionToken else{return false}
         busy=true;defer{busy=false}
         do {
             let rows:[EventRow]=try await api.rpc("fts_printer_events_v74",body:["p_device_token":dev,"p_session_token":session])
             events=rows
             if !rows.contains(where:{$0.event_token==selectedEventToken}) { selectedEventToken=rows.first?.event_token ?? "" }
             if let e=selectedEvent { localImport.load(event:e) }
-            await refreshSelected()
-        } catch { errorMessage=error.localizedDescription }
+            if selectedEventToken.isEmpty {
+                orders=[]
+                stock=nil
+                status="Kein freigegebenes Printer-Event gefunden."
+            } else {
+                await refreshSelected()
+            }
+            return true
+        } catch {
+            errorMessage="Events konnten nicht geladen werden: "+error.localizedDescription
+            return false
+        }
     }
 
     func selectEvent(_ token:String) async {
@@ -890,6 +909,7 @@ struct MainView: View {
                 Picker("Event",selection:Binding(get:{state.selectedEventToken},set:{v in Task{await state.selectEvent(v)}})){
                     ForEach(state.events){e in Text(e.event_title).tag(e.event_token)}
                 }.frame(width:360)
+                Button("Events neu laden"){Task{_ = await state.loadEvents()}}
                 Button("Aktualisieren"){Task{await state.refreshSelected()}}
                 Button("Mitarbeiter wechseln"){Task{await state.switchStaff()}}
             }.padding(16).background(.thinMaterial)
@@ -999,12 +1019,7 @@ struct OrderCard:View{
 
 struct CameraImportView:View{
     @EnvironmentObject var state:AppState
-    @ObservedObject var manager:LocalImportManager
     let event:EventRow
-    init(event:EventRow){
-        self.event=event
-        _manager=ObservedObject(wrappedValue:LocalImportManager())
-    }
     var body:some View{
         CameraImportContent(event:event)
             .environmentObject(state)
