@@ -214,6 +214,73 @@ Im bereits festgelegten FTS-Design bekommt der Bereich **SD-Karte / Import** nac
 
 Die Oberfläche soll den Mitarbeiter im normalen Betrieb vollständig durch diesen Ablauf führen, ohne dass er das FTS-System verlassen muss.
 
+
+## Automatische App-Updates · Mac und Samsung
+
+Die endgültige FTS Printer App muss sich selbst über neue Versionen informieren. Supabase dient als zentrale Release-/Versionsquelle für beide Plattformen.
+
+### Allgemeine Update-Logik
+
+- Beim Start der App und danach regelmäßig bei vorhandener Internetverbindung prüft die App die aktuell veröffentlichte FTS-Printer-Version.
+- Wenn die installierte Version aktuell ist, passiert nichts.
+- Wenn eine neuere Version vorhanden ist, erscheint ein klarer Dialog:
+  - **„Neue FTS Printer Version verfügbar“**
+  - aktuelle Version
+  - neue Version
+  - kurze Änderungen / Release Notes
+  - Hauptbutton **„Jetzt aktualisieren“**
+  - Nebenbutton **„Später“**
+- „Jetzt aktualisieren“ ist optisch der klare Standardweg.
+- Wird „Später“ gewählt, bleibt die installierte Version aktiv, aber die App zeigt einen dezenten dauerhaften Hinweis **„Update verfügbar“** und fragt beim nächsten sinnvollen Start / Prüfzeitpunkt erneut.
+- Kritische inkompatible Versionen können zentral als **Pflichtupdate** markiert werden. Dann darf „Später“ nicht mehr angeboten werden und die App erklärt, warum das Update erforderlich ist.
+- Ein Update darf laufende Druckjobs niemals abrupt abbrechen. Ist gerade etwas in **Übertragung / Druckt**, wird die Installation bis zum sicheren Leerlauf verschoben.
+- Vor jedem Update wird die lokale Queue persistent gespeichert. Nach Neustart werden Event, Warteschlange, Druckzustände, SD-/WLAN-Zuordnungen und nicht abgeschlossene Jobs wiederhergestellt.
+
+### Supabase Release-Verwaltung
+
+Für die Produktions-App wird eine eigene FTS-Printer-Release-Struktur verwendet, getrennt von allgemeinen Test-/Nexora-Releases.
+
+Mindestens gespeicherte Felder:
+
+- Plattform: **macOS** / **android**
+- Versionsnummer
+- Buildnummer
+- Veröffentlichungsstatus
+- Veröffentlichungsdatum
+- Download-/Storage-Pfad
+- SHA-256-Prüfsumme
+- Release Notes
+- optional: Mindestversion / Pflichtupdate
+- optional: minimale unterstützte Betriebssystemversion
+
+Die Apps lesen nur veröffentlichte Releases. Ein noch nicht freigegebener Build darf niemals als Update angeboten werden.
+
+### macOS
+
+- Die endgültige Mac-App bekommt eine stabile Bundle-ID und eine dauerhaft steigende Buildnummer.
+- Die Produktions-App wird mit dauerhaftem FTS Developer-ID-Zertifikat signiert und notarisiert.
+- Für den eigentlichen sicheren Update-Mechanismus wird ein signierter macOS-Updater verwendet; Supabase liefert Versions-/Releaseinformationen bzw. den Update-Feed.
+- Updatepakete müssen zusätzlich kryptografisch geprüft werden.
+- Nach Zustimmung des Benutzers wird das Update geladen und beim sicheren Zeitpunkt installiert; anschließend startet **FTS Printer** wieder.
+- Die App darf nicht jedes Update als neue, getrennte „FTS Printer 014/015“-App installieren. Es bleibt dieselbe App und dieselbe Identität.
+
+### Samsung / Android
+
+- Vor der ersten Produktionsversion wird die Android-App mit einer **dauerhaften privaten FTS-Signatur** signiert. Alle späteren APK-Updates müssen mit exakt derselben Signatur erstellt werden, damit Android sie als Update derselben App akzeptiert.
+- Die App prüft Supabase auf eine neuere Android-Version, lädt bei Zustimmung das veröffentlichte APK und prüft dessen SHA-256-Wert.
+- Anschließend wird der Android-Systeminstaller für das Update geöffnet.
+- Android darf aus Sicherheitsgründen die endgültige Installation nicht ohne die erforderliche System-/Benutzerbestätigung heimlich durchführen. Der Mitarbeiter bekommt deshalb nach **„Jetzt aktualisieren“** nur noch die notwendige Android-Systembestätigung.
+- Nach erfolgreicher Aktualisierung startet dieselbe FTS Printer App mit erhaltenen lokalen Daten und Einstellungen weiter.
+- Die aktuelle Debug/Test-Signatur darf nicht die Signatur der ersten endgültigen Produktionsversion sein.
+
+### Update-Sicherheit
+
+- Niemals Update ausführen, während ein Print als **Druckt / Übertragung / Status unklar** markiert ist.
+- Release-Datei vor Installation auf erwartete Version und SHA-256 prüfen.
+- Fehler beim Download oder Update dürfen die aktuelle funktionsfähige App nicht beschädigen.
+- Bei fehlendem Internet läuft die vorhandene Version normal weiter, sofern sie nicht zentral als nicht mehr kompatibel markiert ist.
+- Nach jedem Update erfolgt ein automatischer Start-Selbsttest: lokale Datenbank lesbar, Supabase-Verbindung, angemeldetes Gerät, Printer-Konfiguration und Queue-Recovery.
+
 ## Reihenfolge
 
 1. Endgültige Printer-App stabil fertigstellen.
