@@ -27,7 +27,7 @@
     return '<div class="photoItem">'+(path?'<button type="button" class="viewPhoto" data-view-photo="'+esc(url)+'"><img src="'+esc(url)+'" alt="Druckfoto" onerror="this.outerHTML=\'<div class=&quot;photoMissing&quot;>Foto nicht mehr im Speicher</div>\'"></button>':'<div class="photoMissing">Foto nicht mehr im Speicher</div>')+'<b>'+Number(item.quantity||0)+' × 10×15</b>'+(canPrint(o)&&path?'<button type="button" class="singlePrint" data-print-item="'+esc(o.order_id)+'" data-item-index="'+i+'">Dieses Foto drucken</button>':'')+'</div>';
   }
   function card(o,index){
-    const p=paymentLabel(o.payment_status),pr=printLabel(o.print_status),pk=pickupLabel(o),items=Array.isArray(o.items)?o.items:[],ready=canPrint(o);
+    const pay=String(o.payment_status||'').toUpperCase(),p=pay==='COVERED'?['Veranstalter übernimmt','ok']:pay==='FREE'?['FTS gratis','ok']:paymentLabel(pay),pr=printLabel(o.print_status),pk=pickupLabel(o),items=Array.isArray(o.items)?o.items:[],ready=canPrint(o);
     const amount=o.billing_mode==='organizer_flat'?'Veranstalter':o.billing_mode==='fts_free'?'FTS gratis':euro(o.total_cents);
     const amountSub=o.is_test?'TEST · kein echter Umsatz':Number(o.quantity_total||0)+' Ausdruck'+(Number(o.quantity_total||0)===1?'':'e');
     let actions='';
