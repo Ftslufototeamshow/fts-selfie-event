@@ -1265,7 +1265,7 @@ async function ensurePayPalPrint(){
             printStatus(ptr('approved'),'ok');printSelection.clear();document.querySelectorAll('[data-print-select]').forEach(x=>{x.checked=false});document.querySelectorAll('[data-print-qty]').forEach(x=>{x.disabled=true;x.value='1'});updatePrintSummary();
             await showMySelfies();
             document.getElementById('mySelfiesGrid')?.scrollIntoView({behavior:'smooth',block:'start'});
-          }else if(result.payment_status==='PENDING'){printStatus(ptr('pending'),'warn');const finalStatus=await pollPrintStatus(currentPrintOrder.print_order_id);if(finalStatus?.payment_status==='COMPLETED'&&finalStatus?.print_status==='READY'){await showMySelfies();document.getElementById('mySelfiesGrid')?.scrollIntoView({behavior:'smooth',block:'start'})}
+          }else if(result.payment_status==='PENDING'){printStatus(ptr('pending'),'warn');const finalStatus=await pollPrintStatus(currentPrintOrder.print_order_id);if(finalStatus?.payment_status==='COMPLETED'&&finalStatus?.print_status==='READY'){await showMySelfies();document.getElementById('mySelfiesGrid')?.scrollIntoView({behavior:'smooth',block:'start'})}}
           else printStatus(ptr('error'),'err');
         }catch(e){console.error('PayPal capture',e);printStatus(ptr('error'),'err')}
         finally{printBusy=false}
