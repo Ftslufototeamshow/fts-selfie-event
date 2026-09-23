@@ -82,6 +82,75 @@ Die aktuelle Supabase-Struktur enthält bereits wesentliche Teile dieser Logik:
 - Die Printer-Schnittstelle kann bereits einen Beleg über die Order-ID laden.
 - Die neue App muss diese vorhandenen Bausteine sauber in die festgelegte Benutzeroberfläche integrieren, statt eine zweite parallele Beleg-/Abhollogik zu erfinden.
 
+
+## SD-Karte / Kameraalbum / lokale Fotobox
+
+Dieser Bereich ist für die professionellen Kamera-/Fotobox-Fotos vorgesehen. Diese Fotos bleiben lokal auf dem Print-Laptop und werden **nicht** in den öffentlichen Selfie-Speicher hochgeladen.
+
+### Event-Album freigeben
+
+- Vor dem Einsatz wird für das aktuelle Event einmal der lokale Event-Album-/Ordnerbereich **freigegeben / aktiviert**.
+- Danach bleibt der Mitarbeiter innerhalb der FTS Printer App; für den normalen Arbeitsablauf ist kein Wechsel in Finder/Explorer oder ein anderes Programm nötig.
+- Wird eine SD-Karte eingesetzt, erkennt die App die Karte automatisch und startet den Import-/Synchronisationsprozess für das aktivierte Event-Album.
+- Bereits bekannte/importierte Fotos werden nicht noch einmal angelegt.
+- Neue Fotos werden automatisch in das lokale Event-Album übernommen und erscheinen anschließend automatisch in der FTS Printer App.
+- Die Übertragung zwischen Album und Printer-App erfolgt lokal. Kamera-/Fotobox-Dateien werden nicht unnötig über Supabase oder die öffentliche Selfie-Galerie geleitet.
+- Die App zeigt neue Fotos fortlaufend in einer übersichtlichen Galerie; das neueste Foto steht sichtbar an erster Stelle bzw. wird deutlich hervorgehoben.
+
+### Manueller Mengenentscheid durch den Mitarbeiter
+
+Bei Kamera-/Fotobox-Fotos kommt die Zahlung aus der externen Fotokasse / dem Terminal / Cash. Deshalb gibt es in diesem Bereich **keine zweite Zahlung** in der Printer-App.
+
+Der Mitarbeiter macht pro ausgewähltem Foto nur zwei Dinge:
+
+1. gewünschte Stückzahl eingeben, z. B. **1, 2, 3 …**
+2. **GO / Zum Druck freigeben** drücken
+
+- Vor GO ist die Auswahl nur vorbereitet und noch nicht an einen Drucker vergeben.
+- Nach GO erzeugt die App aus der Stückzahl die entsprechende Anzahl Druckeinheiten.
+- Beispiel: Foto A = 2 Exemplare, Foto B = 1 Exemplar. Nach GO entstehen drei Druckeinheiten.
+- Der Mitarbeiter muss nicht für jedes Exemplar noch einmal auf Drucken tippen.
+- Die Stückzahl kann nur bis zur Freigabe geändert werden. Danach wird eine Änderung über einen klaren Korrektur-/Storno-Workflow behandelt, damit keine Doppelprints entstehen.
+
+### Gemeinsame Warteschlange und automatische Druckerverteilung
+
+Nach GO benutzt Kamera/Album exakt dieselbe technische Mehrdrucker-Logik wie bezahlte Selfie-Aufträge.
+
+- Freie Drucker werden automatisch erkannt.
+- Jede Druckeinheit wird genau einem freien Drucker zugewiesen.
+- Sind zwei oder drei Drucker frei, können verschiedene Fotos bzw. Exemplare parallel gedruckt werden.
+- Derselbe Auftrag darf niemals versehentlich doppelt an zwei Drucker gesendet werden, außer die gewählte Stückzahl verlangt mehrere Exemplare.
+- Ist kein Drucker frei, bleibt der Auftrag sichtbar in **Wartet auf freien Drucker**.
+- Sobald ein Drucker frei wird, erhält er automatisch die nächste freigegebene Druckeinheit.
+- Beispiel mit zwei Druckern:
+  - Printer 01 druckt Foto A / Exemplar 1
+  - Printer 02 druckt Foto A / Exemplar 2 oder das nächste freigegebene Foto B
+  - der nächste wartende Auftrag startet automatisch, sobald einer der Drucker wieder frei ist.
+- Die App zeigt pro Einheit bzw. Auftrag den Status **Wartet**, **Zugewiesen**, **Übertragung**, **Druckt**, **Fertig**, **Prüfen/Fehler** und die geschätzte Restzeit.
+- Bei einem unklaren Druckerfehler wird nicht blind auf einem anderen Drucker erneut gedruckt. Die App verlangt zuerst eine Prüfung / bewussten Nachdruck.
+
+### Material- und Tagesstatistik
+
+- Jeder erfolgreich ausgeführte Kamera-/Fotobox-Print reduziert den lokalen Event-Materialbestand genau einmal.
+- Kamera-/Fotobox-Prints werden in der Tagesstatistik getrennt von Selfie-Prints geführt.
+- Es wird **kein zweiter Umsatz** erzeugt, da Terminal/Cash bereits außerhalb der Printer-App kassiert wurde.
+- Testdruck, Fehldruck und bewusster Nachdruck bleiben eigene Materialbuchungen.
+
+### Bedienoberfläche
+
+Im bereits festgelegten FTS-Design bekommt der Bereich **SD-Karte / Import** nach Aktivierung des Event-Albums eine kompakte Arbeitsansicht:
+
+- aktuelles Event / aktives Album
+- SD-Karte erkannt / Import läuft / aktuell
+- Galerie mit den neuesten Fotos
+- ausgewähltes Foto groß sichtbar
+- Mengenfeld **Anzahl**
+- Hauptbutton **GO · Zum Druck**
+- Status der Warteschlange
+- sichtbare Druckerzustände und Restzeiten
+
+Die Oberfläche soll den Mitarbeiter im normalen Betrieb vollständig durch diesen Ablauf führen, ohne dass er das FTS-System verlassen muss.
+
 ## Reihenfolge
 
 1. Endgültige Printer-App stabil fertigstellen.
