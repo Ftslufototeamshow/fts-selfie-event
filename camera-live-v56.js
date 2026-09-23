@@ -111,7 +111,7 @@
     finally{busy=false}
   }
   ensureStyle();buildModal();makeButton();
-  const observer=new MutationObserver(()=>{makeButton();if(modal?.classList.contains('show'))updateOverlay()});
+  const observer=new MutationObserver(()=>{makeButton()});
   observer.observe(document.body,{childList:true,subtree:true});
   document.addEventListener('click',e=>{if(e.target.closest?.('[data-filter]'))setTimeout(updateOverlay,0)});
   window.addEventListener('pagehide',stopStream);document.addEventListener('visibilitychange',()=>{if(document.hidden&&modal?.classList.contains('show'))closeCamera()});
