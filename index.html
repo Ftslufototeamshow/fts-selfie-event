@@ -16,7 +16,7 @@
 .net{display:flex;align-items:center;gap:8px;border-radius:12px;padding:9px 11px;margin:0 0 14px;font-size:.84rem}.online{background:rgba(65,170,113,.12);border:1px solid rgba(65,170,113,.28)}.offline{background:rgba(225,166,54,.12);border:1px solid rgba(225,166,54,.35)}
 .moduleTitle{font-weight:900;margin:18px 0 8px}.choiceRow{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}.choice{border:1px solid rgba(255,255,255,.09);background:#0a2426;color:#e9efed;border-radius:13px;padding:9px 7px;cursor:pointer;text-align:center;font-weight:800;font-size:.75rem}.choice.active{outline:2px solid var(--accent);background:#123b3e}.choice small{display:block;color:#859b97;font-weight:600;margin-top:3px;font-size:.65rem}.frameMini{height:48px;margin:0 auto 7px;border:2px solid color-mix(in srgb,var(--accent) 70%,#fff);border-radius:7px;display:grid;place-items:center;color:var(--accent);font-size:.7rem}.frameMini.portrait{width:34px}.frameMini.duo{width:38px}.frameMini.wide{width:63px;height:39px}.frameMini.story{width:29px;height:52px}.frameMini.free{width:50px;height:44px;border-style:dashed}
 .logoEvent{max-height:58px;max-width:160px;object-fit:contain;margin:2px 0 10px;display:none}.logoEvent.show{display:block}
-.upload{display:grid;place-items:center;min-height:165px;border:2px dashed color-mix(in srgb,var(--accent) 50%,transparent);border-radius:20px;text-align:center;padding:22px;cursor:pointer;background:rgba(0,0,0,.12);margin-top:14px}.upload strong{font-size:1.2rem}.upload span{display:block;color:#9cacaa;margin-top:8px}.upload input{display:none}
+.upload{display:grid;place-items:center;min-height:86px;border:1px solid rgba(255,255,255,.09);border-radius:15px;text-align:center;padding:14px 16px;cursor:default;background:rgba(0,0,0,.10);margin-top:9px}.upload strong{font-size:.9rem;color:#dfe8e6}.upload span{display:block;color:#91a5a1;margin-top:5px;font-size:.75rem}.upload input{display:none}
 .compare{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}.previewBox{min-width:0;background:#061012;border:1px solid rgba(255,255,255,.08);border-radius:17px;padding:7px}.previewBox b{display:block;margin:2px 4px 7px;color:var(--accent);font-size:.78rem}.previewBox img,.previewBox canvas{width:100%;height:auto;max-height:560px;object-fit:contain;border-radius:10px;display:block}
 .privacyInfo{margin:17px 0 10px;padding:13px 14px;border-radius:14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);color:#aebbb9;font-size:.82rem;line-height:1.45}.privacyInfo strong{display:block;color:#f3eee5;margin-bottom:5px}.consent{display:flex;gap:10px;align-items:flex-start;margin:12px 0 17px;color:#c5cfcd;font-size:.9rem}.consent input{margin-top:3px;transform:scale(1.2)}
 button.main{width:100%;border:0;border-radius:15px;padding:16px;font:inherit;font-weight:900;background:var(--accent);color:#102020;cursor:pointer}button:disabled{opacity:.55;cursor:wait}.msg{border-radius:14px;padding:13px 15px;margin:15px 0 0;display:none}.ok{display:block;background:rgba(68,180,117,.16);border:1px solid rgba(68,180,117,.35)}.warn{display:block;background:rgba(225,166,54,.13);border:1px solid rgba(225,166,54,.35)}.err{display:block;background:rgba(220,80,80,.14);border:1px solid rgba(220,80,80,.35)}.foot{text-align:center;color:#7f9692;font-size:.78rem;margin-top:18px}.loading{padding:60px 20px;text-align:center;color:#a8b6b4}.galleryMainList{display:grid;gap:8px;margin-top:10px}.galleryMain{display:block;width:100%;border-radius:15px;padding:16px;text-align:center;text-decoration:none;font-weight:900;background:var(--accent);color:#102020;margin:0}.galleryMain:nth-child(even){background:#15383a;color:#f4f1e8;border:1px solid rgba(255,255,255,.1)}
@@ -112,8 +112,8 @@ if(window.FTS_STUDIO_V56?.filterInfo)Object.assign(filterInfo,window.FTS_STUDIO_
 
 const I18N={
  de:{
-  layoutTitle:'1. Foto-Layout wählen',filterTitle:'2. Look / Filter wählen',photoTitle:'📸 3. Selfie aufnehmen',
-  photoSub:'oder ein Foto vom Handy auswählen · Layout und Filter kannst du danach noch ändern',
+  layoutTitle:'1. Foto-Layout wählen',filterTitle:'2. Look / Filter wählen',photoTitle:'Deine Selfies in dieser Session',
+  photoSub:'Noch kein Selfie aufgenommen.',captureCountOne:'Bisher 1 Selfie aufgenommen.',captureCountMany:'Bisher {count} Selfies aufgenommen.',
   original:'Original',design:'Dein Event-Design',privacyTitle:'Datenschutz & Einwilligung',
   privacy:'FTS.lu verarbeitet und speichert dein Foto zeitlich begrenzt für dieses Selfie-Event und – falls gewählt – für den Fotoprint. Es wird kein Name abgefragt oder zusammen mit dem Foto gespeichert.',
   consent:'Ich habe die Datenschutzhinweise gelesen und stimme dieser internen Verarbeitung für Selfie und gegebenenfalls Fotoprint zu.',
@@ -146,8 +146,8 @@ const I18N={
   natural:'Natürlich',naturalDesc:'neutral',warm:'Warm',warmDesc:'weicher',vivid:'Kräftig',vividDesc:'mehr Farbe',mono:'Schwarzweiß',monoDesc:'klassisch',cool:'Cool',coolDesc:'moderner Look'
  },
  en:{
-  layoutTitle:'1. Choose photo layout',filterTitle:'2. Choose look / filter',photoTitle:'📸 3. Take a selfie',
-  photoSub:'or choose a photo from your phone · you can change layout and filter afterwards',
+  layoutTitle:'1. Choose photo layout',filterTitle:'2. Choose look / filter',photoTitle:'Your selfies in this session',
+  photoSub:'No selfie taken yet.',captureCountOne:'1 selfie taken so far.',captureCountMany:'{count} selfies taken so far.',
   original:'Original',design:'Your event design',privacyTitle:'Privacy & consent',
   privacy:'FTS.lu processes and stores your photo for a limited time for this selfie event and, where selected, for photo printing. No name is requested or stored with the photo.',
   consent:'I have read the privacy information and agree to this internal processing for the selfie service and, where applicable, photo printing.',
@@ -180,8 +180,8 @@ const I18N={
   natural:'Natural',naturalDesc:'neutral',warm:'Warm',warmDesc:'softer',vivid:'Vivid',vividDesc:'more color',mono:'Black & white',monoDesc:'classic',cool:'Cool',coolDesc:'modern look'
  },
  fr:{
-  layoutTitle:'1. Choisir la mise en page',filterTitle:'2. Choisir le style / filtre',photoTitle:'📸 3. Prendre un selfie',
-  photoSub:'ou choisir une photo du téléphone · la mise en page et le filtre restent modifiables ensuite',
+  layoutTitle:'1. Choisir la mise en page',filterTitle:'2. Choisir le style / filtre',photoTitle:'Vos selfies dans cette session',
+  photoSub:'Aucun selfie pris pour le moment.',captureCountOne:'1 selfie pris jusqu’ici.',captureCountMany:'{count} selfies pris jusqu’ici.',
   original:'Original',design:'Votre design événement',privacyTitle:'Confidentialité & consentement',
   privacy:'FTS.lu traite et conserve votre photo pendant une durée limitée pour cet événement selfie et, le cas échéant, pour l’impression photo. Aucun nom n’est demandé ni enregistré avec la photo.',
   consent:'J’ai lu les informations de confidentialité et j’accepte ce traitement interne pour le service selfie et, le cas échéant, l’impression photo.',
@@ -575,10 +575,10 @@ function render(){
    <div class="choiceRow" id="filterChoices">${primaryFilters.map(filterButton).join('')}</div>
    ${moreFilters.length?`<details class="moreFilters"><summary>${lang==='fr'?'Plus de filtres':lang==='en'?'More filters':'Mehr Filter'} · ${moreFilters.length}</summary><div class="choiceRow moreFilterGrid">${moreFilters.map(filterButton).join('')}</div></details>`:''}
 
-   <label class="upload" id="uploadLabel">
+   <div class="upload" id="uploadLabel" aria-live="polite">
      <div><strong id="photoTitle">${tr('photoTitle')}</strong><span id="photoSub">${tr('photoSub')}</span></div>
-     <input id="photo" type="file" accept="image/*" capture="user" ${uploadOpen?'':'disabled'}>
-   </label>
+     <input id="photo" type="file" accept="image/*" capture="user" ${uploadOpen?'':'disabled'} tabindex="-1" aria-hidden="true">
+   </div>
 
    <section class="compare" id="compare">
      <div class="previewBox"><b id="originalLabel">${tr('original')}</b><img id="originalPreview"></div>
@@ -1059,11 +1059,16 @@ async function loadMySelfieRows(){
   return rows;
 }
 function mySelfiesAccessLabel(count){return trf(count===1?'mySelfiesAccessOne':'mySelfiesAccessMany',{count})}
+function updateCaptureCount(count=0){
+  const el=document.getElementById('photoSub');if(!el)return;
+  el.textContent=count===1?tr('captureCountOne'):count>1?trf('captureCountMany',{count}):tr('photoSub');
+}
 async function refreshMySelfiesAccess(){
   const btn=document.getElementById('mySelfiesAccessBtn'),text=document.getElementById('mySelfiesAccessText');
-  if(!btn||!text||routeMode==='expired'||!existingGuestSessionId()){btn?.classList.remove('show');return}
+  if(!btn||!text||routeMode==='expired'||!existingGuestSessionId()){btn?.classList.remove('show');updateCaptureCount(0);return}
   clearMySelfieTempUrls();
   const rows=await loadMySelfieRows();
+  updateCaptureCount(rows.length);
   if(!rows.length){btn.classList.remove('show');return}
   text.textContent=mySelfiesAccessLabel(rows.length);btn.classList.add('show');
 }
