@@ -175,7 +175,30 @@
             </label>
             <input id="printStartsAt" type="hidden">
             <input id="printEndsAt" type="hidden">
-            <div class="hint" style="margin-top:7px">Die Bezahlung wird erst später nach der PayPal-Konfiguration live geschaltet. Ohne serverseitig bestätigtes COMPLETED wird niemals ein Druckauftrag freigegeben.</div>
+            <div class="hint" style="margin-top:7px">Ohne serverseitig bestätigtes COMPLETED wird niemals ein Druckauftrag freigegeben. Zusätzlich sperrt der Server neue Bestellungen automatisch, sobald kein sicherer Materialbestand mehr verfügbar ist.</div>
+            <div class="grid" style="margin-top:12px">
+              <div>
+                <label>Sicherer Startbestand · Prints</label>
+                <input id="stockSafeStart" type="number" min="0" step="1" value="0">
+                <div class="hint">Nur Material eintragen, dessen Menge sicher bekannt ist. Dieser Wert schützt vor Überverkauf.</div>
+              </div>
+              <div>
+                <label>Geöffneter Bestand · optionale Schätzung</label>
+                <input id="stockOpenEstimate" type="number" min="0" step="1" placeholder="leer = unbekannt">
+                <div class="hint">Nur Information. Diese Schätzung wird niemals für neue Zahlungen freigegeben.</div>
+              </div>
+              <div class="full">
+                <label class="langSetting" style="align-items:center">
+                  <input id="stockOpenUnknown" type="checkbox">
+                  <span><b>Geöffneter Bestand ist unbekannt</b><span class="hint" style="display:block;margin-top:4px">Beispiel: angebrochenes SELPHY-Paket. Das System zeigt „unbekannt“, zählt es aber nicht zum sicheren Verkaufsbestand.</span></span>
+                </label>
+              </div>
+              <div class="full">
+                <label>Material-Notiz</label>
+                <input id="stockNote" type="text" maxlength="300" placeholder="z. B. 2 ungeöffnete Pakete × 108">
+              </div>
+              <div class="full result hidden" id="stockSummaryBox"></div>
+            </div>
           </div>
           <div class="full">
             <label>Selfie-/Galerie-Links nach dem Event (optional)</label>
@@ -1160,6 +1183,27 @@ async function persistPrintSetting(eventToken){
     p_print_ends_at:printDateIso(end)
   });
 }
+async function persistPrintStock(eventToken){
+  const safe=Math.max(0,Math.trunc(Number($('#stockSafeStart')?.value||0)));
+  const estimateRaw=String($('#stockOpenEstimate')?.value||'').trim();
+  const estimate=estimateRaw===''?null:Math.max(0,Math.trunc(Number(estimateRaw)));
+  const data=await rpc('fts_admin_set_print_stock_v70',{
+    p_admin_code:authCredential(),
+    p_event_token:eventToken,
+    p_safe_start_qty:safe,
+    p_open_stock_unknown:$('#stockOpenUnknown')?.checked===true,
+    p_open_stock_estimate:estimate,
+    p_note:$('#stockNote')?.value?.trim()||null
+  });
+  renderStockSummary(data);
+}
+function renderStockSummary(s){
+  const box=$('#stockSummaryBox');if(!box)return;
+  if(!s||s.managed!==true){box.classList.add('hidden');box.innerHTML='';return}
+  const open=s.open_stock_unknown?' · offener Bestand unbekannt':s.open_stock_estimate!=null?' · offene Schätzung '+Number(s.open_stock_estimate):'';
+  box.innerHTML='<b>Materialbestand</b><br><span class="small">Sicher verfügbar: <b>'+Number(s.safe_available||0)+'</b> · bereits gedruckt '+Number(s.selfie_printed||0)+' · bezahlt/wartend '+Number(s.selfie_waiting||0)+' · reserviert '+Number(s.active_reservations||0)+open+'</span>';
+  box.classList.remove('hidden');
+}
 async function persistEventLifecycle(eventToken){
   const lc=lifecycleDataFromForm();
   await rpc('fts_admin_set_event_lifecycle_v41',{
@@ -1229,6 +1273,7 @@ $('#createEvent').onclick=async()=>{
       await persistEventLifecycle(eventToken);
       await persistLumorexSetting(eventToken);
       await persistPrintSetting(eventToken);
+      await persistPrintStock(eventToken);
       await persistOperationMode(eventToken);
     }else{
       const args=eventArgs(true);const d=await rpc('fts_admin_create_event_v9',args),r=d[0];eventToken=r.event_token;storageSlug=r.storage_slug;alias=r.short_code;expires=r.expires_at;
@@ -1238,6 +1283,7 @@ $('#createEvent').onclick=async()=>{
       await persistEventLifecycle(eventToken);
       await persistLumorexSetting(eventToken);
       await persistPrintSetting(eventToken);
+      await persistPrintStock(eventToken);
       await persistOperationMode(eventToken);
     }
 
@@ -1266,12 +1312,19 @@ async function loadModeEvent(token,duplicate=false){
   try{const lcRows=await rpc('fts_admin_get_event_lifecycle_v41',{p_admin_code:authCredential(),p_event_token:token});if(lcRows?.[0])e.lifecycle_v11=lcRows[0]}catch(err){console.warn('Event-Lifecycle',err)}
   try{const lr=await rpc('fts_admin_get_lumorex_status_v2',{p_admin_code:authCredential(),p_event_token:token});const ls=Array.isArray(lr)?lr[0]:lr;if(ls)e.lumorex_enabled=ls.enabled!==false}catch(err){console.warn('LUMOREX / VIMA Show',err)}
   try{const pr=await rpc('fts_admin_get_print_settings_v45',{p_admin_code:authCredential(),p_event_token:token});const ps=Array.isArray(pr)?pr[0]:pr;if(ps)e.print_settings=ps}catch(err){console.warn('Fotodruck / PayPal',err)}
+  try{e.print_stock=await rpc('fts_admin_get_print_stock_v70',{p_admin_code:authCredential(),p_event_token:token})}catch(err){console.warn('Materialbestand',err)}
   saveCustomer(e.customer_name,e.customer_token);$('#title').value=e.title||'';$('#subtitle').value=e.subtitle||'';$('#location').value=e.location||'';$('#overlay').value=e.overlay_text||'';
   $('#operationMode').value=e.operation_mode||'selfie_print';
   $('#localCameraPhotos').checked=e.local_camera_photos===true;
   syncOperationModeUi();
   $('#shortCode').value=duplicate?slug(((e.short_code||slug(e.title))+'-2')).slice(0,30):(e.short_code||'');$('#shortCode').disabled=!duplicate;$('#shortCode').dataset.manual='1';$('#days').value=e.retention_days||3;$('#testDays').value=e.test_days_before??2;$('#lumorexEnabled').checked=e.lumorex_enabled!==false;
   const ps=duplicate?null:(e.print_settings||null);$('#printEnabled').checked=!!ps?.enabled;$('#printStartsAt').value=ps?.print_starts_at?dateTimeLocalFromTimestamp(ps.print_starts_at):'';$('#printEndsAt').value=ps?.print_ends_at?dateTimeLocalFromTimestamp(ps.print_ends_at):'';
+  const stock=duplicate?null:(e.print_stock||null);
+  $('#stockSafeStart').value=stock?.managed===true?Number(stock.safe_start_qty||0):0;
+  $('#stockOpenUnknown').checked=stock?.managed===true&&stock.open_stock_unknown===true;
+  $('#stockOpenEstimate').value=stock?.managed===true&&stock.open_stock_estimate!=null?String(stock.open_stock_estimate):'';
+  $('#stockNote').value=stock?.managed===true?String(stock.note||''):'';
+  renderStockSummary(stock);
   const rawTags=parseArr(e.event_tags),tagLc=lifecycleFromTags(rawTags),dbLc=e.lifecycle_v11||null;
   const lc=dbLc?{schedule:parseArr(dbLc.schedule),galleryUrl:dbLc.gallery_url||'',galleryLinks:parseArr(dbLc.gallery_links),galleryAvailableAt:dbLc.gallery_available_at||'',linkExpiresAt:dbLc.link_expires_at||''}:tagLc;
   clearDays();
@@ -1298,7 +1351,7 @@ async function loadModeEvent(token,duplicate=false){
 async function initMode(){if(modeLoaded||!authCredential())return;modeLoaded=true;try{if(EDIT_TOKEN)await loadModeEvent(EDIT_TOKEN,false);else if(DUP_TOKEN)await loadModeEvent(DUP_TOKEN,true)}catch(e){alert('Event konnte nicht geladen werden: '+e.message)}}
 
 
-if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js?v=70',{updateViaCache:'none'}).then(reg=>reg.update().catch(()=>{})).catch(()=>{});
 renderCustomers();
 addEventDay('');
 $('#fakeQr').innerHTML='<i></i>'.repeat(49)+'<img id="previewQrLogo" class="qrPreviewLogo" alt="">';
