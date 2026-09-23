@@ -25,16 +25,16 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS.zip
-            dist/FTS-Printer-macOS.dmg
+            dist/FTS-Printer-macOS-v0.1.4.zip
+            dist/FTS-Printer-macOS-v0.1.4.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.1.3"
+          TAG="fts-printer-mac-v0.1.4"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS.zip dist/FTS-Printer-macOS.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.1.4.zip dist/FTS-Printer-macOS-v0.1.4.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS.zip dist/FTS-Printer-macOS.dmg               --target "$GITHUB_SHA"               --title "FTS Printer macOS v0.1.3"               --notes "Erste installierbare FTS Printer Version für MacBook und iMac. Native Mitarbeiter-Anmeldung, Selfie-Druckaufträge, Kundenbelege, Materialbestand, lokaler Eventordner und automatische Kartenimporte mit SHA-256-Dublettenprüfung."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.1.4.zip dist/FTS-Printer-macOS-v0.1.4.dmg               --target "$GITHUB_SHA"               --title "FTS Printer macOS v0.1.4"               --notes "Erste installierbare FTS Printer Version für MacBook und iMac. Native Mitarbeiter-Anmeldung, Selfie-Druckaufträge, Kundenbelege, Materialbestand, lokaler Eventordner und automatische Kartenimporte mit SHA-256-Dublettenprüfung."
           fi
