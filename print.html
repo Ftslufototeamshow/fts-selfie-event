@@ -166,9 +166,11 @@ function ensurePhotoPrintStyle(){
   @page{size:100mm 148mm;margin:0}
   body.photoPrintMode58>*:not(#photoPrintSurface58){display:none!important}
   body.photoPrintMode58 #photoPrintSurface58{display:block!important;position:static!important;background:#fff!important}
-  body.photoPrintMode58 #photoPrintSurface58 .photoPrintPage58{width:100mm;height:148mm;margin:0;overflow:hidden;display:flex;align-items:center;justify-content:center;page-break-after:always;break-after:page;background:#fff}
+  body.photoPrintMode58 #photoPrintSurface58 .photoPrintPage58{width:100mm;height:148mm;margin:0;overflow:hidden;display:flex;align-items:center;justify-content:center;page-break-after:always;break-after:page;background:#000;position:relative}
   body.photoPrintMode58 #photoPrintSurface58 .photoPrintPage58:last-child{page-break-after:auto;break-after:auto}
-  body.photoPrintMode58 #photoPrintSurface58 img{width:100%;height:100%;display:block;object-fit:contain}
+  body.photoPrintMode58 #photoPrintSurface58 img{display:block;object-fit:cover;max-width:none;max-height:none;flex:0 0 auto;transform-origin:center center}
+  body.photoPrintMode58 #photoPrintSurface58 .photoPrintPage58.portrait img{width:100mm;height:148mm;transform:scale(1.018)}
+  body.photoPrintMode58 #photoPrintSurface58 .photoPrintPage58.landscape img{width:148mm;height:100mm;transform:rotate(90deg) scale(1.018)}
 }
 `;
   document.head.appendChild(s);return s;
@@ -195,6 +197,14 @@ async function waitPrintImages(root){
     if(img.complete&&img.naturalWidth>0)return resolve();
     const done=()=>resolve();img.addEventListener('load',done,{once:true});img.addEventListener('error',done,{once:true});
   })));
+}
+function setPhotoPrintOrientations58(root){
+  root.querySelectorAll('.photoPrintPage58').forEach(page=>{
+    const img=page.querySelector('img');
+    const landscape=!!img&&img.naturalWidth>img.naturalHeight;
+    page.classList.toggle('landscape',landscape);
+    page.classList.toggle('portrait',!landscape);
+  });
 }
 let photoPrintCleanup58=null;
 function cleanupPhotoPrint58(){
@@ -244,6 +254,7 @@ async function printOrder(orderId,onlyIndex=null){
   closeBtn.onclick=cleanupPhotoPrint58;
 
   await waitPrintImages(surface);
+  setPhotoPrintOrientations58(surface);
   document.body.classList.add('photoPrintMode58');
   fallback.style.display='flex';
 
