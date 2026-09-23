@@ -4,9 +4,9 @@
   const cfg=window.FTS_CONFIG||{};
   let modal=null,video=null,stream=null,facing='user',busy=false;
   const labels={
-    de:{open:'Kamera mit Live-Vorschau',fallback:'Oder Foto vom Handy wählen',title:'Live-Vorschau',capture:'Foto aufnehmen',switch:'Kamera wechseln',close:'Schließen',permission:'Kamera konnte nicht geöffnet werden. Du kannst weiterhin die normale Fotoauswahl benutzen.',preview:'Vorschau – das fertige Foto wird danach exakt gerendert.'},
-    en:{open:'Camera with live preview',fallback:'Or choose a photo from your phone',title:'Live preview',capture:'Take photo',switch:'Switch camera',close:'Close',permission:'The camera could not be opened. You can still use the normal photo picker.',preview:'Preview – the final photo is rendered exactly after capture.'},
-    fr:{open:'Caméra avec aperçu en direct',fallback:'Ou choisir une photo du téléphone',title:'Aperçu en direct',capture:'Prendre la photo',switch:'Changer de caméra',close:'Fermer',permission:'La caméra n’a pas pu être ouverte. Vous pouvez toujours utiliser la sélection photo normale.',preview:'Aperçu – la photo finale sera rendue exactement après la prise.'}
+    de:{open:'Kamera mit Live-Vorschau aufnehmen',fallback:'',title:'Live-Vorschau',capture:'Foto aufnehmen',switch:'Kamera wechseln',close:'Schließen',permission:'Die Kamera konnte nicht geöffnet werden. Bitte erlaube den Kamerazugriff im Browser und versuche es erneut.',preview:'Vorschau – das fertige Foto wird danach exakt gerendert.'},
+    en:{open:'Take photo with live camera preview',fallback:'',title:'Live preview',capture:'Take photo',switch:'Switch camera',close:'Close',permission:'The camera could not be opened. Please allow camera access in your browser and try again.',preview:'Preview – the final photo is rendered exactly after capture.'},
+    fr:{open:'Prendre la photo avec aperçu caméra',fallback:'',title:'Aperçu en direct',capture:'Prendre la photo',switch:'Changer de caméra',close:'Fermer',permission:'La caméra n’a pas pu être ouverte. Autorisez l’accès à la caméra dans le navigateur puis réessayez.',preview:'Aperçu – la photo finale sera rendue exactement après la prise.'}
   };
   function state(){try{return window.FTS_GUEST_CAMERA_STATE?.()||{}}catch{return {}}}
   function t(k){const l=state().lang||'de';return labels[l]?.[k]||labels.de[k]||k}
@@ -36,7 +36,7 @@
   function makeButton(){
     const host=document.getElementById('uploadLabel');if(!host||document.getElementById('ftsLiveCamOpen'))return;
     const wrap=document.createElement('div');wrap.id='ftsLiveCamEntry';
-    wrap.innerHTML='<button type="button" class="ftsLiveCamOpen" id="ftsLiveCamOpen">📷 '+esc(t('open'))+'</button><div class="ftsLiveCamHint">'+esc(t('fallback'))+'</div>';
+    wrap.innerHTML='<button type="button" class="ftsLiveCamOpen" id="ftsLiveCamOpen">📷 '+esc(t('open'))+'</button>';
     host.parentNode.insertBefore(wrap,host);
     wrap.querySelector('button').onclick=openCamera;
   }
@@ -92,7 +92,7 @@
   }
   async function openCamera(){
     if(busy)return;busy=true;ensureStyle();buildModal();updateOverlay();
-    if(!navigator.mediaDevices?.getUserMedia){document.getElementById('photo')?.click();busy=false;return}
+    if(!navigator.mediaDevices?.getUserMedia){busy=false;alert(t('permission'));return}
     try{modal.classList.add('show');document.body.style.overflow='hidden';await restartStream();updateOverlay()}
     catch(e){console.warn('FTS Live Kamera',e);closeCamera();alert(t('permission'))}
     finally{busy=false}
