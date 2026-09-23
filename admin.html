@@ -1267,8 +1267,8 @@ async function loadModeEvent(token,duplicate=false){
   try{const lr=await rpc('fts_admin_get_lumorex_status_v2',{p_admin_code:authCredential(),p_event_token:token});const ls=Array.isArray(lr)?lr[0]:lr;if(ls)e.lumorex_enabled=ls.enabled!==false}catch(err){console.warn('LUMOREX / VIMA Show',err)}
   try{const pr=await rpc('fts_admin_get_print_settings_v45',{p_admin_code:authCredential(),p_event_token:token});const ps=Array.isArray(pr)?pr[0]:pr;if(ps)e.print_settings=ps}catch(err){console.warn('Fotodruck / PayPal',err)}
   saveCustomer(e.customer_name,e.customer_token);$('#title').value=e.title||'';$('#subtitle').value=e.subtitle||'';$('#location').value=e.location||'';$('#overlay').value=e.overlay_text||'';
-  $('#operationMode').value=duplicate?'selfie_print':(e.operation_mode||'selfie_print');
-  $('#localCameraPhotos').checked=duplicate?false:(e.local_camera_photos===true);
+  $('#operationMode').value=e.operation_mode||'selfie_print';
+  $('#localCameraPhotos').checked=e.local_camera_photos===true;
   syncOperationModeUi();
   $('#shortCode').value=duplicate?slug(((e.short_code||slug(e.title))+'-2')).slice(0,30):(e.short_code||'');$('#shortCode').disabled=!duplicate;$('#shortCode').dataset.manual='1';$('#days').value=e.retention_days||3;$('#testDays').value=e.test_days_before??2;$('#lumorexEnabled').checked=e.lumorex_enabled!==false;
   const ps=duplicate?null:(e.print_settings||null);$('#printEnabled').checked=!!ps?.enabled;$('#printStartsAt').value=ps?.print_starts_at?dateTimeLocalFromTimestamp(ps.print_starts_at):'';$('#printEndsAt').value=ps?.print_ends_at?dateTimeLocalFromTimestamp(ps.print_ends_at):'';
