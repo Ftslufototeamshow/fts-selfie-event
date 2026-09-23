@@ -957,14 +957,18 @@ async function loadMySelfieRows(){
   if(navigator.onLine&&routeMode!=='expired'){
     try{
       let online=[];
-      try{online=await rpc('fts_get_guest_selfies_v59',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}
-      catch(_e){try{online=await rpc('fts_get_guest_selfies_v45',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}catch(_e2){online=await rpc('fts_get_guest_selfies_v10',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}}
-      for(const p of online)rows.push({photo_id:p.photo_id||null,url:assetUrl(p.designed_path),created_at:p.created_at,pending:false,online_publication_consent:p.online_publication_consent===true,customer_portal_allowed:p.customer_portal_allowed===true});
+      try{online=await rpc('fts_get_guest_selfies_v61',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}
+      catch(_e){try{online=await rpc('fts_get_guest_selfies_v59',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}catch(_e2){try{online=await rpc('fts_get_guest_selfies_v45',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}catch(_e3){online=await rpc('fts_get_guest_selfies_v10',{p_event_token:ev.event_token,p_guest_session_id:sessionId})||[]}}}
+      const wantedTest=routeMode==='test';
+      for(const p of online){
+        if(Object.prototype.hasOwnProperty.call(p,'is_test')&&Boolean(p.is_test)!==wantedTest)continue;
+        rows.push({photo_id:p.photo_id||null,url:assetUrl(p.designed_path),created_at:p.created_at,pending:false,is_test:p.is_test===true,online_publication_consent:p.online_publication_consent===true,customer_portal_allowed:p.customer_portal_allowed===true});
+      }
     }catch(e){console.warn('Meine Selfies online',e)}
   }
   try{
     const queued=await queueAll();
-    queued.filter(q=>q.eventToken===ev.event_token&&q.guestSessionId===sessionId&&q.designedBlob&&!q.isTest).forEach(q=>{
+    queued.filter(q=>q.eventToken===ev.event_token&&q.guestSessionId===sessionId&&q.designedBlob&&(routeMode==='test'?q.isTest===true:q.isTest!==true)).forEach(q=>{
       const url=URL.createObjectURL(q.designedBlob);mySelfieTempUrls.push(url);
       rows.push({url,created_at:new Date(q.createdAt).toISOString(),pending:true,temp:true,online_publication_consent:q.onlinePublicationConsent===true,customer_portal_allowed:q.onlinePublicationConsent===true});
     });
@@ -1007,7 +1011,7 @@ async function downloadMySelfie(row,button=null){
   const old=button?.textContent,card=button?.closest('.mySelfieCard'),privacy=card?.querySelector('img')?.dataset.ftsPrivacy==='1';
   try{
     if(button){button.disabled=true;button.textContent='…'}
-    if(window.FTS_SOCIAL)await FTS_SOCIAL.download(row.url,mySelfieFilename(row.created_at),privacy);
+    if(window.FTS_SOCIAL)await FTS_SOCIAL.download(row.url,mySelfieFilename(row.created_at),privacy,{maxLongEdge:720,quality:.76});
     else window.open(row.url,'_blank','noopener,noreferrer');
     setMySelfieHint(tr('downloadDone'));
   }catch(e){console.warn('Selfie Download',e);window.open(row.url,'_blank','noopener,noreferrer')}
@@ -1019,7 +1023,7 @@ async function shareMySelfie(row,target,button=null){
   try{
     if(button){button.disabled=true;button.textContent='…'}
     if(!window.FTS_SOCIAL)throw new Error('Teilen-Modul nicht verfügbar');
-    const result=await FTS_SOCIAL.shareOne({url:row.url,name:mySelfieFilename(row.created_at),text:(document.getElementById('mySelfiesPostText')?.value||mySelfieSocialText()),privacy:true});
+    const result=await FTS_SOCIAL.shareOne({url:row.url,name:mySelfieFilename(row.created_at),text:(document.getElementById('mySelfiesPostText')?.value||mySelfieSocialText()),privacy:true,maxLongEdge:720,quality:.78});
     if(!result.shared)setMySelfieHint(target==='facebook'?tr('shareFallbackFacebook'):tr('shareFallbackInstagram'));
     else if(result.copied)setMySelfieHint(tr('socialCopied'));
   }catch(e){
