@@ -19,6 +19,16 @@ chmod +x "$MACOS/FTS Printer"
 codesign --force --deep --sign - "$APP"
 rm -f "$DIST/FTS-Printer-macOS.zip" "$DIST/FTS-Printer-macOS.dmg"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/FTS-Printer-macOS.zip"
-hdiutil create -volname "FTS Printer" -srcfolder "$APP" -ov -format UDZO "$DIST/FTS-Printer-macOS.dmg"
+DMG="$DIST/FTS-Printer-macOS.dmg"
+rm -f "$DMG"
+for attempt in 1 2 3; do
+  if hdiutil create -volname "FTS Printer" -srcfolder "$APP" -ov -format UDZO "$DMG"; then
+    break
+  fi
+  echo "DMG creation attempt $attempt failed; retrying..."
+  rm -f "$DMG"
+  sleep $((attempt * 3))
+done
+test -s "$DMG"
 file "$MACOS/FTS Printer"
 codesign --verify --deep --strict "$APP"
