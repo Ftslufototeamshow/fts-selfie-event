@@ -342,8 +342,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.0.3-printer-wakeup"
-    static let build = 84
+    static let version = "1.0.4-login-recovery"
+    static let build = 85
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
