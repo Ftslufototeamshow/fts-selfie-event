@@ -318,7 +318,7 @@ final class ProductionCore: ObservableObject {
     @Published var consumables: [V81Consumable] = []
     @Published var localQueue = V80LocalQueueFile()
     @Published var printerSlots: [LocalPrinterSlot] = []
-    @Published var autoDispatch = false
+    @Published var autoDispatch = UserDefaults.standard.object(forKey: "fts.autodispatch.v80") == nil ? true : UserDefaults.standard.bool(forKey: "fts.autodispatch.v80")
     @Published var queueStatus = ""
     @Published var updateRelease: V80Release?
     @Published var updateAvailable = false
@@ -723,6 +723,17 @@ final class ProductionCore: ObservableObject {
                 saveLocalQueue()
             }
             await refresh(state:state)
+        } catch { lastError=error.localizedDescription }
+    }
+
+    func hideArchived(_ row: V80ArchiveRow, state: AppState) async {
+        guard let dev=state.deviceToken,let session=state.sessionToken else{return}
+        do {
+            let ok:Bool=try await api.rpc("fts_printer_hide_archived_v82",body:[
+                "p_device_token":dev,"p_session_token":session,
+                "p_kind":row.kind,"p_item_id":row.id
+            ])
+            if ok { await refresh(state:state) }
         } catch { lastError=error.localizedDescription }
     }
 
