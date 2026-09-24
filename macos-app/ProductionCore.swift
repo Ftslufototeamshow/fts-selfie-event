@@ -349,6 +349,7 @@ final class ProductionCore: ObservableObject {
     @Published var lastError: String?
     @Published var pickupActionsInFlight: Set<String> = []
     @Published var archiveActionsInFlight: Set<String> = []
+    @Published var consumableActionsInFlight: Set<String> = []
 
     private var activePrinterTasks: [String: Task<Void, Never>] = [:]
     private var lastDispatchedLocal = false
@@ -583,7 +584,11 @@ final class ProductionCore: ObservableObject {
     }
 
     func loadConsumable(printerName:String,component:String,state:AppState) async {
+        let key=printerName+"::"+component
+        guard !consumableActionsInFlight.contains(key) else{return}
         guard let dev=state.deviceToken,let session=state.sessionToken,!state.selectedEventToken.isEmpty else{return}
+        consumableActionsInFlight.insert(key)
+        defer{consumableActionsInFlight.remove(key)}
         do {
             let _:JSONValue = try await api.rpc("fts_printer_load_component_v81",body:[
                 "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
@@ -591,6 +596,10 @@ final class ProductionCore: ObservableObject {
             ])
             await refresh(state:state)
         } catch { lastError=error.localizedDescription }
+    }
+
+    func consumableActionBusy(printerName:String,component:String)->Bool {
+        consumableActionsInFlight.contains(printerName+"::"+component)
     }
 
     func consumable(for printerName:String)->V81Consumable? {
