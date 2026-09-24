@@ -185,7 +185,7 @@ struct ProductionMediaContent: View {
     }
 
     var usedCardLabels:Set<String> {
-        var result=Set<String>()
+        var result=ingest.registeredCardLabels
         for card in ingest.detectedCards {
             if let label=card.label { result.insert(label) }
         }
@@ -251,6 +251,10 @@ struct ProductionMediaContent: View {
                         onRegister:{ label in
                             guard let e=event else{return}
                             Task{await ingest.register(card:card,label:label,event:e)}
+                        },
+                        onReplace:{ label in
+                            guard let e=event else{return}
+                            Task{await ingest.register(card:card,label:label,event:e,replaceExisting:true)}
                         }
                     )
                 }
@@ -361,6 +365,9 @@ struct V80CardRegistrationRow: View {
     let card:V80DetectedCard
     let usedLabels:Set<String>
     let onRegister:(String)->Void
+    let onReplace:(String)->Void
+    @State private var replaceLabel=""
+    @State private var showReplace=false
 
     var body: some View {
         HStack {
@@ -372,12 +379,27 @@ struct V80CardRegistrationRow: View {
             Spacer()
             if card.marker == nil {
                 ForEach(["A","B","C","D"],id:\.self) { label in
-                    Button(label){onRegister(label)}
-                        .disabled(usedLabels.contains(label))
+                    Button(usedLabels.contains(label) ? "\(label) ersetzen" : label) {
+                        if usedLabels.contains(label) {
+                            replaceLabel=label
+                            showReplace=true
+                        } else {
+                            onRegister(label)
+                        }
+                    }
+                    .font(.caption)
                 }
             } else {
                 Text("erkannt").font(.caption.bold()).foregroundStyle(.green)
             }
+        }
+        .alert("Karte \(replaceLabel) ersetzen?",isPresented:$showReplace) {
+            Button("Abbrechen",role:.cancel){}
+            Button("Karte \(replaceLabel) ersetzen",role:.destructive) {
+                onReplace(replaceLabel)
+            }
+        } message: {
+            Text("Die bisherige Zuordnung von Karte \(replaceLabel) wird für dieses Event gesperrt. Die neu eingesteckte Karte übernimmt diese Kennung.")
         }
     }
 }
