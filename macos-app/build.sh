@@ -4,7 +4,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SOURCES=("$ROOT"/macos-app/*.swift)
 PLIST="$ROOT/macos-app/Info.plist"
 DIST="$ROOT/dist"
-APP="$DIST/FTS Printer 014.app"
+APP="$DIST/FTS Printer.app"
 MACOS="$APP/Contents/MacOS"
 mkdir -p "$MACOS"
 rm -f "$MACOS/FTS Printer"
@@ -17,12 +17,12 @@ lipo -create "$DIST/build/fts-printer-arm64" "$DIST/build/fts-printer-x86_64" -o
 cp "$PLIST" "$APP/Contents/Info.plist"
 chmod +x "$MACOS/FTS Printer"
 codesign --force --deep --sign - "$APP"
-rm -f "$DIST/FTS-Printer-macOS-v0.1.4.zip" "$DIST/FTS-Printer-macOS-v0.1.4.dmg"
-ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/FTS-Printer-macOS-v0.1.4.zip"
-DMG="$DIST/FTS-Printer-macOS-v0.1.4.dmg"
+rm -f "$DIST/FTS-Printer-macOS-v0.2.0-core.zip" "$DIST/FTS-Printer-macOS-v0.2.0-core.dmg"
+ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/FTS-Printer-macOS-v0.2.0-core.zip"
+DMG="$DIST/FTS-Printer-macOS-v0.2.0-core.dmg"
 rm -f "$DMG"
 for attempt in 1 2 3; do
-  if hdiutil create -volname "FTS Printer 014" -srcfolder "$APP" -ov -format UDZO "$DMG"; then
+  if hdiutil create -volname "FTS Printer" -srcfolder "$APP" -ov -format UDZO "$DMG"; then
     break
   fi
   echo "DMG creation attempt $attempt failed; retrying..."
