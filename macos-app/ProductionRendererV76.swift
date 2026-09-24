@@ -116,7 +116,7 @@ enum ProductionRendererV76 {
                 let targetBottom=1-(minimum+gap)/100
                 let needed=face.bottom-targetBottom*ch
                 let centerDesired=(face.y+face.bottom)/2-ch*0.42
-                cy=clamp(max(cy,needed,centerDesired),0,sh-ch)
+                cy=clamp(max(cy,max(needed,centerDesired)),0,sh-ch)
             }
         }
 
@@ -428,7 +428,7 @@ enum ProductionRendererV76 {
 
         // Character-by-character color cycle, preserving v76 alignment.
         let chars=Array(text)
-        let widths=chars.map { String($0).size(withAttributes:[.font:font]).width }
+        let widths=chars.map { (String($0) as NSString).size(withAttributes:[.font:font]).width }
         let total=widths.reduce(0,+)
         var left=align=="center" ? canvas.width/2-total/2 : (align=="right" ? canvas.width-pad-total : pad)
         for (i,ch) in chars.enumerated() {
@@ -487,7 +487,7 @@ enum ProductionRendererV76 {
                 let size=item["size"]?.string ?? "medium"
                 let pair = size=="small" ? (CGFloat(0.12),CGFloat(0.075)) : (size=="large" ? (0.26,0.145):(0.18,0.105))
                 let maxW=w*pair.0,maxH=h*pair.1
-                let scale=min(maxW/max(img.size.width,1),maxH/max(img.size.height,1),1)
+                let scale=min(1,min(maxW/max(img.size.width,1),maxH/max(img.size.height,1)))
                 dims.append((item,img,img.size.width*scale,img.size.height*scale))
             }
             let totalW=dims.reduce(0){$0+$1.2}+gap*CGFloat(max(0,dims.count-1))
