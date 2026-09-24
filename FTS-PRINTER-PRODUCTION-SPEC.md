@@ -134,7 +134,7 @@ Die physischen Kamera-SD-Karten werden am Anfang des Events einmal in der Printe
 - Karte 3 bekommt **Karte C**.
 - Karte 4 bekommt **Karte D**.
 - Die sichtbare Kennzeichnung A/B/C/D wird zusätzlich physisch auf der jeweiligen Karte angebracht.
-- Bei der Erstregistrierung soll die App prüfen, ob die Karte für das Event leer bzw. ohne zu importierende alte Fotos ist.
+- Bei der Erstregistrierung zeigt die App vorhandene Fotos als Altbestand an und legt dafür den Baseline-Snapshot an. Eine leere Karte ist empfohlen, aber technisch nicht vorgeschrieben; vorhandene Altbilder werden nicht in das neue Event importiert.
 - Die App speichert für die Karte eine technische Kennung und legt zusätzlich eine kleine FTS-Kartenkennung auf der Karte ab, damit dieselbe Karte beim späteren Einstecken wieder als A/B/C/D erkannt werden kann.
 - Solange die Karte nach der Registrierung **nicht in der Kamera formatiert** wird, bleibt diese Kennung erhalten, auch nachdem mit der Kamera neue Fotos aufgenommen wurden.
 - Wenn die Karte formatiert wurde oder die Kennung fehlt, darf die App nicht raten. Sie zeigt **„Unbekannte Karte – erneut als A/B/C/D zuordnen“**.
@@ -159,6 +159,15 @@ Die Nummer **001, 002, 003 …** ist ausdrücklich **keine JPEG-Dateinummer** un
 - Die App schlägt die Nummern automatisch der Reihe nach vor, damit der Mitarbeiter sie nicht jedes Mal neu erfinden muss.
 - Die Zählung kann pro Event neu bei **001** starten; die Kombination aus Event + Karte + Kundennummer bleibt intern eindeutig.
 - Diese Kundennummer dient auch zum Wiederfinden in Warteschlange, Druckstatus und Abholung.
+
+### Abholung bei Kamera / SD / WLAN
+
+- Kamera-, SD- und WLAN-Aufträge verwenden nach erfolgreichem Druck denselben Bereich **Kundenabholung** wie Selfie-Aufträge.
+- Die sichtbare Kennung bleibt die lokale Kundennummer, z. B. **A001**, **B001** oder **W001**; sie wird nicht mit der sechsstelligen Selfie-Kennung vermischt.
+- Erst wenn alle freigegebenen Exemplare eines lokalen Kundenauftrags erfolgreich gedruckt sind, wechselt der Auftrag auf **READY_FOR_PICKUP / ABHOLBEREIT**.
+- Der Mitarbeiter bestätigt die Ausgabe mit **„Foto abgeholt“**. Danach wird der lokale Auftrag mit Audit und Zeitstempel archiviert.
+- Das Archivieren des Auftrags löscht oder verschiebt die lokale Originalbilddatei nicht. Das Foto bleibt im lokalen Event-Album erhalten.
+- Für diese lokalen Aufträge wird kein zweiter Umsatz und kein PayPal-Beleg erzeugt, weil die Zahlung bereits über die externe Kasse / das Terminal / Cash erfolgt ist.
 
 ### Manueller Mengenentscheid durch den Mitarbeiter
 
