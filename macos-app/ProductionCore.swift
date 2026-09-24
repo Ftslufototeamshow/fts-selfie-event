@@ -390,6 +390,15 @@ final class ProductionCore: ObservableObject {
         catch { lastError = "Lokale Druckwarteschlange konnte nicht gespeichert werden: \(error.localizedDescription)" }
     }
 
+    func clearEmptyLocalQueue() {
+        guard localQueue.jobs.isEmpty else {
+            lastError="Tagesalbum kann nicht geleert werden, solange lokale Druckaufträge vorhanden sind."
+            return
+        }
+        localQueue=V80LocalQueueFile()
+        saveLocalQueue()
+    }
+
     func discoverPrinters() {
         let names = V80MacSpooler.installedPrinterNames()
         let enabled = Set(UserDefaults.standard.stringArray(forKey: "fts.enabled.printers.v80") ?? [])
@@ -828,7 +837,7 @@ final class ProductionCore: ObservableObject {
         saveLocalQueue()
     }
 
-    func createLocalJob(state:AppState, media:[V80MediaItem:Int], sourceType:String, sourceLabel:String) async -> String? {
+    func createLocalJob(state:AppState, media:[V80MediaItem:Int], sourceType:String, sourceLabel:String, eventDay:String) async -> String? {
         guard let dev=state.deviceToken,let session=state.sessionToken,!state.selectedEventToken.isEmpty,
               !loadedFolderPath.isEmpty else{return nil}
         let filtered=media.filter{$0.value>0}
@@ -836,8 +845,9 @@ final class ProductionCore: ObservableObject {
         guard qty>0 else{return nil}
         let id=UUID()
         do {
-            let result:V80LocalJobCreate = try await api.rpc("fts_printer_create_local_job_v80",body:[
+            let result:V80LocalJobCreate = try await api.rpc("fts_printer_create_local_job_v92",body:[
                 "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
+                "p_event_day":eventDay,
                 "p_local_job_id":id.uuidString,"p_source_type":sourceType,"p_source_label":sourceLabel,"p_quantity":qty
             ])
             guard result.ok==true,let code=result.customer_code else {
@@ -854,7 +864,7 @@ final class ProductionCore: ObservableObject {
                 }
             }
             localQueue.jobs.append(V80LocalPrintJob(
-                id:id,eventToken:state.selectedEventToken,customerCode:code,sourceType:sourceType,
+                id:id,eventToken:state.selectedEventToken,eventDay:eventDay,customerCode:code,sourceType:sourceType,
                 sourceLabel:sourceLabel,createdAt:Date(),status:.waiting,units:units
             ))
             saveLocalQueue()
@@ -929,6 +939,26 @@ final class ProductionCore: ObservableObject {
             ])
             if ok { await refresh(state:state) }
         } catch { lastError=error.localizedDescription }
+    }
+
+    func resetLocalDay(state:AppState,eventDay:String) async -> Bool {
+        guard localQueue.jobs.isEmpty else {
+            lastError="Für dieses Tagesalbum gibt es bereits lokale Druckaufträge. Die Nummerierung kann nicht zurückgesetzt werden."
+            return false
+        }
+        guard let dev=state.deviceToken,let session=state.sessionToken,!state.selectedEventToken.isEmpty else{return false}
+        do {
+            let result:V92DayResetResult=try await api.rpc("fts_printer_reset_local_day_v92",body:[
+                "p_device_token":dev,"p_session_token":session,
+                "p_event_token":state.selectedEventToken,"p_event_day":eventDay
+            ])
+            if result.ok==true { return true }
+            lastError=result.message ?? "Tageszähler konnte nicht zurückgesetzt werden."
+            return false
+        } catch {
+            lastError=error.localizedDescription
+            return false
+        }
     }
 
     func checkUpdate(platform:String) async {
