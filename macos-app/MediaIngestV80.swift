@@ -45,6 +45,8 @@ struct V80MediaItem: Codable, Identifiable, Hashable {
     let sha256: String
     let sourcePath: String
     let importedPath: String
+    let designedPath: String?
+    let designSignature: String?
     let originalName: String
     let sourceType: String
     let sourceLabel: String
@@ -238,12 +240,15 @@ final class MediaIngestV80: ObservableObject {
             let r=try await Task.detached(priority:.utility) {
                 try Self.scanSync(eventToken:event.event_token,activation:a)
             }.value
-            items=r.items.sorted{$0.importedAt>$1.importedAt}
+            let designed=await ensureDesignedCopies(event:event,activation:a,items:r.items)
+            items=designed.items.sorted{$0.importedAt>$1.importedAt}
             detectedCards=r.cards
             registeredCardLabels=r.labels
             lastImportedCount=r.newCount
-            if r.newCount>0 {
-                status="\(r.newCount) neue Foto\(r.newCount==1 ? "" : "s") übernommen."
+            if designed.failed>0 {
+                status="\(r.newCount) neue Fotos übernommen · \(designed.failed) Design-Datei(en) konnten nicht erstellt werden."
+            } else if r.newCount>0 || designed.created>0 {
+                status="\(r.newCount) neue Foto\(r.newCount==1 ? "" : "s") übernommen · \(designed.created) Druckdesign\(designed.created==1 ? "" : "s") erstellt."
             } else if r.cards.contains(where:{$0.marker==nil}) {
                 status="Unbekannte SD-Karte erkannt. Erst A/B/C/D zuordnen – noch kein Import."
             } else {
@@ -252,6 +257,79 @@ final class MediaIngestV80: ObservableObject {
         } catch {
             status="Importprüfung: \(error.localizedDescription)"
         }
+    }
+
+    private func ensureDesignedCopies(event:EventRow,activation:V80MediaActivation,items:[V80MediaItem]) async -> (items:[V80MediaItem],created:Int,failed:Int) {
+        let fm=FileManager.default
+        let signature=designSignature(event)
+        let readyDir=URL(fileURLWithPath:activation.folderPath,isDirectory:true).appendingPathComponent("Druckbereit",isDirectory:true)
+        try? fm.createDirectory(at:readyDir,withIntermediateDirectories:true)
+
+        var out=items
+        var created=0
+        var failed=0
+
+        for i in out.indices {
+            let existing=out[i].designedPath
+            if out[i].designSignature==signature,
+               let existing,
+               fm.fileExists(atPath:existing) {
+                continue
+            }
+
+            do {
+                let rendered=try await ProductionRendererV76.renderedImage(sourceURL:URL(fileURLWithPath:out[i].importedPath),event:event)
+                let stem=URL(fileURLWithPath:out[i].originalName).deletingPathExtension().lastPathComponent
+                let safeStem=sanitize(stem)
+                let fileName="\(out[i].sourceLabel)-\(safeStem)-\(String(out[i].sha256.prefix(10))).jpg"
+                let dest=readyDir.appendingPathComponent(fileName)
+                guard let tiff=rendered.tiffRepresentation,
+                      let rep=NSBitmapImageRep(data:tiff),
+                      let jpg=rep.representation(using:.jpeg,properties:[.compressionFactor:0.96]) else {
+                    throw NSError(domain:"FTSPrinter",code:190,userInfo:[NSLocalizedDescriptionKey:"Druckdesign konnte nicht als JPEG gespeichert werden."])
+                }
+                try jpg.write(to:dest,options:.atomic)
+                out[i]=V80MediaItem(
+                    id:out[i].id,sha256:out[i].sha256,sourcePath:out[i].sourcePath,importedPath:out[i].importedPath,
+                    designedPath:dest.path,designSignature:signature,
+                    originalName:out[i].originalName,sourceType:out[i].sourceType,sourceLabel:out[i].sourceLabel,
+                    cardUUID:out[i].cardUUID,cameraID:out[i].cameraID,importedAt:out[i].importedAt
+                )
+                created += 1
+            } catch {
+                failed += 1
+            }
+        }
+
+        if created>0 {
+            do {
+                var manifest=try Self.loadManifestSync(activation)
+                let map=Dictionary(uniqueKeysWithValues:out.map{($0.id,$0)})
+                manifest.items=manifest.items.map{map[$0.id] ?? $0}
+                try Self.saveManifestSync(manifest,activation)
+            } catch {
+                failed += 1
+            }
+        }
+        return (out,created,failed)
+    }
+
+    private func designSignature(_ event:EventRow)->String {
+        let encoder=JSONEncoder()
+        encoder.outputFormatting=[.sortedKeys]
+        var hasher=SHA256()
+        func add(_ text:String?) {
+            hasher.update(data:Data((text ?? "").utf8))
+            hasher.update(data:Data([0]))
+        }
+        func addJSON(_ value:JSONValue?) {
+            if let value,let data=try? encoder.encode(value) { hasher.update(data:data) }
+            hasher.update(data:Data([0]))
+        }
+        add(event.event_title);add(event.subtitle);add(event.overlay_text);add(event.event_date)
+        add(event.accent);add(event.photo_branding)
+        addJSON(event.studio_config);addJSON(event.logo_items);addJSON(event.decoration_items)
+        return hasher.finalize().map{String(format:"%02x",$0)}.joined()
     }
 
     private func loadManifest() {
@@ -365,6 +443,7 @@ final class MediaIngestV80: ObservableObject {
                 try fm.copyItem(at:file,to:dest)
                 let item=V80MediaItem(
                     id:hash,sha256:hash,sourcePath:file.path,importedPath:dest.path,
+                    designedPath:nil,designSignature:nil,
                     originalName:file.lastPathComponent,sourceType:"SD",sourceLabel:marker.label,
                     cardUUID:marker.cardUUID,cameraID:cameraIdentity(file),importedAt:Date()
                 )
