@@ -1106,12 +1106,24 @@ struct MainView: View {
 
 struct StockPill:View{
     let stock:StockSnapshot?
+
+    var levelColor:Color {
+        guard stock?.managed==true else{return .gray}
+        let n=stock?.safe_available ?? 0
+        if n==0{return .purple}
+        if n<=10{return .red}
+        if n<=20{return .orange}
+        return .green
+    }
+
     var body:some View{
         HStack(spacing:6){
             Image(systemName:"shippingbox.fill")
             Text(stock?.managed==true ? "\(stock?.safe_available ?? 0) sicher" : "nicht eingerichtet").bold()
-        }.font(.callout).padding(.horizontal,12).padding(.vertical,7)
-        .background((stock?.safe_available ?? 1)<=0 ? Color.red.opacity(0.15):Color.green.opacity(0.14))
+        }
+        .font(.callout).padding(.horizontal,12).padding(.vertical,7)
+        .background(levelColor.opacity(0.16))
+        .foregroundStyle(levelColor)
         .clipShape(Capsule())
     }
 }
