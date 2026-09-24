@@ -233,9 +233,19 @@ enum V80MacSpooler {
     static let minimumPhysicalSeconds: TimeInterval = 42
     static let defaultSeconds: TimeInterval = 44
 
-    @MainActor
-    static func installedPrinterNames() -> [String] {
-        var names=NSPrinter.printerNames.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    static func installedPrinterNames() async -> [String] {
+        let configured = await MainActor.run {
+            NSPrinter.printerNames.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        }
+        // CUPS/ioreg can occasionally pause while a network printer is changing state.
+        // Run those probes off the UI thread so the Mac cursor never beachballs the app.
+        return await Task.detached(priority:.utility) {
+            filterConfiguredPrinters(configured)
+        }.value
+    }
+
+    private static func filterConfiguredPrinters(_ configured:[String]) -> [String] {
+        var names=configured
 
         // If a Canon SELPHY is connected directly by USB, prefer that physical path
         // and suppress stale Wi-Fi/AirPrint duplicates for the same SELPHY model.
@@ -269,23 +279,12 @@ enum V80MacSpooler {
     }
 
     private static func usbSELPHYPresent()->Bool {
-        let p=Process()
-        p.executableURL=URL(fileURLWithPath:"/usr/sbin/ioreg")
-        p.arguments=["-p","IOUSB","-l","-w","0"]
-        let out=Pipe()
-        p.standardOutput=out
-        p.standardError=Pipe()
-        do {
-            try p.run()
-            p.waitUntilExit()
-            guard p.terminationStatus==0 else{return true}
-            let d=out.fileHandleForReading.readDataToEndOfFile()
-            let text=String(data:d,encoding:.utf8)?.lowercased() ?? ""
-            return text.contains("selphy") || text.contains("cp1500")
-        } catch {
+        guard let text=runProcess("/usr/sbin/ioreg",["-p","IOUSB","-l","-w","0"],timeout:1.5) else {
             // If hardware enumeration itself fails, do not hide a valid configured queue.
             return true
         }
+        let lower=text.lowercased()
+        return lower.contains("selphy") || lower.contains("cp1500")
     }
 
     private static func deviceURI(printerName:String)->String {
@@ -297,20 +296,32 @@ enum V80MacSpooler {
     }
 
     private static func runLPStat(_ arguments:[String])->String {
+        runProcess("/usr/bin/lpstat",arguments,timeout:1.5)?
+            .trimmingCharacters(in:.whitespacesAndNewlines) ?? ""
+    }
+
+    private static func runProcess(_ executable:String,_ arguments:[String],timeout:TimeInterval)->String? {
         let p=Process()
-        p.executableURL=URL(fileURLWithPath:"/usr/bin/lpstat")
+        p.executableURL=URL(fileURLWithPath:executable)
         p.arguments=arguments
         let out=Pipe()
         p.standardOutput=out
         p.standardError=Pipe()
         do {
             try p.run()
-            p.waitUntilExit()
-            guard p.terminationStatus==0 else{return ""}
+            let deadline=Date().addingTimeInterval(timeout)
+            while p.isRunning && Date() < deadline {
+                Thread.sleep(forTimeInterval:0.03)
+            }
+            if p.isRunning {
+                p.terminate()
+                return nil
+            }
+            guard p.terminationStatus==0 else{return nil}
             let d=out.fileHandleForReading.readDataToEndOfFile()
-            return String(data:d,encoding:.utf8)?.trimmingCharacters(in:.whitespacesAndNewlines) ?? ""
+            return String(data:d,encoding:.utf8)
         } catch {
-            return ""
+            return nil
         }
     }
 
@@ -344,42 +355,15 @@ enum V80MacSpooler {
     }
 
     static func isAccepting(printerName: String) -> Bool? {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/lpstat")
-        p.arguments = ["-a", printerName]
-        let out = Pipe()
-        p.standardOutput = out
-        p.standardError = Pipe()
-        do {
-            try p.run()
-            p.waitUntilExit()
-            let data = out.fileHandleForReading.readDataToEndOfFile()
-            let text = String(data:data,encoding:.utf8)?.lowercased() ?? ""
-            if p.terminationStatus != 0 { return false }
-            if text.contains("not accepting") || text.contains("disabled") { return false }
-            return !text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty
-        } catch {
-            return nil
-        }
+        guard let raw=runProcess("/usr/bin/lpstat",["-a",printerName],timeout:1.5) else{return nil}
+        let text=raw.lowercased()
+        if text.contains("not accepting") || text.contains("disabled") { return false }
+        return !text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty
     }
 
     static func queueHasJobs(printerName: String) -> Bool? {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/lpstat")
-        p.arguments = ["-W", "not-completed", "-o", printerName]
-        let pipe = Pipe()
-        p.standardOutput = pipe
-        p.standardError = Pipe()
-        do {
-            try p.run()
-            p.waitUntilExit()
-            let d = pipe.fileHandleForReading.readDataToEndOfFile()
-            let s = String(data: d, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if p.terminationStatus == 0 { return !s.isEmpty }
-            return nil
-        } catch {
-            return nil
-        }
+        guard let raw=runProcess("/usr/bin/lpstat",["-W","not-completed","-o",printerName],timeout:1.5) else{return nil}
+        return !raw.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty
     }
 
     static func learnedSeconds(printerName: String) -> TimeInterval {
@@ -404,7 +388,9 @@ enum V80MacSpooler {
             if elapsed > timeout {
                 throw NSError(domain: "FTSPrinter", code: 82, userInfo: [NSLocalizedDescriptionKey: "Druckstatus nach \(Int(timeout)) Sekunden unklar. Ausdruck am Drucker prüfen."])
             }
-            let q = queueHasJobs(printerName: printerName)
+            let q = await Task.detached(priority:.utility) {
+                queueHasJobs(printerName: printerName)
+            }.value
             if q == true { sawQueue = true }
             if elapsed >= minimumPhysicalSeconds {
                 if sawQueue, q == false { return }
@@ -419,8 +405,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.0.6-mac-print-fix"
-    static let build = 87
+    static let version = "1.0.7-stability"
+    static let build = 88
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -478,8 +464,8 @@ final class ProductionCore: ObservableObject {
         saveLocalQueue()
     }
 
-    func discoverPrinters() {
-        var names = V80MacSpooler.installedPrinterNames()
+    func discoverPrinters() async {
+        var names = await V80MacSpooler.installedPrinterNames()
         // Never make a printer disappear in the middle of an active transfer/print.
         for old in printerSlots where ["PREPARING","TRANSFER","PRINTING"].contains(old.state) {
             if !names.contains(old.name) { names.append(old.name) }
@@ -513,6 +499,14 @@ final class ProductionCore: ObservableObject {
         UserDefaults.standard.set(names, forKey: "fts.enabled.printers.v80")
     }
 
+    private func isTransientTransportMessage(_ message:String)->Bool {
+        let m=message.lowercased()
+        return m.contains("401") || m.contains("unauthorized") || m.contains("jwt")
+            || m.contains("network") || m.contains("internet") || m.contains("connection")
+            || m.contains("timed out") || m.contains("timeout") || m.contains("server")
+            || m.contains("503") || m.contains("502") || m.contains("504") || m.contains("429")
+    }
+
     func refresh(state: AppState) async {
         guard let dev = state.deviceToken, let session = state.sessionToken,
               !state.selectedEventToken.isEmpty else { return }
@@ -534,6 +528,7 @@ final class ProductionCore: ObservableObject {
             ])
             let (qq,nn,pp,aa,cons) = try await (q,n,p,a,cc)
             workUnits = qq; printerNodes = nn; pickups = pp; archived = aa; consumables = cons
+            if let e=lastError, isTransientTransportMessage(e) { lastError=nil }
             let waitingCount = qq.filter{$0.unit_status == "READY"}.count + localWaitingCount
             let enabled = printerSlots.filter{$0.enabled}
             let materialBlocked = waitingCount > 0 && !enabled.isEmpty && enabled.allSatisfy{ !materialReady(for:$0.name) }
