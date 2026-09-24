@@ -33,7 +33,15 @@ struct ProductionQueueContent: View {
                 Spacer()
                 Toggle("Automatik",isOn:Binding(
                     get:{core.autoDispatch},
-                    set:{v in core.autoDispatch=v;if v{core.discoverPrinters();core.dispatchAvailable(state:state)}}
+                    set:{v in
+                        core.autoDispatch=v
+                        if v {
+                            Task {
+                                await core.discoverPrinters()
+                                core.dispatchAvailable(state:state)
+                            }
+                        }
+                    }
                 )).toggleStyle(.switch)
                 Button("Neu laden"){Task{await core.refresh(state:state)}}
             }
@@ -136,7 +144,7 @@ struct ProductionQueueContent: View {
             }
         }.padding(8)
         .task {
-            core.discoverPrinters()
+            await core.discoverPrinters()
             await core.refresh(state:state)
         }
     }
@@ -641,7 +649,7 @@ struct ProductionSystemContent:View {
                 HStack {
                     Text("System & Printer").font(.title3.bold())
                     Spacer()
-                    Button("Drucker neu erkennen"){core.discoverPrinters()}
+                    Button("Drucker neu erkennen"){Task{await core.discoverPrinters()}}
                 }
 
                 GroupBox("Installierte Drucker") {
@@ -713,11 +721,21 @@ struct ProductionSystemContent:View {
                 }
 
                 if let e=core.lastError {
-                    GroupBox("Letzter Hinweis") { Text(e).foregroundStyle(.red).textSelection(.enabled).padding(.vertical,4) }
+                    let critical=e.localizedCaseInsensitiveContains("unklar") || e.localizedCaseInsensitiveContains("physisch prüfen")
+                    GroupBox(critical ? "Druck prüfen" : "Hinweis") {
+                        HStack(alignment:.top,spacing:8) {
+                            Image(systemName:critical ? "exclamationmark.triangle.fill" : "info.circle.fill")
+                                .foregroundStyle(critical ? .red : .orange)
+                            Text(e).foregroundStyle(critical ? .red : .secondary).textSelection(.enabled)
+                        }.padding(.vertical,4)
+                    }
                 }
             }.padding(8)
         }
-        .onAppear{core.discoverPrinters()}
-        .task{await core.checkUpdate(platform:"macos");await core.refresh(state:state)}
+        .task{
+            await core.discoverPrinters()
+            await core.checkUpdate(platform:"macos")
+            await core.refresh(state:state)
+        }
     }
 }
