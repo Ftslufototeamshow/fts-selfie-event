@@ -35,6 +35,7 @@ struct V80CardBaseline: Codable, Hashable {
     let cardUUID: String
     let label: String
     var knownSourceKeys: Set<String>
+    var knownFingerprints: [String:String]?
     let createdAt: Date
 }
 
@@ -55,6 +56,7 @@ struct V80MediaManifest: Codable {
     var items: [V80MediaItem] = []
     var baselines: [String: V80CardBaseline] = [:]
     var wlanKnownSourceKeys: Set<String> = []
+    var wlanFingerprints: [String:String]?
 }
 
 @MainActor
@@ -194,10 +196,17 @@ final class MediaIngestV80: ObservableObject {
 
         let files=mediaFiles(on:volume)
         var keys=Set<String>()
+        var fingerprints:[String:String]=[:]
         for f in files {
-            if let k=sourceKey(f,root:volume){keys.insert(k)}
+            if let k=sourceKey(f,root:volume){
+                keys.insert(k)
+                fingerprints[k]=try sha256(f)
+            }
         }
-        manifest.baselines[cardUUID]=V80CardBaseline(cardUUID:cardUUID,label:label,knownSourceKeys:keys,createdAt:Date())
+        manifest.baselines[cardUUID]=V80CardBaseline(
+            cardUUID:cardUUID,label:label,knownSourceKeys:keys,
+            knownFingerprints:fingerprints,createdAt:Date()
+        )
         try saveManifestSync(manifest,activation)
         let cards=detectCardsSync(eventToken:eventToken)
         return (manifest.items,cards,keys.count,Set(manifest.baselines.values.map{$0.label}))
@@ -219,14 +228,26 @@ final class MediaIngestV80: ObservableObject {
 
             for file in mediaFiles(on:volume) {
                 guard let key=sourceKey(file,root:volume) else{continue}
-                if baseline.knownSourceKeys.contains(key){continue}
                 // Wait until the camera/OS has finished writing the file.
                 let rv=try? file.resourceValues(forKeys:[.contentModificationDateKey,.fileSizeKey])
                 if let mod=rv?.contentModificationDate,Date().timeIntervalSince(mod)<1.5{continue}
                 guard (rv?.fileSize ?? 0)>0 else{continue}
 
+                if baseline.knownSourceKeys.contains(key) {
+                    if let oldHash=baseline.knownFingerprints?[key] {
+                        let currentHash=try sha256(file)
+                        if currentHash==oldHash { continue }
+                        // Same path/size/time but different bytes: treat as a new camera file.
+                    } else {
+                        // Compatibility with baselines created before fingerprint tracking.
+                        continue
+                    }
+                }
+
                 let hash=try sha256(file)
                 baseline.knownSourceKeys.insert(key)
+                if baseline.knownFingerprints == nil { baseline.knownFingerprints=[:] }
+                baseline.knownFingerprints?[key]=hash
                 if hashes.contains(hash){continue}
 
                 let folder=URL(fileURLWithPath:activation.folderPath)
@@ -258,9 +279,18 @@ final class MediaIngestV80: ObservableObject {
                 guard rv?.isRegularFile==true,(rv?.fileSize ?? 0)>0 else{continue}
                 if let mod=rv?.contentModificationDate,Date().timeIntervalSince(mod)<1.5{continue}
                 guard let key=sourceKey(file,root:wlan) else{continue}
-                if manifest.wlanKnownSourceKeys.contains(key){continue}
+                if manifest.wlanKnownSourceKeys.contains(key) {
+                    if let oldHash=manifest.wlanFingerprints?[key] {
+                        let currentHash=try sha256(file)
+                        if currentHash==oldHash { continue }
+                    } else {
+                        continue
+                    }
+                }
                 let hash=try sha256(file)
                 manifest.wlanKnownSourceKeys.insert(key)
+                if manifest.wlanFingerprints == nil { manifest.wlanFingerprints=[:] }
+                manifest.wlanFingerprints?[key]=hash
                 if hashes.contains(hash){continue}
                 let dest=uniqueDestination(folder:wlanArchive,name:file.lastPathComponent)
                 try fm.copyItem(at:file,to:dest)
@@ -322,7 +352,8 @@ final class MediaIngestV80: ObservableObject {
         let rel=file.path.hasPrefix(root.path) ? String(file.path.dropFirst(root.path.count)) : file.lastPathComponent
         let size=rv.fileSize ?? 0
         let mod=Int((rv.contentModificationDate ?? .distantPast).timeIntervalSince1970)
-        return "\(rel)|\(size)|\(mod)"
+        let capture=captureTimestamp(file) ?? ""
+        return "\(rel)|\(size)|\(mod)|\(capture)"
     }
 
     nonisolated private static func loadManifestSync(_ activation:V80MediaActivation) throws -> V80MediaManifest {
@@ -358,6 +389,16 @@ final class MediaIngestV80: ObservableObject {
             i+=1
         }
         return candidate
+    }
+
+    nonisolated private static func captureTimestamp(_ url:URL)->String?{
+        guard let src=CGImageSourceCreateWithURL(url as CFURL,nil),
+              let props=CGImageSourceCopyPropertiesAtIndex(src,0,nil) as? [String:Any] else{return nil}
+        let exif=props["{Exif}"] as? [String:Any]
+        let tiff=props["{TIFF}"] as? [String:Any]
+        return (exif?["DateTimeOriginal"] as? String)
+            ?? (exif?["DateTimeDigitized"] as? String)
+            ?? (tiff?["DateTime"] as? String)
     }
 
     nonisolated private static func cameraIdentity(_ url:URL)->String?{
