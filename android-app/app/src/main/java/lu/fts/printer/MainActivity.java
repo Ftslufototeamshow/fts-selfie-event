@@ -39,6 +39,7 @@ public class MainActivity extends Activity {
     final ArrayList<JSONObject> workUnits = new ArrayList<>();
     final ArrayList<JSONObject> pickupRows = new ArrayList<>();
     final ArrayList<JSONObject> printerNodes = new ArrayList<>();
+    final ArrayList<JSONObject> consumableRows = new ArrayList<>();
     final ArrayList<JSONObject> archiveRows = new ArrayList<>();
 
     SharedPreferences prefs;
@@ -393,6 +394,13 @@ public class MainActivity extends Activity {
                 renderActiveBody();
             }
         });
+        rpc("fts_printer_consumables_v81",obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken), result -> {
+            if(result instanceof JSONArray){
+                consumableRows.clear();JSONArray a=(JSONArray)result;
+                for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)consumableRows.add(o);}
+                renderActiveBody();
+            }
+        });
         rpc("fts_printer_archived_v80",obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken,"p_limit",100), result -> {
             if(result instanceof JSONArray){
                 archiveRows.clear();JSONArray a=(JSONArray)result;
@@ -557,17 +565,40 @@ public class MainActivity extends Activity {
         body.addView(noteView("Die physischen Druckjobs werden vom Mac-Print-Host parallel auf die freigegebenen Drucker verteilt."));
         if(printerNodes.isEmpty()){body.addView(noteView("Noch kein aktiver Mac-Printer gemeldet."));return;}
         for(JSONObject n:printerNodes){
+            String key=n.optString("printer_key","");
             LinearLayout card=card();
-            card.addView(txt(n.optString("display_name",n.optString("printer_key","Printer")),18,Color.WHITE,true));
+            card.addView(txt(n.optString("display_name",key.isEmpty()?"Printer":key),18,Color.WHITE,true));
             String st=n.optString("state","—");
             int eta=n.optInt("eta_seconds",0);
             card.addView(txt(st+(eta>0?" · ca. "+eta+" Sek.":""),14,"ERROR".equals(st)?Color.rgb(255,120,120):Color.rgb(130,220,170),true));
+            JSONObject cons=findConsumable(key);
+            String paper=cons==null||cons.isNull("paper_remaining")?"unbekannt":String.valueOf(cons.optInt("paper_remaining"));
+            String film=cons==null||cons.isNull("film_remaining")?"unbekannt":String.valueOf(cons.optInt("film_remaining"));
+            card.addView(txt("Papier: "+paper+" / 18 · Farbfilm: "+film+" / 54",13,Color.rgb(190,205,202),true));
+            LinearLayout supplies=row();
+            Button paperBtn=secondaryButton("18 Blatt eingelegt");
+            Button filmBtn=secondaryButton("Farbfilm eingelegt");
+            supplies.addView(paperBtn);supplies.addView(filmBtn);card.addView(supplies);
+            paperBtn.setOnClickListener(v->loadConsumable(key,"PAPER_PACK"));
+            filmBtn.setOnClickListener(v->loadConsumable(key,"FILM_CASSETTE"));
             String dev=n.optString("device_label","");
             if(!dev.isEmpty())card.addView(txt(dev,12,Color.rgb(150,170,167),false));
             String err=n.optString("last_error","");
             if(!err.isEmpty())card.addView(txt(err,12,Color.rgb(255,170,80),true));
             body.addView(card);
         }
+    }
+
+    JSONObject findConsumable(String printerKey){
+        for(JSONObject c:consumableRows)if(printerKey.equals(c.optString("printer_key","")))return c;
+        return null;
+    }
+
+    void loadConsumable(String printerKey,String component){
+        rpc("fts_printer_load_component_v81",obj(
+                "p_device_token",deviceToken,"p_session_token",sessionToken,
+                "p_event_token",selectedEventToken,"p_printer_key",printerKey,"p_component",component
+        ),r->{toast("Materialstatus aktualisiert.");refreshSelected();});
     }
 
     void renderCamera(LinearLayout body) {
@@ -722,7 +753,7 @@ public class MainActivity extends Activity {
     void logoutAndSwitch(){
         onMain=false;handler.removeCallbacksAndMessages(null);
         rpc("fts_printer_logout_v72",obj("p_device_token",deviceToken,"p_session_token",sessionToken),r->{});
-        sessionToken="";workUnits.clear();pickupRows.clear();printerNodes.clear();archiveRows.clear();prefs.edit().remove("session_token").apply();loadStaff();
+        sessionToken="";workUnits.clear();pickupRows.clear();printerNodes.clear();consumableRows.clear();archiveRows.clear();prefs.edit().remove("session_token").apply();loadStaff();
     }
 
     interface RpcCallback { void done(Object result); }
