@@ -31,17 +31,17 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.2.3-printer-health.zip
-            dist/FTS-Printer-macOS-v0.2.3-printer-health.dmg
+            dist/FTS-Printer-macOS-v0.2.4-printer-wakeup.zip
+            dist/FTS-Printer-macOS-v0.2.4-printer-wakeup.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.2.3-printer-health"
+          TAG="fts-printer-mac-v0.2.4-printer-wakeup"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.2.3-printer-health.zip dist/FTS-Printer-macOS-v0.2.3-printer-health.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.2.4-printer-wakeup.zip dist/FTS-Printer-macOS-v0.2.4-printer-wakeup.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.2.3-printer-health.zip dist/FTS-Printer-macOS-v0.2.3-printer-health.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.2.3 · Printer Health" --notes "Build 83 mit stabilerer Drucker-Erreichbarkeitsprüfung und automatischer Wiederverbindung."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.2.4-printer-wakeup.zip dist/FTS-Printer-macOS-v0.2.4-printer-wakeup.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.2.4 · Printer Wake-up" --notes "Build 84 mit Wake-up-Retry: ein einzelner AirPrint/CUPS-Aussetzer blockiert keinen frischen Druckauftrag mehr."
           fi
