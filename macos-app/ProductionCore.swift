@@ -241,7 +241,15 @@ enum V80MacSpooler {
         let meta=Dictionary(uniqueKeysWithValues:names.map { name in
             (name,(deviceURI(printerName:name),printerDetails(printerName:name)))
         })
-        let hasUSBSELPHY=names.contains { name in
+        let usbSELPHYPresence=usbSELPHYPresent()
+        names=names.filter { name in
+            let info=meta[name] ?? ("","")
+            let hay=(name+" "+info.0+" "+info.1).lowercased()
+            let isUSBSELPHY=info.0.lowercased().hasPrefix("usb://") && (hay.contains("selphy") || hay.contains("cp1500"))
+            return !(isUSBSELPHY && !usbSELPHYPresence)
+        }
+
+        let hasUSBSELPHY=usbSELPHYPresence && names.contains { name in
             let info=meta[name] ?? ("","")
             let hay=(name+" "+info.0+" "+info.1).lowercased()
             return info.0.lowercased().hasPrefix("usb://") && (hay.contains("selphy") || hay.contains("cp1500"))
@@ -257,6 +265,26 @@ enum V80MacSpooler {
             }
         }
         return names
+    }
+
+    private static func usbSELPHYPresent()->Bool {
+        let p=Process()
+        p.executableURL=URL(fileURLWithPath:"/usr/sbin/ioreg")
+        p.arguments=["-p","IOUSB","-l","-w","0"]
+        let out=Pipe()
+        p.standardOutput=out
+        p.standardError=Pipe()
+        do {
+            try p.run()
+            p.waitUntilExit()
+            guard p.terminationStatus==0 else{return true}
+            let d=out.fileHandleForReading.readDataToEndOfFile()
+            let text=String(data:d,encoding:.utf8)?.lowercased() ?? ""
+            return text.contains("selphy") || text.contains("cp1500")
+        } catch {
+            // If hardware enumeration itself fails, do not hide a valid configured queue.
+            return true
+        }
     }
 
     private static func deviceURI(printerName:String)->String {
