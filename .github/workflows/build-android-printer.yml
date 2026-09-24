@@ -58,3 +58,20 @@ jobs:
           else
             gh release create "$TAG" dist-android/FTS-Printer-Samsung-v0.2.1-design.apk               --target "$GITHUB_SHA"               --title "FTS Printer Samsung / Android v0.2.1 · Schritt 2 Design"               --prerelease               --notes "Installierbare FTS Printer Schritt-2 APK im Schwarz/Gold/Cyan Design. Funktionskern bleibt erhalten; physischer Druck ist vor Ort am Samsung/Canon-System zu prüfen."
           fi
+
+      - name: Remove obsolete Android releases
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CURRENT="fts-printer-android-v0.2.1-design"
+          gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
+            case "$TAG" in
+              fts-printer-android-v*)
+                if [ "$TAG" != "$CURRENT" ]; then
+                  echo "Removing obsolete Android release $TAG"
+                  gh release delete "$TAG" --cleanup-tag -y || true
+                fi
+                ;;
+            esac
+          done
