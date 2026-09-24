@@ -404,7 +404,7 @@ final class ProductionCore: ObservableObject {
             let materialBlocked = waitingCount > 0 && !enabled.isEmpty && enabled.allSatisfy{ !materialReady(for:$0.name) }
             queueStatus = "\(qq.filter{$0.unit_status == "READY"}.count) Selfie-Einheiten warten · \(localWaitingCount) lokale Einheiten warten" + (materialBlocked ? " · Material nachfüllen" : "")
             await heartbeatAll(state: state)
-            if autoDispatch { dispatchAvailable(state: state) }
+            if autoDispatch && hasDispatchableWork { dispatchAvailable(state: state) }
         } catch {
             if !(await state.recoverAuthentication(from: error)) {
                 lastError = error.localizedDescription
@@ -414,6 +414,10 @@ final class ProductionCore: ObservableObject {
 
     var localWaitingCount: Int {
         localQueue.jobs.flatMap(\.units).filter { $0.status == .waiting }.count
+    }
+
+    var hasDispatchableWork: Bool {
+        localWaitingCount > 0 || workUnits.contains { $0.unit_status == "READY" }
     }
 
     private func heartbeatAll(state: AppState) async {
@@ -434,7 +438,7 @@ final class ProductionCore: ObservableObject {
     }
 
     func dispatchAvailable(state: AppState) {
-        guard autoDispatch else { return }
+        guard autoDispatch && hasDispatchableWork else { return }
         for slot in printerSlots where slot.enabled && slot.state == "IDLE" && materialReady(for: slot.name) {
             guard activePrinterTasks[slot.name] == nil else { continue }
             let name = slot.name
