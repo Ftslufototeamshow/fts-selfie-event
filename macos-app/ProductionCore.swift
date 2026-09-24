@@ -217,7 +217,9 @@ final class V80BorderlessPrintView: NSView {
 }
 
 enum V80MacSpooler {
-    static let minimumPhysicalSeconds: TimeInterval = 36
+    // CP1500 postcard prints are around the low-40-second range once printing begins.
+    // Never declare a photo finished merely because the CUPS queue clears early.
+    static let minimumPhysicalSeconds: TimeInterval = 42
     static let defaultSeconds: TimeInterval = 44
 
     @MainActor
