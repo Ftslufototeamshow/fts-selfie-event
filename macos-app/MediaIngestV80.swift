@@ -483,6 +483,7 @@ final class MediaIngestV80: ObservableObject {
             try fm.copyItem(at:file,to:dest)
             let item=V80MediaItem(
                 id:hash,sha256:hash,sourcePath:file.path,importedPath:dest.path,
+                designedPath:nil,designSignature:nil,
                 originalName:file.lastPathComponent,sourceType:"WIFI",sourceLabel:"W",
                 cardUUID:nil,cameraID:cameraIdentity(file),importedAt:Date()
             )
