@@ -628,7 +628,7 @@ final class AppState: ObservableObject {
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
-    static let appVersion = "0.2.5-login-recovery"
+    static let appVersion = "0.2.6-printer-autosync"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -715,7 +715,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.2.5-login-recovery"
+                "p_user_agent":"FTS Printer macOS 0.2.6-printer-autosync"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -746,7 +746,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.2.5-login-recovery"
+                "p_user_agent":"FTS Printer macOS 0.2.6-printer-autosync"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session
@@ -1221,10 +1221,16 @@ struct MainView: View {
                state.production.updateRelease?.build_number != postponedUpdateBuild,
                !printingActive { updatePrompt=true }
             var updateCheckTicks = 0
+            var printerDiscoveryTicks = 0
             while !Task.isCancelled {
                 await state.refreshSelected()
                 await state.production.refresh(state:state)
                 updateCheckTicks += 1
+                printerDiscoveryTicks += 1
+                if printerDiscoveryTicks >= 5 {
+                    printerDiscoveryTicks = 0
+                    state.production.discoverPrinters()
+                }
                 if updateCheckTicks >= 450 {
                     updateCheckTicks = 0
                     await state.production.checkUpdate(platform:"macos")
