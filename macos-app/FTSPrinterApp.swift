@@ -1168,7 +1168,7 @@ struct MainView: View {
             nav("Events","calendar",.events)
             nav("Druckaufträge","printer.fill",.orders)
             nav("SD-Karte / Import","sdcard.fill",.media,disabled:!canUseMedia)
-            Button{showStock=true}{
+            Button(action:{showStock=true}) {
                 Label("Materialbestand",systemImage:"shippingbox.fill")
                     .frame(maxWidth:.infinity,alignment:.leading).padding(.horizontal,12).padding(.vertical,10)
             }.buttonStyle(.plain).foregroundStyle(.white.opacity(0.88))
