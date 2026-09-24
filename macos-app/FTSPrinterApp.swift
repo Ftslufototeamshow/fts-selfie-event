@@ -1633,8 +1633,22 @@ struct OrderCard:View{
         HStack(alignment:.top,spacing:14){
             if let u=firstURL{
                 AsyncImage(url:u){phase in
-                    if let im=phase.image{im.resizable().scaledToFit()}
-                    else{ZStack{Color.black.opacity(0.2);ProgressView()}}
+                    switch phase {
+                    case .empty:
+                        ZStack{Color.black.opacity(0.2);ProgressView()}
+                    case .success(let image):
+                        image.resizable().scaledToFit()
+                    case .failure:
+                        ZStack {
+                            Color.black.opacity(0.2)
+                            VStack(spacing:6) {
+                                Image(systemName:"photo.badge.exclamationmark").font(.title2).foregroundStyle(.orange)
+                                Text("Vorschau nicht geladen").font(.caption2).foregroundStyle(FTSTheme.muted)
+                            }
+                        }
+                    @unknown default:
+                        Color.black.opacity(0.2)
+                    }
                 }.frame(width:150,height:190).background(.black.opacity(0.08)).clipShape(RoundedRectangle(cornerRadius:10))
             }
             VStack(alignment:.leading,spacing:8){
