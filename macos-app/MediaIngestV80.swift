@@ -110,8 +110,19 @@ final class MediaIngestV80: ObservableObject {
         UserDefaults.standard.set(selectedDay,forKey:daySelectionKey(event))
 
         if UserDefaults.standard.data(forKey:activationKey(event,day:selectedDay)) == nil,
-           UserDefaults.standard.data(forKey:legacyActivationKey(event)) != nil {
+           let legacyData=UserDefaults.standard.data(forKey:legacyActivationKey(event)),
+           let legacy=try? JSONDecoder().decode(V80MediaActivation.self,from:legacyData) {
             try? createDailyAlbums(event:event)
+            if let dayData=UserDefaults.standard.data(forKey:activationKey(event,day:selectedDay)),
+               let dayActivation=try? JSONDecoder().decode(V80MediaActivation.self,from:dayData),
+               var legacyManifest=try? Self.loadManifestSync(legacy),
+               var dayManifest=try? Self.loadManifestSync(dayActivation) {
+                dayManifest.baselines=legacyManifest.baselines
+                dayManifest.wlanKnownSourceKeys=legacyManifest.wlanKnownSourceKeys
+                dayManifest.wlanFingerprints=legacyManifest.wlanFingerprints
+                try? Self.saveManifestSync(dayManifest,dayActivation)
+                legacyManifest.items=[]
+            }
         }
 
         guard let d=UserDefaults.standard.data(forKey:activationKey(event,day:selectedDay)),
@@ -323,7 +334,10 @@ final class MediaIngestV80: ObservableObject {
                 guard let key=sourceKey(file,root:volume) else{continue}
                 // Wait until the camera/OS has finished writing the file.
                 let rv=try? file.resourceValues(forKeys:[.contentModificationDateKey,.fileSizeKey])
-                if let mod=rv?.contentModificationDate,Date().timeIntervalSince(mod)<1.5{continue}
+                if let mod=rv?.contentModificationDate {
+                    let age=Date().timeIntervalSince(mod)
+                    if age >= 0 && age < 1.5 { continue }
+                }
                 guard (rv?.fileSize ?? 0)>0 else{continue}
 
                 if baseline.knownSourceKeys.contains(key) {
@@ -368,7 +382,10 @@ final class MediaIngestV80: ObservableObject {
         for file in preferredMediaFiles(root:wlan) {
             let rv=try? file.resourceValues(forKeys:[.isRegularFileKey,.contentModificationDateKey,.fileSizeKey])
             guard rv?.isRegularFile==true,(rv?.fileSize ?? 0)>0 else{continue}
-            if let mod=rv?.contentModificationDate,Date().timeIntervalSince(mod)<1.5{continue}
+            if let mod=rv?.contentModificationDate {
+                    let age=Date().timeIntervalSince(mod)
+                    if age >= 0 && age < 1.5 { continue }
+                }
             guard let key=sourceKey(file,root:wlan) else{continue}
             if manifest.wlanKnownSourceKeys.contains(key) {
                 if let oldHash=manifest.wlanFingerprints?[key] {
