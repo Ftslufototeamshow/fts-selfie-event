@@ -468,7 +468,7 @@ final class MediaIngestV80: ObservableObject {
                 best[key]=f
             }
         }
-        return best.values.sorted{$0.path.localizedCaseInsensitiveCompare($1.path)==.orderedAscending}
+        return best.values.sorted{$0.path.localizedCaseInsensitiveCompare($1.path) == .orderedAscending}
     }
 
     nonisolated private static func supported(_ u:URL)->Bool {
