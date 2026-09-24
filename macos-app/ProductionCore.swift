@@ -327,6 +327,13 @@ final class ProductionCore: ObservableObject {
     private var activePrinterTasks: [String: Task<Void, Never>] = [:]
     private var lastDispatchedLocal = false
     private var loadedFolderPath = ""
+    private let hostID: String = {
+        let key = "fts.printer.host-id.v80"
+        if let existing = UserDefaults.standard.string(forKey:key), !existing.isEmpty { return existing }
+        let created = UUID().uuidString.lowercased()
+        UserDefaults.standard.set(created, forKey:key)
+        return created
+    }()
     private let api = FTSAPI.shared
 
     func loadLocalQueue(folderPath: String?) {
@@ -388,7 +395,10 @@ final class ProductionCore: ObservableObject {
             ])
             let (qq,nn,pp,aa,cons) = try await (q,n,p,a,cc)
             workUnits = qq; printerNodes = nn; pickups = pp; archived = aa; consumables = cons
-            queueStatus = "\(qq.filter{$0.unit_status == "READY"}.count) Selfie-Einheiten warten · \(localWaitingCount) lokale Einheiten warten"
+            let waitingCount = qq.filter{$0.unit_status == "READY"}.count + localWaitingCount
+            let enabled = printerSlots.filter{$0.enabled}
+            let materialBlocked = waitingCount > 0 && !enabled.isEmpty && enabled.allSatisfy{ !materialReady(for:$0.name) }
+            queueStatus = "\(qq.filter{$0.unit_status == "READY"}.count) Selfie-Einheiten warten · \(localWaitingCount) lokale Einheiten warten" + (materialBlocked ? " · Material nachfüllen" : "")
             await heartbeatAll(state: state)
             if autoDispatch { dispatchAvailable(state: state) }
         } catch {
@@ -409,7 +419,7 @@ final class ProductionCore: ObservableObject {
                 "p_device_token":dev,
                 "p_session_token":session,
                 "p_event_token":state.selectedEventToken,
-                "p_printer_key":slot.name,
+                "p_printer_key":backendPrinterKey(slot.name),
                 "p_display_name":slot.name,
                 "p_state":slot.state,
                 "p_eta_seconds":slot.eta,
@@ -421,7 +431,7 @@ final class ProductionCore: ObservableObject {
 
     func dispatchAvailable(state: AppState) {
         guard autoDispatch else { return }
-        for slot in printerSlots where slot.enabled && slot.state == "IDLE" {
+        for slot in printerSlots where slot.enabled && slot.state == "IDLE" && materialReady(for: slot.name) {
             guard activePrinterTasks[slot.name] == nil else { continue }
             let name = slot.name
             activePrinterTasks[name] = Task { [weak self, weak state] in
@@ -459,8 +469,9 @@ final class ProductionCore: ObservableObject {
         do {
             let claim: V80Claim = try await api.rpc("fts_printer_claim_next_v80", body: [
                 "p_device_token":dev, "p_session_token":session,
-                "p_event_token":state.selectedEventToken, "p_printer_key":printerName
+                "p_event_token":state.selectedEventToken, "p_printer_key":backendPrinterKey(printerName)
             ])
+            if claim.error == "MATERIAL_EMPTY" { return }
             if claim.empty == true || claim.busy == true || claim.unit_id == nil { return }
             guard let unitID=claim.unit_id, let path=claim.designed_path else { return }
             setSlot(printerName,state:"TRANSFER",eta:Int(V80MacSpooler.learnedSeconds(printerName:printerName)),current:unitID,error:nil)
@@ -535,14 +546,31 @@ final class ProductionCore: ObservableObject {
         do {
             let _:JSONValue = try await api.rpc("fts_printer_load_component_v81",body:[
                 "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
-                "p_printer_key":printerName,"p_component":component
+                "p_printer_key":backendPrinterKey(printerName),"p_component":component
             ])
             await refresh(state:state)
         } catch { lastError=error.localizedDescription }
     }
 
     func consumable(for printerName:String)->V81Consumable? {
-        consumables.first{$0.printer_key==printerName}
+        consumables.first{$0.printer_key==backendPrinterKey(printerName)}
+    }
+
+    func materialReady(for printerName:String) -> Bool {
+        guard let c = consumable(for:printerName) else { return true }
+        return (c.paper_remaining ?? 1) > 0 && (c.film_remaining ?? 1) > 0
+    }
+
+    func materialMessage(for printerName:String) -> String? {
+        guard let c = consumable(for:printerName) else { return nil }
+        if (c.paper_remaining ?? 1) <= 0 && (c.film_remaining ?? 1) <= 0 { return "Papier und Farbfilm leer" }
+        if (c.paper_remaining ?? 1) <= 0 { return "Papier leer" }
+        if (c.film_remaining ?? 1) <= 0 { return "Farbfilm leer" }
+        return nil
+    }
+
+    private func backendPrinterKey(_ printerName:String) -> String {
+        hostID + "::" + printerName
     }
 
     func clearPrinterError(_ name:String) {
@@ -597,7 +625,7 @@ final class ProductionCore: ObservableObject {
             V80MacSpooler.rememberDuration(Date().timeIntervalSince(start),printerName:printerName)
             let _:Bool? = try? await api.rpc("fts_printer_consume_local_components_v81",body:[
                 "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
-                "p_printer_key":printerName,"p_quantity":1
+                "p_printer_key":backendPrinterKey(printerName),"p_quantity":1
             ],as:Bool.self)
 
             guard let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
