@@ -202,7 +202,9 @@ final class V80BorderlessPrintView: NSView {
         NSColor.black.setFill()
         bounds.fill()
         let iw = max(image.size.width, 1), ih = max(image.size.height, 1)
-        let scale = max(bounds.width / iw, bounds.height / ih)
+        // CP1500 borderless safety bleed: fill the nominal 10×15 surface and
+        // overscan 1.8% so driver/paper tolerances cannot expose a white hairline.
+        let scale = max(bounds.width / iw, bounds.height / ih) * 1.018
         let s = NSSize(width: iw * scale, height: ih * scale)
         let r = NSRect(
             x: (bounds.width - s.width) / 2,
