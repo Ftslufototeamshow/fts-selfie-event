@@ -461,7 +461,8 @@ struct V80MediaItemCell: View {
 
     var body: some View {
         VStack(alignment:.leading,spacing:7) {
-            if let image=NSImage(contentsOfFile:item.importedPath) {
+            let previewPath=(item.designedPath?.isEmpty == false) ? item.designedPath! : item.importedPath
+            if let image=NSImage(contentsOfFile:previewPath) {
                 Image(nsImage:image)
                     .resizable()
                     .scaledToFill()
@@ -473,6 +474,9 @@ struct V80MediaItemCell: View {
             Text(item.originalName).font(.caption.bold()).lineLimit(1)
             Text(item.sourceType=="WIFI" ? "WLAN" : "Karte \(item.sourceLabel)")
                 .font(.caption2).foregroundStyle(.secondary)
+            if item.designedPath?.isEmpty == false {
+                Text("Selfie-Design angewendet").font(.caption2).foregroundStyle(.green)
+            }
             Stepper(value:$quantity,in:0...20) {
                 Text("Anzahl: \(quantity)").font(.caption.bold())
             }
