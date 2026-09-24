@@ -68,7 +68,7 @@ struct ProductionQueueContent: View {
 
             ScrollView {
                 LazyVStack(alignment:.leading,spacing:10) {
-                    if groupedOrders.isEmpty && core.localQueue.jobs.filter({$0.status != .archived && $0.status != .cancelled}).isEmpty {
+                    if groupedOrders.isEmpty && core.localQueue.jobs.filter({$0.status != .archived && $0.status != .cancelled && $0.status != .readyForPickup}).isEmpty {
                         VStack(spacing:10){
                             Image(systemName:"printer").font(.system(size:34)).foregroundStyle(.secondary)
                             Text("Keine Druckaufträge").font(.headline)
@@ -105,7 +105,7 @@ struct ProductionQueueContent: View {
                         .padding(12).background(Color(nsColor:.controlBackgroundColor)).clipShape(RoundedRectangle(cornerRadius:12))
                     }
 
-                    ForEach(core.localQueue.jobs.filter{$0.status != .archived && $0.status != .cancelled}) { job in
+                    ForEach(core.localQueue.jobs.filter{$0.status != .archived && $0.status != .cancelled && $0.status != .readyForPickup}) { job in
                         let printed=job.units.filter{$0.status == .printed}.count
                         VStack(alignment:.leading,spacing:7) {
                             HStack {
