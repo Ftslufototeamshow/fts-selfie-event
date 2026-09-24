@@ -47,6 +47,8 @@ public class MainActivity extends Activity {
     String selectedEventToken = "";
     JSONObject stock = null;
     LinearLayout root, content;
+    ScrollView mainScroll;
+    final Set<String> actionLocks = Collections.synchronizedSet(new HashSet<>());
     Spinner eventSpinner;
     TextView statusText, stockText, userText;
     boolean onMain = false;
@@ -60,6 +62,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         prefs = getSharedPreferences("fts_printer", MODE_PRIVATE);
         deviceToken = prefs.getString("device_token","");
         sessionToken = prefs.getString("session_token","");
@@ -84,12 +87,17 @@ public class MainActivity extends Activity {
         statusText = txt("Startet …", 12, Color.rgb(150,170,167), false);
         root.addView(statusText);
 
-        ScrollView sv = new ScrollView(this);
+        mainScroll = new ScrollView(this);
+        mainScroll.setFillViewport(true);
+        mainScroll.setVerticalScrollBarEnabled(true);
+        mainScroll.setScrollbarFadingEnabled(false);
+        mainScroll.setSmoothScrollingEnabled(true);
+        mainScroll.setClipToPadding(false);
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(0,dp(18),0,dp(30));
-        sv.addView(content);
-        root.addView(sv, new LinearLayout.LayoutParams(-1,0,1));
+        mainScroll.addView(content,new ScrollView.LayoutParams(-1,-2));
+        root.addView(mainScroll, new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
     }
 
@@ -432,6 +440,7 @@ public class MainActivity extends Activity {
     void renderOrders(LinearLayout body) {
         activeScreen="orders";
         body.removeAllViews();
+        scrollTop();
         TextView h=txt("Automatische Druckaufträge",20,Color.WHITE,true);body.addView(h);
         body.addView(noteView("Der Mac-Print-Host verteilt jedes bezahlte Exemplar automatisch auf den nächsten freien Drucker. Das Samsung löst keinen zweiten Druck aus."));
 
@@ -517,6 +526,7 @@ public class MainActivity extends Activity {
         activeScreen="pickup";
         pickupFilter=filter==null?"":filter;
         body.removeAllViews();
+        scrollTop();
         body.addView(txt("Kundenabholung",20,Color.WHITE,true));
         body.addView(noteView(pickupRows.size()+" Auftrag"+(pickupRows.size()==1?"":"e")+" warten auf Abholung."));
 
@@ -549,7 +559,7 @@ public class MainActivity extends Activity {
                 }
             }
             Button done=button("Foto abgeholt");actions.addView(done);
-            done.setOnClickListener(v->markPickupRow(p));
+            done.setOnClickListener(v->markPickupRow(p,done));
             card.addView(actions);
             body.addView(card);
         }
@@ -563,42 +573,58 @@ public class MainActivity extends Activity {
             if("printer_admin".equals(currentRole)){
                 Button remove=secondaryButton("Entfernen");
                 ar.addView(remove);
-                remove.setOnClickListener(v->hideArchived(a));
+                remove.setOnClickListener(v->hideArchived(a,remove));
             }
             body.addView(ar);
         }
     }
 
-    void hideArchived(JSONObject a){
+    void hideArchived(JSONObject a,Button source){
         String kind=a.optString("kind","");
         String id=a.optString("id","");
         if(kind.isEmpty()||id.isEmpty())return;
+        String lock="archive:"+id;
         new AlertDialog.Builder(this)
                 .setTitle("Aus Archiv entfernen?")
                 .setMessage("Der Eintrag verschwindet aus der operativen Archivliste. Kundenbeleg und Buchhaltungsdaten werden dadurch nicht gelöscht.")
                 .setNegativeButton("Abbrechen",null)
-                .setPositiveButton("Entfernen",(d,w)->rpc("fts_printer_hide_archived_v82",obj(
-                        "p_device_token",deviceToken,
-                        "p_session_token",sessionToken,
-                        "p_kind",kind,
-                        "p_item_id",id
-                ),r->{toast(Boolean.TRUE.equals(r)?"Aus Archiv entfernt.":"Eintrag konnte nicht entfernt werden.");refreshSelected();}))
+                .setPositiveButton("Entfernen",(d,w)->{
+                    if(!beginAction(lock,source))return;
+                    rpc("fts_printer_hide_archived_v82",obj(
+                            "p_device_token",deviceToken,
+                            "p_session_token",sessionToken,
+                            "p_kind",kind,
+                            "p_item_id",id
+                    ),r->{
+                        endAction(lock,source);
+                        toast(Boolean.TRUE.equals(r)?"Aus Archiv entfernt.":"Eintrag konnte nicht entfernt werden.");
+                        refreshSelected();
+                    });
+                })
                 .show();
     }
 
-    void markPickupRow(JSONObject p){
+    void markPickupRow(JSONObject p,Button source){
         String kind=p.optString("kind","SELFIE");
         String id=p.optString("id","");
+        String lock="pickup:"+id;
+        if(!beginAction(lock,source))return;
         String rpcName="LOCAL".equalsIgnoreCase(kind)?"fts_printer_mark_local_picked_up_archive_v80":"fts_printer_mark_picked_up_archive_v80";
         JSONObject args="LOCAL".equalsIgnoreCase(kind)
                 ?obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_local_job_id",id)
                 :obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_order_id",id);
-        rpc(rpcName,args,r->{toast(Boolean.TRUE.equals(r)?"Abgeholt und archiviert.":"Auftrag ist nicht abholbereit.");pickupFilter="";refreshSelected();});
+        rpc(rpcName,args,r->{
+            endAction(lock,source);
+            toast(Boolean.TRUE.equals(r)?"Abgeholt und archiviert.":"Auftrag ist nicht abholbereit.");
+            pickupFilter="";
+            refreshSelected();
+        });
     }
 
     void renderPrinters(LinearLayout body){
         activeScreen="printers";
         body.removeAllViews();
+        scrollTop();
         body.addView(txt("Printer-Aktivität",20,Color.WHITE,true));
         body.addView(noteView("Die physischen Druckjobs werden vom Mac-Print-Host parallel auf die freigegebenen Drucker verteilt."));
         if(printerNodes.isEmpty()){body.addView(noteView("Noch kein aktiver Mac-Printer gemeldet."));return;}
@@ -768,14 +794,23 @@ public class MainActivity extends Activity {
                 .setNegativeButton("Schließen",null)
                 .setPositiveButton("Buchen",null).create();
         dlg.setOnShowListener(x->dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            Button book=dlg.getButton(AlertDialog.BUTTON_POSITIVE);
+            String lock="stock-booking";
+            if(actionLocks.contains(lock))return;
             int q;try{q=Integer.parseInt(qty.getText().toString().trim());}catch(Exception e){toast("Gültige Menge eingeben.");return;}
             String code=pin.getText().toString().trim();if(code.isEmpty()){toast("Persönlichen Code erneut eingeben.");return;}
             String k=values.get(kind.getSelectedItemPosition());
+            if(!beginAction(lock,book))return;
             rpc("fts_printer_adjust_stock_v73",obj(
                     "p_device_token",deviceToken,"p_session_token",sessionToken,"p_code",code,
                     "p_event_token",selectedEventToken,"p_event_day",today(),"p_kind",k,"p_quantity",q,
                     "p_note",note.getText().toString().trim()
-            ),r->{toast("Bestand aktualisiert.");dlg.dismiss();refreshSelected();});
+            ),r->{
+                endAction(lock,book);
+                toast("Bestand aktualisiert.");
+                dlg.dismiss();
+                refreshSelected();
+            });
         }));
         dlg.show();
     }
@@ -929,6 +964,31 @@ public class MainActivity extends Activity {
     }
 
     void clear(){content.removeAllViews();}
+    void scrollTop(){
+        if(mainScroll!=null)mainScroll.post(()->mainScroll.smoothScrollTo(0,0));
+    }
+
+    boolean beginAction(String key,Button source){
+        synchronized(actionLocks){
+            if(actionLocks.contains(key))return false;
+            actionLocks.add(key);
+        }
+        if(source!=null){
+            source.setEnabled(false);
+            source.setAlpha(0.65f);
+        }
+        handler.postDelayed(()->endAction(key,source),20000);
+        return true;
+    }
+
+    void endAction(String key,Button source){
+        actionLocks.remove(key);
+        if(source!=null){
+            source.setEnabled(true);
+            source.setAlpha(1f);
+        }
+    }
+
     void addHeading(String s){content.addView(txt(s,24,Color.WHITE,true));}
     void addNote(String s){content.addView(noteView(s));}
     TextView noteView(String s){TextView t=txt(s,13,Color.rgb(150,170,167),false);t.setPadding(0,dp(8),0,dp(12));return t;}
