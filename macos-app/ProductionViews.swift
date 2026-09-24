@@ -42,7 +42,7 @@ struct ProductionQueueContent: View {
                 Text("Noch kein Ausgabedrucker aktiviert. Unter „System & Printer“ mindestens einen Canon-Drucker auswählen.")
                     .font(.callout).foregroundStyle(.orange)
             } else {
-                ScrollView(.horizontal,showsIndicators:false) {
+                ScrollView(.horizontal,showsIndicators:true) {
                     HStack(spacing:8) {
                         ForEach(core.printerSlots.filter(\.enabled)) { p in
                             VStack(alignment:.leading,spacing:4) {
@@ -66,7 +66,7 @@ struct ProductionQueueContent: View {
 
             Divider()
 
-            ScrollView {
+            ScrollView(.vertical,showsIndicators:true) {
                 LazyVStack(alignment:.leading,spacing:10) {
                     if groupedOrders.isEmpty && core.localQueue.jobs.filter({$0.status != .archived && $0.status != .cancelled && $0.status != .readyForPickup}).isEmpty {
                         VStack(spacing:10){
@@ -156,6 +156,7 @@ struct ProductionMediaContent: View {
     @State private var sourceLabel="A"
     @State private var quantities:[String:Int]=[:]
     @State private var lastCode=""
+    @State private var submitting=false
 
     var event:EventRow? { state.selectedEvent }
 
@@ -257,6 +258,7 @@ struct ProductionMediaContent: View {
                             Task{await ingest.register(card:card,label:label,event:e,replaceExisting:true)}
                         }
                     )
+                    .disabled(ingest.scanning)
                 }
             }.padding(.vertical,4)
         }
@@ -274,9 +276,9 @@ struct ProductionMediaContent: View {
             if total>0 {
                 Text("\(total) Ausdruck\(total==1 ? "" : "e") ausgewählt").font(.headline)
             }
-            Button("GO · Zum Druck"){submitSelection()}
+            Button(submitting ? "Wird angelegt …" : "GO · Zum Druck"){submitSelection()}
                 .buttonStyle(.borderedProminent)
-                .disabled(total==0)
+                .disabled(total==0 || submitting || ingest.scanning)
         }
     }
 
@@ -288,7 +290,7 @@ struct ProductionMediaContent: View {
     }
 
     private var mediaGrid: some View {
-        ScrollView {
+        ScrollView(.vertical,showsIndicators:true) {
             LazyVGrid(columns:[GridItem(.adaptive(minimum:180),spacing:10)],spacing:10) {
                 ForEach(visibleItems) { item in
                     V80MediaItemCell(
@@ -315,7 +317,8 @@ struct ProductionMediaContent: View {
     }
 
     private func submitSelection() {
-        guard total>0 else{return}
+        guard total>0, !submitting else{return}
+        submitting=true
         var selection:[V80MediaItem:Int]=[:]
         for item in visibleItems {
             let q=quantities[item.id] ?? 0
@@ -324,6 +327,7 @@ struct ProductionMediaContent: View {
         let selectedType = sourceLabel=="W" ? "WIFI":"SD"
         let selectedLabel = sourceLabel
         Task {
+            defer { submitting=false }
             if let code=await core.createLocalJob(
                 state:state,
                 media:selection,
@@ -461,7 +465,7 @@ struct ProductionPickupContent: View {
                 TextField("Abholcode suchen",text:$search).textFieldStyle(.roundedBorder).frame(width:240)
                 Button("Neu laden"){Task{await core.refresh(state:state)}}
             }
-            ScrollView {
+            ScrollView(.vertical,showsIndicators:true) {
                 LazyVStack(spacing:10) {
                     ForEach(filtered) { p in
                         HStack(spacing:14) {
@@ -477,9 +481,11 @@ struct ProductionPickupContent: View {
                                order.receipt_number != nil {
                                 Button("Beleg für Kunden"){Task{await state.showReceipt(order)}}
                             }
-                            Button("Foto abgeholt") {
+                            Button(core.pickupActionsInFlight.contains(p.id) ? "Wird archiviert …" : "Foto abgeholt") {
                                 Task{await core.markPickedUp(p,state:state)}
-                            }.buttonStyle(.borderedProminent)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(core.pickupActionsInFlight.contains(p.id))
                         }
                         .padding(12).background(Color(nsColor:.controlBackgroundColor)).clipShape(RoundedRectangle(cornerRadius:12))
                     }
@@ -496,9 +502,11 @@ struct ProductionPickupContent: View {
                                     Spacer()
                                     Text("\(a.quantity) ×").font(.caption)
                                     if state.currentUser?.role=="printer_admin" {
-                                        Button("Aus Archiv entfernen",role:.destructive) {
+                                        Button(core.archiveActionsInFlight.contains(a.id) ? "Wird entfernt …" : "Aus Archiv entfernen",role:.destructive) {
                                             Task{await core.hideArchived(a,state:state)}
-                                        }.font(.caption)
+                                        }
+                                        .font(.caption)
+                                        .disabled(core.archiveActionsInFlight.contains(a.id))
                                     }
                                 }.padding(7)
                             }
@@ -568,7 +576,7 @@ struct ProductionSystemContent:View {
     }
 
     var body:some View {
-        ScrollView {
+        ScrollView(.vertical,showsIndicators:true) {
             VStack(alignment:.leading,spacing:16) {
                 HStack {
                     Text("System & Printer").font(.title3.bold())
