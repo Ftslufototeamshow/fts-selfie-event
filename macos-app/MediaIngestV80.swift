@@ -6,6 +6,7 @@ import ImageIO
 
 struct V80MediaActivation: Codable, Hashable {
     let eventToken: String
+    let eventDay: String?
     let folderPath: String
     let wlanInputPath: String
     let activatedAt: Date
@@ -62,6 +63,7 @@ struct V80MediaManifest: Codable {
 @MainActor
 final class MediaIngestV80: ObservableObject {
     @Published var activation: V80MediaActivation?
+    @Published var selectedDay = ""
     @Published var items: [V80MediaItem] = []
     @Published var detectedCards: [V80DetectedCard] = []
     @Published var registeredCardLabels: Set<String> = []
@@ -69,42 +71,120 @@ final class MediaIngestV80: ObservableObject {
     @Published var scanning = false
     @Published var lastImportedCount = 0
 
-    private func activationKey(_ event: EventRow) -> String { "fts.media.activation.v80.\(event.event_token)" }
+    private func legacyActivationKey(_ event: EventRow) -> String { "fts.media.activation.v80.\(event.event_token)" }
+    private func activationKey(_ event: EventRow, day: String) -> String { "fts.media.activation.v92.\(event.event_token).\(day)" }
+    private func daySelectionKey(_ event: EventRow) -> String { "fts.media.day.v92.\(event.event_token)" }
+
+    func eventDays(_ event: EventRow) -> [String] {
+        var days:[String]=[]
+        if let values=event.event_days?.array {
+            for value in values {
+                if let d=value.string, !d.isEmpty, !days.contains(d) { days.append(d) }
+            }
+        }
+        if days.isEmpty, let d=event.event_date, !d.isEmpty { days=[d] }
+        return days.sorted()
+    }
+
+    private func todayString() -> String {
+        let f=DateFormatter()
+        f.calendar=Calendar(identifier:.gregorian)
+        f.locale=Locale(identifier:"en_US_POSIX")
+        f.timeZone=TimeZone(identifier:"Europe/Luxembourg") ?? .current
+        f.dateFormat="yyyy-MM-dd"
+        return f.string(from:Date())
+    }
+
+    private func preferredDay(for event: EventRow) -> String {
+        let days=eventDays(event)
+        let saved=UserDefaults.standard.string(forKey:daySelectionKey(event))
+        if let saved,days.contains(saved){return saved}
+        let today=todayString()
+        if days.contains(today){return today}
+        return days.first ?? event.event_date ?? today
+    }
 
     func load(event: EventRow) {
-        guard let d=UserDefaults.standard.data(forKey:activationKey(event)),
+        let day=selectedDay.isEmpty ? preferredDay(for:event) : selectedDay
+        selectedDay=eventDays(event).contains(day) ? day : preferredDay(for:event)
+        UserDefaults.standard.set(selectedDay,forKey:daySelectionKey(event))
+
+        if UserDefaults.standard.data(forKey:activationKey(event,day:selectedDay)) == nil,
+           UserDefaults.standard.data(forKey:legacyActivationKey(event)) != nil {
+            try? createDailyAlbums(event:event)
+        }
+
+        guard let d=UserDefaults.standard.data(forKey:activationKey(event,day:selectedDay)),
               let a=try? JSONDecoder().decode(V80MediaActivation.self,from:d),
               FileManager.default.fileExists(atPath:a.folderPath) else {
-            activation=nil;items=[];detectedCards=[];registeredCardLabels=[];status="Event-Album noch nicht aktiviert.";return
+            activation=nil;items=[];detectedCards=[];registeredCardLabels=[]
+            status="Tagesalbum \(selectedDay) noch nicht aktiviert.";return
         }
         activation=a
         loadManifest()
-        status="Event-Album aktiv."
+        status="Tagesalbum \(selectedDay) aktiv."
+    }
+
+    func selectDay(_ day:String,event:EventRow) {
+        guard eventDays(event).contains(day) else{return}
+        selectedDay=day
+        UserDefaults.standard.set(day,forKey:daySelectionKey(event))
+        load(event:event)
     }
 
     func activate(event: EventRow) throws {
+        if selectedDay.isEmpty { selectedDay=preferredDay(for:event) }
+        try createDailyAlbums(event:event)
+        load(event:event)
+        status="Tagesalbum \(selectedDay) aktiv. SD-Karten können A/B/C/D zugeordnet werden."
+    }
+
+    private func createDailyAlbums(event:EventRow) throws {
         let fm=FileManager.default
         let pictures=fm.urls(for:.picturesDirectory,in:.userDomainMask).first
             ?? fm.homeDirectoryForCurrentUser.appendingPathComponent("Pictures")
         let root=pictures.appendingPathComponent("FTS Print Events",isDirectory:true)
         let code=sanitize(event.short_code ?? event.event_token)
         let name=sanitize(event.event_title)
-        let folder=root.appendingPathComponent("\(code) - \(name)",isDirectory:true)
-        let original=folder.appendingPathComponent("Kamera Original",isDirectory:true)
-        let wlan=folder.appendingPathComponent("WLAN Kamera Eingang",isDirectory:true)
-        try fm.createDirectory(at:original,withIntermediateDirectories:true)
-        try fm.createDirectory(at:folder.appendingPathComponent("Druckbereit",isDirectory:true),withIntermediateDirectories:true)
-        try fm.createDirectory(at:wlan,withIntermediateDirectories:true)
+        let eventRoot=root.appendingPathComponent("\(code) - \(name)",isDirectory:true)
+        try fm.createDirectory(at:eventRoot,withIntermediateDirectories:true)
 
-        let a=V80MediaActivation(eventToken:event.event_token,folderPath:folder.path,wlanInputPath:wlan.path,activatedAt:Date())
-        activation=a
-        UserDefaults.standard.set(try JSONEncoder().encode(a),forKey:activationKey(event))
-        let manifestURL=folder.appendingPathComponent(".fts-media-manifest-v80.json")
-        if !fm.fileExists(atPath:manifestURL.path) {
-            try JSONEncoder().encode(V80MediaManifest()).write(to:manifestURL,options:.atomic)
+        var days=eventDays(event)
+        if days.isEmpty { days=[selectedDay.isEmpty ? todayString() : selectedDay] }
+        for day in days {
+            let folder=eventRoot.appendingPathComponent(day,isDirectory:true)
+            let original=folder.appendingPathComponent("Kamera Original",isDirectory:true)
+            let wlan=folder.appendingPathComponent("WLAN Kamera Eingang",isDirectory:true)
+            try fm.createDirectory(at:original,withIntermediateDirectories:true)
+            try fm.createDirectory(at:folder.appendingPathComponent("Druckbereit",isDirectory:true),withIntermediateDirectories:true)
+            try fm.createDirectory(at:wlan,withIntermediateDirectories:true)
+
+            let a=V80MediaActivation(eventToken:event.event_token,eventDay:day,folderPath:folder.path,wlanInputPath:wlan.path,activatedAt:Date())
+            UserDefaults.standard.set(try JSONEncoder().encode(a),forKey:activationKey(event,day:day))
+            let manifestURL=folder.appendingPathComponent(".fts-media-manifest-v80.json")
+            if !fm.fileExists(atPath:manifestURL.path) {
+                try JSONEncoder().encode(V80MediaManifest()).write(to:manifestURL,options:.atomic)
+            }
         }
-        loadManifest()
-        status="Event-Album aktiv. SD-Karten können jetzt A/B/C/D zugeordnet werden."
+    }
+
+    func clearCurrentDayLocal() throws {
+        guard let a=activation else{return}
+        let fm=FileManager.default
+        var manifest=try Self.loadManifestSync(a)
+        let folder=URL(fileURLWithPath:a.folderPath,isDirectory:true)
+        for name in ["Kamera Original","Druckbereit"] {
+            let u=folder.appendingPathComponent(name,isDirectory:true)
+            if fm.fileExists(atPath:u.path){try fm.removeItem(at:u)}
+            try fm.createDirectory(at:u,withIntermediateDirectories:true)
+        }
+        manifest.items=[]
+        try Self.saveManifestSync(manifest,a)
+        let queue=folder.appendingPathComponent(".fts-local-print-queue-v80.json")
+        if fm.fileExists(atPath:queue.path){try fm.removeItem(at:queue)}
+        items=[]
+        lastImportedCount=0
+        status="Tagesalbum \(selectedDay) geleert. Karte/WLAN-Startbestand bleibt geschützt."
     }
 
     func revealEventFolder() {
@@ -222,9 +302,22 @@ final class MediaIngestV80: ObservableObject {
         for card in cards {
             guard let marker=card.marker,marker.eventToken==eventToken else{continue}
             let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
-            guard var baseline=manifest.baselines[marker.cardUUID] else {
+            if manifest.baselines[marker.cardUUID] == nil {
+                var keys=Set<String>()
+                var fingerprints:[String:String]=[:]
+                for file in mediaFiles(on:volume) {
+                    if let key=sourceKey(file,root:volume) {
+                        keys.insert(key)
+                        fingerprints[key]=(try? sha256(file)) ?? ""
+                    }
+                }
+                manifest.baselines[marker.cardUUID]=V80CardBaseline(
+                    cardUUID:marker.cardUUID,label:marker.label,knownSourceKeys:keys,
+                    knownFingerprints:fingerprints,createdAt:Date()
+                )
                 continue
             }
+            guard var baseline=manifest.baselines[marker.cardUUID] else { continue }
 
             for file in mediaFiles(on:volume) {
                 guard let key=sourceKey(file,root:volume) else{continue}
@@ -272,35 +365,32 @@ final class MediaIngestV80: ObservableObject {
         let wlanArchive=URL(fileURLWithPath:activation.folderPath)
             .appendingPathComponent("Kamera Original/WLAN",isDirectory:true)
         try fm.createDirectory(at:wlanArchive,withIntermediateDirectories:true)
-        if let en=fm.enumerator(at:wlan,includingPropertiesForKeys:[.isRegularFileKey,.contentModificationDateKey,.fileSizeKey],options:[.skipsHiddenFiles,.skipsPackageDescendants]) {
-            for case let file as URL in en {
-                guard supported(file) else{continue}
-                let rv=try? file.resourceValues(forKeys:[.isRegularFileKey,.contentModificationDateKey,.fileSizeKey])
-                guard rv?.isRegularFile==true,(rv?.fileSize ?? 0)>0 else{continue}
-                if let mod=rv?.contentModificationDate,Date().timeIntervalSince(mod)<1.5{continue}
-                guard let key=sourceKey(file,root:wlan) else{continue}
-                if manifest.wlanKnownSourceKeys.contains(key) {
-                    if let oldHash=manifest.wlanFingerprints?[key] {
-                        let currentHash=try sha256(file)
-                        if currentHash==oldHash { continue }
-                    } else {
-                        continue
-                    }
+        for file in preferredMediaFiles(root:wlan) {
+            let rv=try? file.resourceValues(forKeys:[.isRegularFileKey,.contentModificationDateKey,.fileSizeKey])
+            guard rv?.isRegularFile==true,(rv?.fileSize ?? 0)>0 else{continue}
+            if let mod=rv?.contentModificationDate,Date().timeIntervalSince(mod)<1.5{continue}
+            guard let key=sourceKey(file,root:wlan) else{continue}
+            if manifest.wlanKnownSourceKeys.contains(key) {
+                if let oldHash=manifest.wlanFingerprints?[key] {
+                    let currentHash=try sha256(file)
+                    if currentHash==oldHash { continue }
+                } else {
+                    continue
                 }
-                let hash=try sha256(file)
-                manifest.wlanKnownSourceKeys.insert(key)
-                if manifest.wlanFingerprints == nil { manifest.wlanFingerprints=[:] }
-                manifest.wlanFingerprints?[key]=hash
-                if hashes.contains(hash){continue}
-                let dest=uniqueDestination(folder:wlanArchive,name:file.lastPathComponent)
-                try fm.copyItem(at:file,to:dest)
-                let item=V80MediaItem(
-                    id:hash,sha256:hash,sourcePath:file.path,importedPath:dest.path,
-                    originalName:file.lastPathComponent,sourceType:"WIFI",sourceLabel:"W",
-                    cardUUID:nil,cameraID:cameraIdentity(file),importedAt:Date()
-                )
-                manifest.items.append(item);hashes.insert(hash);newCount+=1
             }
+            let hash=try sha256(file)
+            manifest.wlanKnownSourceKeys.insert(key)
+            if manifest.wlanFingerprints == nil { manifest.wlanFingerprints=[:] }
+            manifest.wlanFingerprints?[key]=hash
+            if hashes.contains(hash){continue}
+            let dest=uniqueDestination(folder:wlanArchive,name:file.lastPathComponent)
+            try fm.copyItem(at:file,to:dest)
+            let item=V80MediaItem(
+                id:hash,sha256:hash,sourcePath:file.path,importedPath:dest.path,
+                originalName:file.lastPathComponent,sourceType:"WIFI",sourceLabel:"W",
+                cardUUID:nil,cameraID:cameraIdentity(file),importedAt:Date()
+            )
+            manifest.items.append(item);hashes.insert(hash);newCount+=1
         }
 
         try saveManifestSync(manifest,activation)
@@ -335,16 +425,46 @@ final class MediaIngestV80: ObservableObject {
         let fm=FileManager.default
         let dcim=volume.appendingPathComponent("DCIM",isDirectory:true)
         let root=fm.fileExists(atPath:dcim.path) ? dcim : volume
-        guard let en=fm.enumerator(at:root,includingPropertiesForKeys:[.isRegularFileKey,.contentModificationDateKey,.fileSizeKey],options:[.skipsHiddenFiles,.skipsPackageDescendants]) else{return[]}
-        var result:[URL]=[]
-        for case let f as URL in en where supported(f) {
-            if (try? f.resourceValues(forKeys:[.isRegularFileKey]).isRegularFile)==true{result.append(f)}
+        return preferredMediaFiles(root:root)
+    }
+
+    // Cameras often save RAW + JPEG with the same base filename.
+    // FTS imports exactly one file per pair and prefers the much smaller JPEG.
+    // RAW remains a fallback only when no JPEG/HEIC/PNG partner exists.
+    nonisolated private static func preferredMediaFiles(root:URL) -> [URL] {
+        let fm=FileManager.default
+        guard let en=fm.enumerator(
+            at:root,
+            includingPropertiesForKeys:[.isRegularFileKey,.contentModificationDateKey,.fileSizeKey],
+            options:[.skipsHiddenFiles,.skipsPackageDescendants]
+        ) else{return[]}
+
+        var best:[String:URL]=[:]
+        for case let f as URL in en {
+            guard supported(f),(try? f.resourceValues(forKeys:[.isRegularFileKey]).isRegularFile)==true else{continue}
+            let parent=f.deletingLastPathComponent().path.lowercased()
+            let stem=f.deletingPathExtension().lastPathComponent.lowercased()
+            let key=parent+"|"+stem
+            if let old=best[key] {
+                if preferenceRank(f)<preferenceRank(old){best[key]=f}
+            } else {
+                best[key]=f
+            }
         }
-        return result
+        return best.values.sorted{$0.path.localizedCaseInsensitiveCompare($1.path)==.orderedAscending}
     }
 
     nonisolated private static func supported(_ u:URL)->Bool {
-        ["jpg","jpeg","heic","png"].contains(u.pathExtension.lowercased())
+        ["jpg","jpeg","heic","hif","png","cr3","cr2","dng","nef","arw","raf"].contains(u.pathExtension.lowercased())
+    }
+
+    nonisolated private static func preferenceRank(_ u:URL)->Int {
+        switch u.pathExtension.lowercased() {
+        case "jpg","jpeg": return 0
+        case "heic","hif": return 1
+        case "png": return 2
+        default: return 10
+        }
     }
 
     nonisolated private static func sourceKey(_ file:URL,root:URL)->String? {
