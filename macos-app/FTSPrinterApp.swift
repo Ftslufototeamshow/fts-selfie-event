@@ -1637,8 +1637,19 @@ struct ReceiptSheet:View{
 
 // MARK: - App
 
+final class FTSAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        if let url=Bundle.main.url(forResource:"fts_printer_icon",withExtension:"jpg"),
+           let image=NSImage(contentsOf:url) {
+            NSApp.applicationIconImage=image
+        }
+    }
+}
+
+
 @main
 struct FTSPrinterApp: App {
+    @NSApplicationDelegateAdaptor(FTSAppDelegate.self) private var appDelegate
     @StateObject private var state=AppState()
     var body:some Scene{
         WindowGroup{
