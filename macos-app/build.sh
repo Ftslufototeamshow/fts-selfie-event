@@ -21,9 +21,9 @@ cp "$ROOT/macos-app/Resources/fts_printer_header.jpg" "$RES/fts_printer_header.j
 cp "$ROOT/macos-app/Resources/fts_printer_icon.jpg" "$RES/fts_printer_icon.jpg"
 chmod +x "$MACOS/FTS Printer"
 codesign --force --deep --sign - "$APP"
-rm -f "$DIST/FTS-Printer-macOS-v0.2.2-dayalbums.zip" "$DIST/FTS-Printer-macOS-v0.2.2-dayalbums.dmg"
-ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/FTS-Printer-macOS-v0.2.2-dayalbums.zip"
-DMG="$DIST/FTS-Printer-macOS-v0.2.2-dayalbums.dmg"
+rm -f "$DIST/FTS-Printer-macOS-v0.2.3-printer-health.zip" "$DIST/FTS-Printer-macOS-v0.2.3-printer-health.dmg"
+ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/FTS-Printer-macOS-v0.2.3-printer-health.zip"
+DMG="$DIST/FTS-Printer-macOS-v0.2.3-printer-health.dmg"
 rm -f "$DMG"
 for attempt in 1 2 3; do
   if hdiutil create -volname "FTS Printer" -srcfolder "$APP" -ov -format UDZO "$DMG"; then
