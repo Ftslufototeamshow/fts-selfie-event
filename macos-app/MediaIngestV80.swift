@@ -62,6 +62,7 @@ final class MediaIngestV80: ObservableObject {
     @Published var activation: V80MediaActivation?
     @Published var items: [V80MediaItem] = []
     @Published var detectedCards: [V80DetectedCard] = []
+    @Published var registeredCardLabels: Set<String> = []
     @Published var status = "Lokales Event-Album noch nicht aktiviert."
     @Published var scanning = false
     @Published var lastImportedCount = 0
@@ -72,7 +73,7 @@ final class MediaIngestV80: ObservableObject {
         guard let d=UserDefaults.standard.data(forKey:activationKey(event)),
               let a=try? JSONDecoder().decode(V80MediaActivation.self,from:d),
               FileManager.default.fileExists(atPath:a.folderPath) else {
-            activation=nil;items=[];detectedCards=[];status="Event-Album noch nicht aktiviert.";return
+            activation=nil;items=[];detectedCards=[];registeredCardLabels=[];status="Event-Album noch nicht aktiviert.";return
         }
         activation=a
         loadManifest()
@@ -114,7 +115,7 @@ final class MediaIngestV80: ObservableObject {
         NSWorkspace.shared.open(URL(fileURLWithPath:a.wlanInputPath))
     }
 
-    func register(card: V80DetectedCard, label: String, event: EventRow) async {
+    func register(card: V80DetectedCard, label: String, event: EventRow, replaceExisting: Bool = false) async {
         guard let a=activation else{return}
         let clean=label.uppercased().trimmingCharacters(in:.whitespacesAndNewlines)
         guard ["A","B","C","D"].contains(clean) else {
@@ -124,10 +125,11 @@ final class MediaIngestV80: ObservableObject {
         defer{scanning=false}
         do {
             let result=try await Task.detached(priority:.utility) {
-                try Self.registerSync(card:card,label:clean,eventToken:event.event_token,activation:a)
+                try Self.registerSync(card:card,label:clean,eventToken:event.event_token,activation:a,replaceExisting:replaceExisting)
             }.value
             items=result.items.sorted{$0.importedAt>$1.importedAt}
             detectedCards=result.cards
+            registeredCardLabels=result.labels
             status="Karte \(clean) registriert. \(result.baselineCount) vorhandene Fotos wurden als Altbestand markiert."
         } catch {
             status="Karte konnte nicht registriert werden: \(error.localizedDescription)"
@@ -145,6 +147,7 @@ final class MediaIngestV80: ObservableObject {
             }.value
             items=r.items.sorted{$0.importedAt>$1.importedAt}
             detectedCards=r.cards
+            registeredCardLabels=r.labels
             lastImportedCount=r.newCount
             if r.newCount>0 {
                 status="\(r.newCount) neue Foto\(r.newCount==1 ? "" : "s") übernommen."
@@ -165,13 +168,23 @@ final class MediaIngestV80: ObservableObject {
             items=[];return
         }
         items=m.items.sorted{$0.importedAt>$1.importedAt}
+        registeredCardLabels=Set(m.baselines.values.map{$0.label})
     }
 
-    nonisolated private static func registerSync(card:V80DetectedCard,label:String,eventToken:String,activation:V80MediaActivation) throws -> (items:[V80MediaItem],cards:[V80DetectedCard],baselineCount:Int) {
+    nonisolated private static func registerSync(card:V80DetectedCard,label:String,eventToken:String,activation:V80MediaActivation,replaceExisting:Bool) throws -> (items:[V80MediaItem],cards:[V80DetectedCard],baselineCount:Int,labels:Set<String>) {
         let fm=FileManager.default
         let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
         guard fm.isWritableFile(atPath:volume.path) else {
             throw NSError(domain:"FTSPrinter",code:100,userInfo:[NSLocalizedDescriptionKey:"SD-Karte ist schreibgeschützt."])
+        }
+
+        var manifest=try loadManifestSync(activation)
+        let existingIDs=manifest.baselines.filter{$0.value.label==label}.map{$0.key}
+        if !existingIDs.isEmpty && !replaceExisting {
+            throw NSError(domain:"FTSPrinter",code:101,userInfo:[NSLocalizedDescriptionKey:"Karte \(label) ist für dieses Event bereits registriert. Zum Ersetzen ausdrücklich „\(label) ersetzen“ wählen."])
+        }
+        if replaceExisting {
+            for id in existingIDs { manifest.baselines.removeValue(forKey:id) }
         }
 
         let cardUUID=UUID().uuidString
@@ -179,7 +192,6 @@ final class MediaIngestV80: ObservableObject {
         let markerURL=volume.appendingPathComponent(".fts-printer-card-v80.json")
         try JSONEncoder().encode(marker).write(to:markerURL,options:.atomic)
 
-        var manifest=try loadManifestSync(activation)
         let files=mediaFiles(on:volume)
         var keys=Set<String>()
         for f in files {
@@ -188,10 +200,10 @@ final class MediaIngestV80: ObservableObject {
         manifest.baselines[cardUUID]=V80CardBaseline(cardUUID:cardUUID,label:label,knownSourceKeys:keys,createdAt:Date())
         try saveManifestSync(manifest,activation)
         let cards=detectCardsSync(eventToken:eventToken)
-        return (manifest.items,cards,keys.count)
+        return (manifest.items,cards,keys.count,Set(manifest.baselines.values.map{$0.label}))
     }
 
-    nonisolated private static func scanSync(eventToken:String,activation:V80MediaActivation) throws -> (items:[V80MediaItem],cards:[V80DetectedCard],newCount:Int) {
+    nonisolated private static func scanSync(eventToken:String,activation:V80MediaActivation) throws -> (items:[V80MediaItem],cards:[V80DetectedCard],newCount:Int,labels:Set<String>) {
         let fm=FileManager.default
         var manifest=try loadManifestSync(activation)
         var hashes=Set(manifest.items.map(\.sha256))
@@ -201,8 +213,9 @@ final class MediaIngestV80: ObservableObject {
         for card in cards {
             guard let marker=card.marker,marker.eventToken==eventToken else{continue}
             let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
-            var baseline=manifest.baselines[marker.cardUUID]
-                ?? V80CardBaseline(cardUUID:marker.cardUUID,label:marker.label,knownSourceKeys:[],createdAt:marker.registeredAt)
+            guard var baseline=manifest.baselines[marker.cardUUID] else {
+                continue
+            }
 
             for file in mediaFiles(on:volume) {
                 guard let key=sourceKey(file,root:volume) else{continue}
@@ -261,7 +274,7 @@ final class MediaIngestV80: ObservableObject {
         }
 
         try saveManifestSync(manifest,activation)
-        return (manifest.items,cards,newCount)
+        return (manifest.items,cards,newCount,Set(manifest.baselines.values.map{$0.label}))
     }
 
     nonisolated private static func detectCardsSync(eventToken:String) -> [V80DetectedCard] {
