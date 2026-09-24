@@ -281,6 +281,24 @@ Die Apps lesen nur veröffentlichte Releases. Ein noch nicht freigegebener Build
 - Bei fehlendem Internet läuft die vorhandene Version normal weiter, sofern sie nicht zentral als nicht mehr kompatibel markiert ist.
 - Nach jedem Update erfolgt ein automatischer Start-Selbsttest: lokale Datenbank lesbar, Supabase-Verbindung, angemeldetes Gerät, Printer-Konfiguration und Queue-Recovery.
 
+
+## Scroll-, Klick- und Bedienlogik
+
+Die endgültige FTS Printer App muss auf Mac/iMac und Samsung vollständig bedienbar bleiben, auch wenn Listen, Karten, Drucker, Fotos oder Archiv-Einträge länger als der sichtbare Bildschirm werden.
+
+- Alle inhaltlich langen Arbeitsbereiche sind vertikal scrollbar.
+- Horizontale Printer-/Statusreihen dürfen horizontal scrollbar sein, wenn nicht alle Karten gleichzeitig in das Fenster passen.
+- Scrollleisten bzw. Scroll-Indikatoren bleiben bei Arbeitslisten sichtbar bzw. eindeutig bedienbar.
+- Auf Samsung verwendet die Hauptansicht eine echte ScrollView mit sichtbarer Scrollleiste, Smooth-Scrolling und Keyboard-Resize, damit Eingabefelder nicht von der Bildschirmtastatur verdeckt werden.
+- Beim Wechsel zwischen Druckaufträge / Abholung / Printer springt Samsung wieder an den Anfang des neuen Arbeitsbereichs.
+- Buttons und Eingabefelder müssen vollständig anklickbar/antippbar sein und eine ausreichend große Trefferfläche besitzen.
+- Kritische Aktionen werden gegen Doppel-Klick/Doppel-Tap geschützt.
+- Insbesondere **GO · Zum Druck**, **Foto abgeholt**, **Aus Archiv entfernen** und Materialbuchungen dürfen durch schnelles mehrfaches Klicken niemals doppelte Aufträge oder doppelte Buchungen erzeugen.
+- Während eine kritische Aktion läuft, wird der zugehörige Button deaktiviert bzw. zeigt einen laufenden Status.
+- SD-Karten-Zuordnung A/B/C/D ist während eines laufenden Scans/Imports gesperrt.
+- Netzwerk-/Refresh-Vorgänge dürfen die Scroll- und Klickoberfläche nicht dauerhaft blockieren.
+- Die endgültige Designrunde darf diese funktionale Scroll-/Klicklogik nicht entfernen oder überdecken.
+
 ## Reihenfolge
 
 1. Endgültige Printer-App stabil fertigstellen.
