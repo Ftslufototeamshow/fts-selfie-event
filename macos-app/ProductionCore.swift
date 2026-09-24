@@ -660,7 +660,7 @@ final class ProductionCore: ObservableObject {
 
         do {
             guard let event=state.selectedEvent else{throw NSError(domain:"FTSPrinter",code:85,userInfo:[NSLocalizedDescriptionKey:"Event nicht mehr ausgewählt."])}
-            let rendered=try LocalRenderer.renderedImage(sourceURL:URL(fileURLWithPath:path),event:event)
+            let rendered=try await ProductionRendererV76.renderedImage(sourceURL:URL(fileURLWithPath:path),event:event)
             let estimate=V80MacSpooler.learnedSeconds(printerName:printerName)
             let start=Date()
             setSlot(printerName,state:"PRINTING",eta:Int(estimate),current:"LOCAL:"+jobID.uuidString,error:nil)
