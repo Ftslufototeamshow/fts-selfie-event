@@ -1231,6 +1231,7 @@ struct StockSheet:View{
     @State private var kind="ADD_STOCK"
     @State private var note=""
     @State private var code=""
+    @State private var booking=false
     var body:some View{
         VStack(alignment:.leading,spacing:16){
             HStack{Text("Materialbestand").font(.title2.bold());Spacer();Button("Schließen"){isPresented=false}}
@@ -1260,10 +1261,21 @@ struct StockSheet:View{
                 TextField("Notiz optional",text:$note)
             }
             SecureField("Persönlichen Code erneut eingeben",text:$code)
-            Button("Buchung bestätigen"){
+            Button(booking ? "Buchung läuft …" : "Buchung bestätigen"){
+                guard !booking else{return}
                 guard let q=Int(qty),q != 0 else{state.errorMessage="Gültige Menge eingeben.";return}
-                Task{if await state.adjustStock(kind:kind,quantity:q,code:code,note:note){code="";note="";isPresented=false}}
-            }.buttonStyle(.borderedProminent).disabled(code.isEmpty)
+                booking=true
+                Task{
+                    defer{booking=false}
+                    if await state.adjustStock(kind:kind,quantity:q,code:code,note:note){
+                        code=""
+                        note=""
+                        isPresented=false
+                    }
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(code.isEmpty || booking)
         }.padding(24).frame(width:680)
     }
     func metric(_ label:String,_ value:Int)->some View{
