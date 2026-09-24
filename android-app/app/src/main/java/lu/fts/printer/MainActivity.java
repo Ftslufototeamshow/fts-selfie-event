@@ -544,8 +544,32 @@ public class MainActivity extends Activity {
         int n=Math.min(20,archiveRows.size());
         for(int i=0;i<n;i++){
             JSONObject a=archiveRows.get(i);
-            body.addView(txt(a.optString("customer_code","—")+" · "+a.optString("kind","")+" · "+a.optInt("quantity",0)+" ×",12,Color.rgb(150,170,167),false));
+            LinearLayout ar=row();
+            ar.addView(txt(a.optString("customer_code","—")+" · "+a.optString("kind","")+" · "+a.optInt("quantity",0)+" ×",12,Color.rgb(150,170,167),false),new LinearLayout.LayoutParams(0,-2,1));
+            if("printer_admin".equals(currentRole)){
+                Button remove=secondaryButton("Entfernen");
+                ar.addView(remove);
+                remove.setOnClickListener(v->hideArchived(a));
+            }
+            body.addView(ar);
         }
+    }
+
+    void hideArchived(JSONObject a){
+        String kind=a.optString("kind","");
+        String id=a.optString("id","");
+        if(kind.isEmpty()||id.isEmpty())return;
+        new AlertDialog.Builder(this)
+                .setTitle("Aus Archiv entfernen?")
+                .setMessage("Der Eintrag verschwindet aus der operativen Archivliste. Kundenbeleg und Buchhaltungsdaten werden dadurch nicht gelöscht.")
+                .setNegativeButton("Abbrechen",null)
+                .setPositiveButton("Entfernen",(d,w)->rpc("fts_printer_hide_archived_v82",obj(
+                        "p_device_token",deviceToken,
+                        "p_session_token",sessionToken,
+                        "p_kind",kind,
+                        "p_item_id",id
+                ),r->{toast(Boolean.TRUE.equals(r)?"Aus Archiv entfernt.":"Eintrag konnte nicht entfernt werden.");refreshSelected();}))
+                .show();
     }
 
     void markPickupRow(JSONObject p){
@@ -575,6 +599,10 @@ public class MainActivity extends Activity {
             String paper=cons==null||cons.isNull("paper_remaining")?"unbekannt":String.valueOf(cons.optInt("paper_remaining"));
             String film=cons==null||cons.isNull("film_remaining")?"unbekannt":String.valueOf(cons.optInt("film_remaining"));
             card.addView(txt("Papier: "+paper+" / 18 · Farbfilm: "+film+" / 54",13,Color.rgb(190,205,202),true));
+            if("0".equals(paper)||"0".equals(film)){
+                String warn=("0".equals(paper)&&"0".equals(film))?"Papier und Farbfilm leer":("0".equals(paper)?"Papier leer":"Farbfilm leer");
+                card.addView(txt(warn+" · automatische Druckverteilung wartet.",12,Color.rgb(255,120,120),true));
+            }
             LinearLayout supplies=row();
             Button paperBtn=secondaryButton("18 Blatt eingelegt");
             Button filmBtn=secondaryButton("Farbfilm eingelegt");
