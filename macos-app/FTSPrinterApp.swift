@@ -618,6 +618,7 @@ final class AppState: ObservableObject {
     @Published var errorMessage: String?
     @Published var busy = false
     @Published var status = ""
+    @Published var preLoginUpdateStatus = ""
 
     let localImport = LocalImportManager()
     let mediaIngest = MediaIngestV80()
@@ -625,7 +626,9 @@ final class AppState: ObservableObject {
     private let api = FTSAPI.shared
     private var liveDeviceToken: String?
     private var liveSessionToken: String?
-    static let appVersion = "0.2.4-printer-wakeup"
+    private var preLoginUpdateInFlight = false
+    private var preLoginUpdateOpenedBuild: Int?
+    static let appVersion = "0.2.5-login-recovery"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -661,7 +664,10 @@ final class AppState: ObservableObject {
     func bootstrap() async {
         if liveDeviceToken == nil { liveDeviceToken = Keychain.get("deviceToken") }
         if liveSessionToken == nil { liveSessionToken = Keychain.get("staffSession") }
-        guard let dev = deviceToken, !dev.isEmpty else { await loadDeviceAdmins(); return }
+        guard let dev = deviceToken, !dev.isEmpty else {
+            await loadDeviceAdmins()
+            return
+        }
         if let session = sessionToken, !session.isEmpty {
             do {
                 let info: SessionInfo = try await api.rpc("fts_printer_validate_session_v72", body: ["p_device_token":dev,"p_session_token":session])
@@ -674,22 +680,30 @@ final class AppState: ObservableObject {
                     await loadChoices()
                     return
                 }
-            } catch {}
-            Keychain.remove("staffSession")
+                liveSessionToken=nil
+                Keychain.remove("staffSession")
+            } catch {
+                if await recoverAuthentication(from:error) { return }
+                // A temporary network failure must never destroy a valid device pairing.
+                errorMessage="Verbindung zum FTS-System unterbrochen. Anmeldung wird automatisch erneut versucht."
+                status=error.localizedDescription
+            }
         }
         await loadChoices()
     }
 
     func loadDeviceAdmins() async {
+        guard !busy else{return}
         busy=true; defer{busy=false}
         do {
             let rows:[DeviceAdminChoice] = try await api.rpc("fts_printer_device_admin_choices_v75",body:[:])
             deviceAdmins=rows
+            errorMessage=nil
             phase = .deviceSetup
         } catch {
-            deviceAdmins=[]
+            // Keep any previously loaded admins and retry from the setup screen.
             phase = .deviceSetup
-            errorMessage=error.localizedDescription
+            errorMessage="Administratorliste konnte nicht geladen werden: \(error.localizedDescription)"
         }
     }
 
@@ -701,7 +715,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.2.4-printer-wakeup"
+                "p_user_agent":"FTS Printer macOS 0.2.5-login-recovery"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -710,14 +724,17 @@ final class AppState: ObservableObject {
     }
 
     func loadChoices() async {
-        guard let dev=deviceToken else { await loadDeviceAdmins(); return }
+        guard let dev=deviceToken,!dev.isEmpty else { await loadDeviceAdmins(); return }
         do {
             let rows:[StaffChoice] = try await api.rpc("fts_printer_login_choices_v72",body:["p_device_token":dev])
-            staffChoices=rows;phase = .staffLogin
+            staffChoices=rows
+            errorMessage=nil
+            phase = .staffLogin
         } catch {
             if !(await recoverAuthentication(from:error)) {
-                errorMessage=error.localizedDescription
-                phase = .deviceSetup
+                // A network error is not a lost device activation.
+                errorMessage="Mitarbeiterliste konnte nicht geladen werden: \(error.localizedDescription)"
+                phase = .staffLogin
             }
         }
     }
@@ -729,7 +746,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.2.4-printer-wakeup"
+                "p_user_agent":"FTS Printer macOS 0.2.5-login-recovery"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session
@@ -749,11 +766,14 @@ final class AppState: ObservableObject {
             return
         }
         production.autoDispatch=false
+        // Never touch the device pairing during a normal staff change.
+        phase = .staffLogin
         if let dev=deviceToken,let session=sessionToken {
             let _:Bool? = try? await api.rpc("fts_printer_logout_v72",body:["p_device_token":dev,"p_session_token":session],as:Bool.self)
         }
         liveSessionToken=nil
-        Keychain.remove("staffSession");currentUser=nil;orders=[];stock=nil
+        Keychain.remove("staffSession")
+        currentUser=nil;orders=[];stock=nil
         await loadChoices()
     }
 
@@ -764,7 +784,29 @@ final class AppState: ObservableObject {
         }
         production.autoDispatch=false
         liveSessionToken=nil;liveDeviceToken=nil
-        Keychain.remove("staffSession");Keychain.remove("deviceToken");currentUser=nil;events=[];orders=[];phase = .deviceSetup
+        Keychain.remove("staffSession");Keychain.remove("deviceToken")
+        currentUser=nil;events=[];orders=[];staffChoices=[]
+        deviceAdmins=[]
+        phase = .deviceSetup
+        Task { await loadDeviceAdmins() }
+    }
+
+    func checkPreLoginUpdate() async {
+        guard phase != .main,!preLoginUpdateInFlight else{return}
+        await production.checkUpdate(platform:"macos")
+        guard production.updateAvailable,
+              let build=production.updateRelease?.build_number,
+              preLoginUpdateOpenedBuild != build else{return}
+        preLoginUpdateInFlight=true
+        preLoginUpdateStatus="Neue Version wird automatisch geladen …"
+        if let url=await production.downloadUpdate() {
+            preLoginUpdateOpenedBuild=build
+            preLoginUpdateStatus="Update geladen · Installer wird geöffnet."
+            NSWorkspace.shared.open(url)
+        } else {
+            preLoginUpdateStatus=production.lastError ?? "Update konnte nicht automatisch geladen werden."
+        }
+        preLoginUpdateInFlight=false
     }
 
     @discardableResult
@@ -998,7 +1040,7 @@ struct DeviceSetupView: View {
                     Text("Diesen Mac einmalig mit einem Printer-Administrator freischalten. Administrator auswählen und persönlichen Printer-Code eingeben.")
                         .foregroundStyle(FTSTheme.muted).frame(maxWidth:520,alignment:.leading)
                     if state.deviceAdmins.isEmpty {
-                        Text("Kein aktiver Printer-Administrator gefunden. Im FTS Cockpit zuerst mindestens einen Printer-Administrator anlegen.")
+                        Text(state.errorMessage ?? "Printer-Administratoren werden geladen …")
                             .foregroundStyle(.orange).frame(maxWidth:520,alignment:.leading)
                         Button("Administratoren neu laden"){Task{await state.loadDeviceAdmins()}}
                     } else {
@@ -1015,6 +1057,9 @@ struct DeviceSetupView: View {
                             Button("Administratoren aktualisieren"){Task{await state.loadDeviceAdmins()}}
                         }
                     }
+                    if !state.preLoginUpdateStatus.isEmpty {
+                        Text(state.preLoginUpdateStatus).font(.caption).foregroundStyle(FTSTheme.cyan)
+                    }
                     Text("FTS Printer v\(AppState.appVersion)").font(.caption).foregroundStyle(FTSTheme.muted)
                 }
                 .ftsCard(18)
@@ -1022,6 +1067,12 @@ struct DeviceSetupView: View {
         }.frame(minWidth:860,minHeight:600)
         .onAppear{if selected.isEmpty{selected=state.deviceAdmins.first?.user_id ?? ""}}
         .onChange(of:state.deviceAdmins){_ in if !state.deviceAdmins.contains(where:{$0.user_id==selected}){selected=state.deviceAdmins.first?.user_id ?? ""}}
+        .task {
+            while !Task.isCancelled && state.phase == .deviceSetup && state.deviceAdmins.isEmpty {
+                await state.loadDeviceAdmins()
+                try? await Task.sleep(for:.seconds(8))
+            }
+        }
     }
 }
 
@@ -1043,6 +1094,10 @@ struct StaffLoginView: View {
                     Text("Wer arbeitet am Printer?").font(.title.bold()).foregroundStyle(.white)
                     Text("Mitarbeiter auswählen und persönlichen Code eingeben. Jeder Druck wird dieser Person zugeordnet.")
                         .foregroundStyle(FTSTheme.muted)
+                    if state.staffChoices.isEmpty {
+                        Text(state.errorMessage ?? "Mitarbeiterliste wird geladen …")
+                            .foregroundStyle(.orange)
+                    }
                     Picker("Mitarbeiter",selection:$selected){
                         Text("Bitte auswählen …").tag("")
                         ForEach(state.staffChoices){u in Text("\(u.display_name) · \(u.roleLabel)").tag(u.user_id)}
@@ -1054,12 +1109,26 @@ struct StaffLoginView: View {
                         Button("Liste aktualisieren"){Task{await state.loadChoices()}}
                     }
                     Button("Gerätefreigabe zurücksetzen",role:.destructive){state.resetDevice()}.buttonStyle(.plain).foregroundStyle(FTSTheme.muted)
+                    if !state.preLoginUpdateStatus.isEmpty {
+                        Text(state.preLoginUpdateStatus).font(.caption).foregroundStyle(FTSTheme.cyan)
+                    }
                     Text("FTS Printer v\(AppState.appVersion)").font(.caption).foregroundStyle(FTSTheme.muted)
                 }
                 .ftsCard(18)
             }.padding(46)
         }.frame(minWidth:860,minHeight:600)
         .onAppear{if selected.isEmpty{selected=state.staffChoices.first?.user_id ?? ""}}
+        .onChange(of:state.staffChoices){_ in
+            if !state.staffChoices.contains(where:{$0.user_id==selected}) {
+                selected=state.staffChoices.first?.user_id ?? ""
+            }
+        }
+        .task {
+            while !Task.isCancelled && state.phase == .staffLogin && state.staffChoices.isEmpty {
+                await state.loadChoices()
+                try? await Task.sleep(for:.seconds(8))
+            }
+        }
     }
 }
 
@@ -1670,7 +1739,13 @@ struct FTSPrinterApp: App {
             .environmentObject(state)
             .preferredColorScheme(.dark)
             .tint(FTSTheme.cyan)
-            .task{if state.phase == .boot{await state.bootstrap()}}
+            .task {
+                if state.phase == .boot { await state.bootstrap() }
+                while !Task.isCancelled {
+                    if state.phase != .main { await state.checkPreLoginUpdate() }
+                    try? await Task.sleep(for:.seconds(30))
+                }
+            }
         }
         .windowStyle(.titleBar)
         .commands{
