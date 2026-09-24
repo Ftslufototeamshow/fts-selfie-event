@@ -647,8 +647,8 @@ public class MainActivity extends Activity {
             Button paperBtn=secondaryButton("18 Blatt eingelegt");
             Button filmBtn=secondaryButton("Farbfilm eingelegt");
             supplies.addView(paperBtn);supplies.addView(filmBtn);card.addView(supplies);
-            paperBtn.setOnClickListener(v->loadConsumable(key,"PAPER_PACK"));
-            filmBtn.setOnClickListener(v->loadConsumable(key,"FILM_CASSETTE"));
+            paperBtn.setOnClickListener(v->loadConsumable(key,"PAPER_PACK",paperBtn));
+            filmBtn.setOnClickListener(v->loadConsumable(key,"FILM_CASSETTE",filmBtn));
             String dev=n.optString("device_label","");
             if(!dev.isEmpty())card.addView(txt(dev,12,Color.rgb(150,170,167),false));
             String err=n.optString("last_error","");
@@ -662,11 +662,17 @@ public class MainActivity extends Activity {
         return null;
     }
 
-    void loadConsumable(String printerKey,String component){
+    void loadConsumable(String printerKey,String component,Button source){
+        String lock="consumable:"+printerKey+":"+component;
+        if(!beginAction(lock,source))return;
         rpc("fts_printer_load_component_v81",obj(
                 "p_device_token",deviceToken,"p_session_token",sessionToken,
                 "p_event_token",selectedEventToken,"p_printer_key",printerKey,"p_component",component
-        ),r->{toast("Materialstatus aktualisiert.");refreshSelected();});
+        ),r->{
+            endAction(lock,source);
+            toast("Materialstatus aktualisiert.");
+            refreshSelected();
+        });
     }
 
     void renderCamera(LinearLayout body) {
