@@ -442,9 +442,10 @@ final class ProductionCore: ObservableObject {
                 guard let self, let state else { return }
                 await self.dispatchOne(printerName: name, state: state)
                 self.activePrinterTasks[name] = nil
-                // Keep every free printer fed without waiting for the next polling cycle.
+                // Refresh the authoritative queue before feeding the next job.
+                // This avoids stale local READY rows and keeps free printers continuously supplied.
                 if self.autoDispatch {
-                    self.dispatchAvailable(state: state)
+                    await self.refresh(state: state)
                 }
             }
         }
