@@ -141,6 +141,7 @@ struct V80LocalPrintUnit: Codable, Identifiable, Hashable {
     let customerCode: String
     let mediaID: String
     let imagePath: String
+    let preRendered: Bool?
     let originalName: String
     let copyIndex: Int
     var status: Status
@@ -418,8 +419,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.0.5-printer-autosync"
-    static let build = 86
+    static let version = "1.0.6-mac-print-fix"
+    static let build = 87
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -491,6 +492,12 @@ final class ProductionCore: ObservableObject {
             if let old = printerSlots.first(where: { $0.name == name }) {
                 var slot = old
                 slot.enabled = enabled.contains(name)
+                if slot.state == "OFFLINE" {
+                    slot.state = "IDLE"
+                    slot.eta = 0
+                    slot.currentUnit = nil
+                    slot.lastError = nil
+                }
                 next.append(slot)
             } else {
                 next.append(LocalPrinterSlot(name: name, enabled: enabled.contains(name), state: "IDLE", eta: 0, currentUnit: nil, lastError: nil))
@@ -626,20 +633,10 @@ final class ProductionCore: ObservableObject {
         guard let dev=state.deviceToken, let session=state.sessionToken else { return }
         setSlot(printerName, state:"PREPARING", eta:0, current:nil, error:nil)
 
-        var accepting:Bool?=nil
-        for attempt in 0..<3 {
-            accepting=await Task.detached(priority:.utility) {
-                V80MacSpooler.isAccepting(printerName:printerName)
-            }.value
-            if accepting != false { break }
-            setSlot(printerName,state:"PREPARING",eta:0,current:nil,error:"Drucker wird geweckt / Verbindung wird geprüft …")
-            if attempt < 2 { try? await Task.sleep(for:.seconds(1.5)) }
-        }
-        if accepting == false {
-            printerConnectivityFailures[printerName]=(printerConnectivityFailures[printerName] ?? 0)+1
-            setSlot(printerName,state:"OFFLINE",eta:0,current:nil,error:"Drucker nach mehreren Versuchen nicht erreichbar. WLAN/Druckerstatus prüfen.")
-            return
-        }
+        // Do not use `lpstat -a` as a connectivity gate here. On SELPHY/AirPrint/USB
+        // macOS can report the queue as temporarily "not accepting" even while
+        // System Settings shows the printer green and a real print is possible.
+        // NSPrintOperation below is the authoritative submission attempt.
         printerConnectivityFailures[printerName]=0
 
         defer {
@@ -792,6 +789,7 @@ final class ProductionCore: ObservableObject {
         let jobID=localQueue.jobs[localRef.jobIndex].id
         let customer=localQueue.jobs[localRef.jobIndex].customerCode
         let path=localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex].imagePath
+        let preRendered=localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex].preRendered == true
         let original=localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex].originalName
 
         localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex].status = .printing
@@ -805,7 +803,15 @@ final class ProductionCore: ObservableObject {
 
         do {
             guard let event=state.selectedEvent else{throw NSError(domain:"FTSPrinter",code:85,userInfo:[NSLocalizedDescriptionKey:"Event nicht mehr ausgewählt."])}
-            let rendered=try await ProductionRendererV76.renderedImage(sourceURL:URL(fileURLWithPath:path),event:event)
+            let rendered:NSImage
+            if preRendered {
+                guard let ready=NSImage(contentsOfFile:path) else {
+                    throw NSError(domain:"FTSPrinter",code:189,userInfo:[NSLocalizedDescriptionKey:"Druckbereite Design-Datei konnte nicht geöffnet werden."])
+                }
+                rendered=ready
+            } else {
+                rendered=try await ProductionRendererV76.renderedImage(sourceURL:URL(fileURLWithPath:path),event:event)
+            }
             let estimate=V80MacSpooler.learnedSeconds(printerName:printerName)
             let start=Date()
             setSlot(printerName,state:"PRINTING",eta:Int(estimate),current:"LOCAL:"+jobID.uuidString,error:nil)
@@ -982,8 +988,10 @@ final class ProductionCore: ObservableObject {
             var units:[V80LocalPrintUnit]=[]
             for (m,count) in filtered.sorted(by:{$0.key.importedAt < $1.key.importedAt}) {
                 for copy in 1...count {
+                    let readyPath = (m.designedPath?.isEmpty == false) ? m.designedPath! : m.importedPath
                     units.append(V80LocalPrintUnit(
-                        id:UUID(),jobID:id,customerCode:code,mediaID:m.id,imagePath:m.importedPath,
+                        id:UUID(),jobID:id,customerCode:code,mediaID:m.id,imagePath:readyPath,
+                        preRendered:(m.designedPath?.isEmpty == false),
                         originalName:m.originalName,copyIndex:copy,status:.waiting,printerName:nil,
                         startedAt:nil,printedAt:nil,lastError:nil,componentSynced:false
                     ))
