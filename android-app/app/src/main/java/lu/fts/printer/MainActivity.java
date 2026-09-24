@@ -76,16 +76,28 @@ public class MainActivity extends Activity {
         io.shutdownNow();
     }
 
+
     void buildBase() {
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(18), dp(18), dp(12));
-        root.setBackgroundColor(Color.rgb(7,23,25));
+        root.setPadding(0,0,0,0);
+        root.setBackgroundColor(Color.rgb(3,7,9));
 
-        TextView title = txt("FTS Printer", 28, Color.WHITE, true);
-        root.addView(title);
-        statusText = txt("Startet …", 12, Color.rgb(150,170,167), false);
-        root.addView(statusText);
+        LinearLayout appbar=new LinearLayout(this);
+        appbar.setOrientation(LinearLayout.HORIZONTAL);
+        appbar.setGravity(Gravity.CENTER_VERTICAL);
+        appbar.setPadding(dp(12),dp(10),dp(12),dp(10));
+        appbar.setBackgroundColor(Color.rgb(4,14,18));
+        ImageView icon=brandImage("fts_printer_icon",dp(48),ImageView.ScaleType.CENTER_CROP);
+        appbar.addView(icon,new LinearLayout.LayoutParams(dp(48),dp(48)));
+        LinearLayout titles=new LinearLayout(this);titles.setOrientation(LinearLayout.VERTICAL);titles.setPadding(dp(10),0,0,0);
+        titles.addView(txt("FTS Printer",20,Color.WHITE,true));
+        statusText=txt("Startet …",11,Color.rgb(150,170,167),false);
+        titles.addView(statusText);
+        appbar.addView(titles,new LinearLayout.LayoutParams(0,-2,1));
+        TextView bell=txt("♢",24,Color.rgb(218,176,91),true);bell.setGravity(Gravity.CENTER);
+        appbar.addView(bell,new LinearLayout.LayoutParams(dp(42),dp(42)));
+        root.addView(appbar,new LinearLayout.LayoutParams(-1,-2));
 
         mainScroll = new ScrollView(this);
         mainScroll.setFillViewport(true);
@@ -95,7 +107,7 @@ public class MainActivity extends Activity {
         mainScroll.setClipToPadding(false);
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(0,dp(18),0,dp(30));
+        content.setPadding(dp(12),dp(10),dp(12),dp(32));
         mainScroll.addView(content,new ScrollView.LayoutParams(-1,-2));
         root.addView(mainScroll, new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
@@ -247,29 +259,53 @@ public class MainActivity extends Activity {
         });
     }
 
+
     void showMain() {
-        onMain=true; activeScreen="orders"; clear();
-        LinearLayout top=row();
-        LinearLayout left=new LinearLayout(this);left.setOrientation(LinearLayout.VERTICAL);
-        userText=txt("FTS Printer",22,Color.WHITE,true);
-        TextView sub=txt(currentUser+" · "+(currentRole.equals("printer_admin")?"Printer-Administrator":"Mitarbeiter"),12,Color.rgb(150,170,167),false);
-        left.addView(userText);left.addView(sub);
-        top.addView(left,new LinearLayout.LayoutParams(0,-2,1));
-        Button switcher=secondaryButton("Mitarbeiter wechseln");
-        top.addView(switcher);
-        content.addView(top);
+        onMain=true; activeScreen="dashboard"; clear();
+
+        ImageView hero=brandImage("fts_printer_header",dp(178),ImageView.ScaleType.CENTER_CROP);
+        hero.setBackgroundColor(Color.BLACK);
+        content.addView(hero,new LinearLayout.LayoutParams(-1,dp(178)));
+
+        LinearLayout identity=card();
+        identity.addView(txt("FTS PRINTER",22,Color.rgb(226,182,91),true));
+        userText=txt(currentUser,18,Color.WHITE,true);
+        identity.addView(userText);
+        identity.addView(txt(currentRole.equals("printer_admin")?"Administrator":"Mitarbeiter",12,Color.rgb(155,172,170),false));
+        content.addView(identity);
+
+        LinearLayout quick=row();
+        Button reloadEvents=button("↻  Events neu laden");
+        Button switcher=button("👥  Mitarbeiter wechseln");
+        quick.addView(reloadEvents,new LinearLayout.LayoutParams(0,dp(52),1));
+        quick.addView(switcher,new LinearLayout.LayoutParams(0,dp(52),1));
+        content.addView(quick);
         switcher.setOnClickListener(v->logoutAndSwitch());
 
-        addNote("Samsung ist die sichere Bedien- und Kontrollstation. Physische Fotoausgabe, SD-Karten und WLAN-Kamera laufen über den Mac-Print-Host, damit kein Doppelprint entsteht.");
-        Button reloadEvents=secondaryButton("Events neu laden");
-        content.addView(reloadEvents);
-
+        LinearLayout eventCard=card();
+        eventCard.addView(txt("Event auswählen",12,Color.rgb(226,182,91),true));
         eventSpinner=new Spinner(this);
         eventSpinner.setPopupBackgroundResource(android.R.color.white);
-        content.addView(eventSpinner);
-        eventInfoText=txt("Event wird geladen …",14,Color.WHITE,true);
-        eventInfoText.setPadding(0,dp(4),0,dp(8));
-        content.addView(eventInfoText);
+        eventCard.addView(eventSpinner,new LinearLayout.LayoutParams(-1,dp(52)));
+        eventInfoText=txt("Event wird geladen …",13,Color.rgb(210,218,216),true);
+        eventInfoText.setPadding(0,dp(6),0,0);
+        eventCard.addView(eventInfoText);
+        content.addView(eventCard);
+
+        LinearLayout stockRow=card();
+        LinearLayout stockTop=row();
+        stockText=txt("Materialbestand —",16,Color.WHITE,true);
+        stockTop.addView(stockText,new LinearLayout.LayoutParams(0,-2,1));
+        Button stockBtn=secondaryButton("Bestand öffnen");
+        stockTop.addView(stockBtn);
+        stockRow.addView(stockTop);
+        stockRow.addView(txt("Papier / Farbfilm / RP-108 · Bestand und Verbrauch werden live überwacht.",11,Color.rgb(145,165,162),false));
+        content.addView(stockRow);
+        stockBtn.setOnClickListener(v->showStockDialog());
+
+        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setTag("body");
+        content.addView(body);
+
         eventSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
             public void onNothingSelected(android.widget.AdapterView<?> p){}
             public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){
@@ -278,34 +314,12 @@ public class MainActivity extends Activity {
                     selectedEventToken=e.token;
                     eventInfoText.setText(e.title+(e.location.isEmpty()?"":" · "+e.location)+(e.date.isEmpty()?"":" · "+e.date));
                     refreshSelected();
+                    renderDashboard(body);
                 }
             }
         });
 
-        LinearLayout stockRow=row();
-        stockText=txt("Bestand —",16,Color.WHITE,true);
-        stockRow.addView(stockText,new LinearLayout.LayoutParams(0,-2,1));
-        Button stockBtn=button("Bestand");
-        stockRow.addView(stockBtn);
-        content.addView(stockRow);
-        stockBtn.setOnClickListener(v->showStockDialog());
-        reloadEvents.setOnClickListener(v->{View b=findTagged(content,"body");if(b instanceof LinearLayout)loadEvents((LinearLayout)b);});
-
-        LinearLayout tab=row();
-        Button ordersBtn=button("Druckaufträge");
-        Button pickupBtn=secondaryButton("Abholung");
-        Button printersBtn=secondaryButton("Printer");
-        tab.addView(ordersBtn,new LinearLayout.LayoutParams(0,-2,1));
-        tab.addView(pickupBtn,new LinearLayout.LayoutParams(0,-2,1));
-        tab.addView(printersBtn,new LinearLayout.LayoutParams(0,-2,1));
-        content.addView(tab);
-
-        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setTag("body");
-        content.addView(body);
-        ordersBtn.setOnClickListener(v->{activeScreen="orders";renderOrders(body);});
-        pickupBtn.setOnClickListener(v->{activeScreen="pickup";renderPickups(body,"");});
-        printersBtn.setOnClickListener(v->{activeScreen="printers";renderPrinters(body);});
-
+        reloadEvents.setOnClickListener(v->loadEvents(body));
         loadEvents(body);
         checkUpdate();
         handler.removeCallbacksAndMessages(null);
@@ -426,8 +440,85 @@ public class MainActivity extends Activity {
         if(b instanceof LinearLayout)renderActive((LinearLayout)b);
     }
 
+
+    void renderDashboard(LinearLayout body){
+        activeScreen="dashboard";
+        body.removeAllViews();
+        scrollTop();
+
+        body.addView(txt("Dashboard",22,Color.WHITE,true));
+        body.addView(noteView("Schnellübersicht für Eventbetrieb, Druckaufträge, Material, Import und Printer-Status."));
+
+        LinearLayout material=card();
+        material.addView(txt("▣  Materialbestand",16,Color.rgb(226,182,91),true));
+        int available=stock==null?0:stock.optInt("safe_available",0);
+        material.addView(txt(available+" verfügbare Prints",26,available<=10?Color.rgb(255,120,110):Color.rgb(80,220,150),true));
+        material.addView(txt("RP-108 · Papier / Farbfilm · sicherer Bestand",12,Color.rgb(150,170,167),false));
+        material.setOnClickListener(v->showStockDialog());
+        body.addView(material);
+
+        int active=0,uncertain=0;
+        for(JSONObject u:workUnits){
+            String s=u.optString("unit_status","");
+            if("READY".equals(s)||"CLAIMED".equals(s)||"PRINTING".equals(s)||"UNCERTAIN".equals(s))active++;
+            if("UNCERTAIN".equals(s))uncertain++;
+        }
+        LinearLayout jobs=card();
+        jobs.addView(txt("▤  Druckaufträge",16,Color.rgb(226,182,91),true));
+        jobs.addView(txt(active+" aktiv · "+uncertain+" prüfen",22,Color.WHITE,true));
+        jobs.addView(txt("Mehrdrucker-Verteilung und Warteschlange",12,Color.rgb(150,170,167),false));
+        jobs.setOnClickListener(v->renderOrders(body));
+        body.addView(jobs);
+
+        LinearLayout media=card();
+        media.addView(txt("▣  SD-Karte / Import",16,Color.rgb(226,182,91),true));
+        media.addView(txt("Handy-/SD-Foto auswählen",18,Color.WHITE,true));
+        media.addView(txt("Mobiler Notfall-Import; der automatische Event-Import läuft über den Mac-Print-Host.",12,Color.rgb(150,170,167),false));
+        media.setOnClickListener(v->renderCamera(body));
+        body.addView(media);
+
+        LinearLayout printers=card();
+        printers.addView(txt("〽  Printer-Aktivität",16,Color.rgb(226,182,91),true));
+        printers.addView(txt(printerNodes.size()+" Printer verbunden",21,Color.WHITE,true));
+        String printerLine="";
+        for(int i=0;i<Math.min(2,printerNodes.size());i++){
+            JSONObject p=printerNodes.get(i);
+            if(i>0)printerLine+=" · ";
+            printerLine+=p.optString("display_name","Printer")+": "+p.optString("state","—");
+        }
+        if(!printerLine.isEmpty())printers.addView(txt(printerLine,12,Color.rgb(150,170,167),false));
+        printers.setOnClickListener(v->renderPrinters(body));
+        body.addView(printers);
+
+        LinearLayout pickup=card();
+        pickup.addView(txt("□  Kundenabholung",16,Color.rgb(226,182,91),true));
+        pickup.addView(txt(pickupRows.size()+" wartet/warten auf Abholung",19,Color.WHITE,true));
+        pickup.setOnClickListener(v->renderPickups(body,""));
+        body.addView(pickup);
+
+        LinearLayout finance=card();
+        if("printer_admin".equals(currentRole)){
+            int cents=0;
+            for(OrderModel o:orders)if(!o.test && ("COMPLETED".equalsIgnoreCase(o.paymentStatus)||"COVERED".equalsIgnoreCase(o.paymentStatus)))cents+=o.totalCents;
+            finance.addView(txt("🔓  Finanzen · Administrator",16,Color.rgb(226,182,91),true));
+            finance.addView(txt(String.format(Locale.GERMANY,"%.2f €",cents/100.0),24,Color.rgb(80,220,150),true));
+            finance.addView(txt("Aktuelle bezahlte Nicht-Test-Aufträge im geladenen Event",11,Color.rgb(150,170,167),false));
+        } else {
+            finance.addView(txt("🔒  Finanzen nur für Administratoren",15,Color.rgb(226,182,91),true));
+            finance.addView(txt("Für Mitarbeiter gesperrt.",12,Color.rgb(150,170,167),false));
+        }
+        body.addView(finance);
+    }
+
+    void addDashboardBack(LinearLayout body){
+        Button back=secondaryButton("‹  Dashboard");
+        body.addView(back);
+        back.setOnClickListener(v->renderDashboard(body));
+    }
+
     void renderActive(LinearLayout body){
-        if("camera".equals(activeScreen))renderCamera(body);
+        if("dashboard".equals(activeScreen))renderDashboard(body);
+        else if("camera".equals(activeScreen))renderCamera(body);
         else if("pickup".equals(activeScreen))renderPickups(body,pickupFilter);
         else if("printers".equals(activeScreen))renderPrinters(body);
         else renderOrders(body);
@@ -446,6 +537,7 @@ public class MainActivity extends Activity {
         activeScreen="orders";
         body.removeAllViews();
         scrollTop();
+        addDashboardBack(body);
         TextView h=txt("Automatische Druckaufträge",20,Color.WHITE,true);body.addView(h);
         body.addView(noteView("Der Mac-Print-Host verteilt jedes bezahlte Exemplar automatisch auf den nächsten freien Drucker. Das Samsung löst keinen zweiten Druck aus."));
 
@@ -520,10 +612,14 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Druck wirklich nicht erfolgt?")
                 .setMessage("Nur erneut freigeben, wenn am Drucker geprüft wurde, dass dieses Exemplar NICHT herausgekommen ist. Sonst entsteht ein Doppelprint.")
                 .setNegativeButton("Abbrechen",null)
-                .setPositiveButton("Nicht gedruckt · erneut",(d,w)->rpc("fts_printer_fail_unit_v80",obj(
-                        "p_device_token",deviceToken,"p_session_token",sessionToken,"p_unit_id",unitId,
-                        "p_error","Samsung: Mitarbeiter bestätigt nicht gedruckt","p_confirm_not_printed",true
-                ),r->{toast("Exemplar wieder freigegeben.");refreshSelected();}))
+                .setPositiveButton("Nicht gedruckt · erneut",(d,w)->{
+                    String lock="uncertain:"+unitId;
+                    if(!beginAction(lock,null))return;
+                    rpc("fts_printer_fail_unit_v80",obj(
+                            "p_device_token",deviceToken,"p_session_token",sessionToken,"p_unit_id",unitId,
+                            "p_error","Samsung: Mitarbeiter bestätigt nicht gedruckt","p_confirm_not_printed",true
+                    ),r->{endAction(lock,null);toast("Exemplar wieder freigegeben.");refreshSelected();});
+                })
                 .show();
     }
 
@@ -532,6 +628,7 @@ public class MainActivity extends Activity {
         pickupFilter=filter==null?"":filter;
         body.removeAllViews();
         scrollTop();
+        addDashboardBack(body);
         body.addView(txt("Kundenabholung",20,Color.WHITE,true));
         body.addView(noteView(pickupRows.size()+" Auftrag"+(pickupRows.size()==1?"":"e")+" warten auf Abholung."));
 
@@ -630,6 +727,7 @@ public class MainActivity extends Activity {
         activeScreen="printers";
         body.removeAllViews();
         scrollTop();
+        addDashboardBack(body);
         body.addView(txt("Printer-Aktivität",20,Color.WHITE,true));
         body.addView(noteView("Die physischen Druckjobs werden vom Mac-Print-Host parallel auf die freigegebenen Drucker verteilt."));
         if(printerNodes.isEmpty()){body.addView(noteView("Noch kein aktiver Mac-Printer gemeldet."));return;}
@@ -683,7 +781,8 @@ public class MainActivity extends Activity {
     void renderCamera(LinearLayout body) {
         activeScreen="camera";
         body.removeAllViews();
-        body.addView(txt("Kamera / Handyfoto",20,Color.WHITE,true));
+        addDashboardBack(body);
+        body.addView(txt("SD-Karte / Import",20,Color.WHITE,true));
         body.addView(noteView("Handy-Notfallprint. Der normale Eventbetrieb mit SD-Karte/WLAN und automatischer Mehrdrucker-Verteilung läuft über den Mac-Print-Host. Fotos bleiben lokal und gehen nicht in die öffentliche Selfie-Galerie."));
         Button choose=button("Foto von Handy / SD-Karte auswählen");
         body.addView(choose);
@@ -831,10 +930,14 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Kamera-Print buchen")
                 .setMessage("Nur bestätigen, wenn dieses Foto wirklich gedruckt wurde. Der Materialbestand wird um 1 reduziert.")
                 .setNegativeButton("Abbrechen",null)
-                .setPositiveButton("Ja, gedruckt",(d,w)->rpc("fts_printer_log_camera_print_v73",obj(
-                        "p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken,
-                        "p_event_day",today(),"p_quantity",1,"p_file_name",selectedLocalName
-                ),r->{toast("Kamera-Print gebucht.");refreshSelected();}))
+                .setPositiveButton("Ja, gedruckt",(d,w)->{
+                    String lock="camera-print:"+selectedLocalName;
+                    if(!beginAction(lock,null))return;
+                    rpc("fts_printer_log_camera_print_v73",obj(
+                            "p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken,
+                            "p_event_day",today(),"p_quantity",1,"p_file_name",selectedLocalName
+                    ),r->{endAction(lock,null);toast("Kamera-Print gebucht.");refreshSelected();});
+                })
                 .show();
     }
 
@@ -958,11 +1061,11 @@ public class MainActivity extends Activity {
     static class Staff {String id,name,role;Staff(String i,String n,String r){id=i;name=n;role=r;}}
     static class EventModel {String token,code,title,location,date;boolean printActive,localCamera;EventModel(String t,String c,String ti,String l,String d,boolean p,boolean lc){token=t;code=c;title=ti;location=l;date=d;printActive=p;localCamera=lc;}}
     static class OrderModel {
-        String id,paymentStatus,printStatus,pickupCode,pickupStatus,receiptNumber,firstPath;int qty;boolean ready,test;
+        String id,paymentStatus,printStatus,pickupCode,pickupStatus,receiptNumber,firstPath;int qty,totalCents;boolean ready,test;
         OrderModel(JSONObject o){
             id=o.optString("order_id");paymentStatus=o.optString("payment_status");printStatus=o.optString("print_status");
             pickupCode=o.optString("pickup_code");pickupStatus=o.optString("pickup_status");receiptNumber=o.optString("receipt_number");
-            qty=o.optInt("quantity_total",0);test=o.optBoolean("is_test",false);
+            qty=o.optInt("quantity_total",0);totalCents=o.optInt("total_cents",0);test=o.optBoolean("is_test",false);
             ready=(paymentStatus.equals("COMPLETED")||paymentStatus.equals("COVERED")||paymentStatus.equals("FREE"))&&printStatus.equals("READY");
             JSONArray items=o.optJSONArray("items");if(items!=null&&items.length()>0){JSONObject i=items.optJSONObject(0);if(i!=null)firstPath=i.optString("designed_path",null);}
         }
@@ -1004,11 +1107,20 @@ public class MainActivity extends Activity {
     void addNote(String s){content.addView(noteView(s));}
     TextView noteView(String s){TextView t=txt(s,13,Color.rgb(150,170,167),false);t.setPadding(0,dp(8),0,dp(12));return t;}
     TextView txt(String s,int sp,int color,boolean bold){TextView t=new TextView(this);t.setText(s);t.setTextSize(sp);t.setTextColor(color);if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return t;}
-    EditText input(String hint,boolean secure){EditText e=new EditText(this);e.setHint(hint);e.setTextColor(Color.WHITE);e.setHintTextColor(Color.rgb(110,135,132));e.setSingleLine(true);e.setPadding(dp(12),dp(10),dp(12),dp(10));e.setBackground(round(Color.rgb(10,36,38),Color.rgb(50,72,73),12));if(secure)e.setTransformationMethod(PasswordTransformationMethod.getInstance());e.setLayoutParams(margins(-1,dp(52),0,dp(7)));return e;}
-    Button button(String s){Button b=new Button(this);b.setText(s);b.setTextColor(Color.rgb(5,25,26));b.setTextSize(14);b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);b.setBackground(round(Color.rgb(216,181,109),Color.TRANSPARENT,12));b.setPadding(dp(12),0,dp(12),0);b.setLayoutParams(margins(-2,dp(48),dp(6),dp(6)));return b;}
-    Button secondaryButton(String s){Button b=button(s);b.setTextColor(Color.WHITE);b.setBackground(round(Color.rgb(20,66,68),Color.rgb(50,90,90),12));return b;}
+    EditText input(String hint,boolean secure){EditText e=new EditText(this);e.setHint(hint);e.setTextColor(Color.WHITE);e.setHintTextColor(Color.rgb(110,135,132));e.setSingleLine(true);e.setPadding(dp(12),dp(10),dp(12),dp(10));e.setBackground(round(Color.rgb(8,24,29),Color.rgb(91,72,39),12));if(secure)e.setTransformationMethod(PasswordTransformationMethod.getInstance());e.setLayoutParams(margins(-1,dp(52),0,dp(7)));return e;}
+    Button button(String s){Button b=new Button(this);b.setText(s);b.setTextColor(Color.rgb(2,18,20));b.setTextSize(14);b.setAllCaps(false);b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);b.setBackground(round(Color.rgb(0,194,214),Color.rgb(40,235,245),12));b.setPadding(dp(12),0,dp(12),0);b.setMinHeight(dp(48));b.setLayoutParams(margins(-2,dp(48),dp(6),dp(6)));return b;}
+    Button secondaryButton(String s){Button b=button(s);b.setTextColor(Color.WHITE);b.setBackground(round(Color.rgb(14,31,36),Color.rgb(168,128,53),12));return b;}
     LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);l.setGravity(Gravity.CENTER_VERTICAL);l.setPadding(0,dp(6),0,dp(6));return l;}
-    LinearLayout card(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(14),dp(14),dp(14),dp(14));l.setBackground(round(Color.rgb(10,36,38),Color.rgb(45,62,63),16));l.setLayoutParams(margins(-1,-2,0,dp(10)));return l;}
+    LinearLayout card(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(14),dp(14),dp(14),dp(14));l.setBackground(round(Color.rgb(8,23,28),Color.rgb(88,70,36),16));l.setLayoutParams(margins(-1,-2,0,dp(10)));l.setClickable(true);l.setFocusable(true);return l;}
+    ImageView brandImage(String name,int height,ImageView.ScaleType scale){
+        ImageView v=new ImageView(this);
+        int id=getResources().getIdentifier(name,"drawable",getPackageName());
+        if(id!=0)v.setImageResource(id);
+        v.setScaleType(scale);
+        v.setAdjustViewBounds(false);
+        v.setBackgroundColor(Color.rgb(3,7,9));
+        return v;
+    }
     GradientDrawable round(int fill,int stroke,float radius){GradientDrawable g=new GradientDrawable();g.setColor(fill);g.setCornerRadius(dp((int)radius));if(stroke!=Color.TRANSPARENT)g.setStroke(dp(1),stroke);return g;}
     LinearLayout.LayoutParams margins(int w,int h,int l,int b){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(w,h);p.setMargins(l,dp(6),0,b);return p;}
     Space space(int d){Space s=new Space(this);s.setLayoutParams(new LinearLayout.LayoutParams(1,dp(d)));return s;}

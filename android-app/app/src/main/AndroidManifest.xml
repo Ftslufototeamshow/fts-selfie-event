@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <application
         android:allowBackup="false"
+        android:icon="@drawable/fts_printer_icon"
         android:label="FTS Printer"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="false">

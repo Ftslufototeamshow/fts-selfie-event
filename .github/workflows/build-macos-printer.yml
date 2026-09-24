@@ -31,17 +31,17 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.2.0-core.zip
-            dist/FTS-Printer-macOS-v0.2.0-core.dmg
+            dist/FTS-Printer-macOS-v0.2.1-design.zip
+            dist/FTS-Printer-macOS-v0.2.1-design.dmg
           if-no-files-found: error
       - name: Publish downloadable release
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.2.0-core"
+          TAG="fts-printer-mac-v0.2.1-design"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.2.0-core.zip dist/FTS-Printer-macOS-v0.2.0-core.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.2.1-design.zip dist/FTS-Printer-macOS-v0.2.1-design.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.2.0-core.zip dist/FTS-Printer-macOS-v0.2.0-core.dmg               --target "$GITHUB_SHA"               --title "FTS Printer macOS v0.2.0 CORE"               --notes "Interner FTS Printer Core-Build für Funktions- und Hardwaretests. Noch keine finale Design-/Produktionsfreigabe."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.2.1-design.zip dist/FTS-Printer-macOS-v0.2.1-design.dmg               --target "$GITHUB_SHA"               --title "FTS Printer macOS v0.2.1 · Schritt 2 Design"               --notes "FTS Printer Schritt 2: finales Schwarz/Gold/Cyan Design auf dem bestehenden Funktionskern. Hardware-Druckausgabe bleibt vor Ort zu testen."
           fi

@@ -40,21 +40,21 @@ jobs:
           cd android-app
           /tmp/gradle-8.10.2/bin/gradle --no-daemon assembleDebug
           mkdir -p ../dist-android
-          cp app/build/outputs/apk/debug/app-debug.apk ../dist-android/FTS-Printer-Samsung-v0.2.0-core.apk
+          cp app/build/outputs/apk/debug/app-debug.apk ../dist-android/FTS-Printer-Samsung-v0.2.1-design.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: FTS-Printer-Samsung
-          path: dist-android/FTS-Printer-Samsung-v0.2.0-core.apk
+          path: dist-android/FTS-Printer-Samsung-v0.2.1-design.apk
           if-no-files-found: error
       - name: Publish downloadable test release
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-android-v0.2.0-core"
+          TAG="fts-printer-android-v0.2.1-design"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist-android/FTS-Printer-Samsung-v0.2.0-core.apk --clobber
+            gh release upload "$TAG" dist-android/FTS-Printer-Samsung-v0.2.1-design.apk --clobber
           else
-            gh release create "$TAG" dist-android/FTS-Printer-Samsung-v0.2.0-core.apk               --target "$GITHUB_SHA"               --title "FTS Printer Samsung / Android v0.2.0 CORE"               --prerelease               --notes "Installierbare interne Test-APK. Mitarbeiter-Login, Printer-Events, Selfie-Druckaufträge, Kundenbelege, Materialbestand, Mitarbeiterwechsel und lokaler Foto-Druck über Android Print Service."
+            gh release create "$TAG" dist-android/FTS-Printer-Samsung-v0.2.1-design.apk               --target "$GITHUB_SHA"               --title "FTS Printer Samsung / Android v0.2.1 · Schritt 2 Design"               --prerelease               --notes "Installierbare FTS Printer Schritt-2 APK im Schwarz/Gold/Cyan Design. Funktionskern bleibt erhalten; physischer Druck ist vor Ort am Samsung/Canon-System zu prüfen."
           fi
