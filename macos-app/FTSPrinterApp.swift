@@ -605,7 +605,7 @@ extension NSColor {
 
 @MainActor
 final class AppState: ObservableObject {
-    enum Phase { case boot, deviceSetup, staffLogin, main }
+    enum Phase: Equatable { case boot, deviceSetup, staffLogin, main }
     @Published var phase: Phase = .boot
     @Published var deviceAdmins: [DeviceAdminChoice] = []
     @Published var staffChoices: [StaffChoice] = []
