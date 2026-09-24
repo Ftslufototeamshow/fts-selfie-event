@@ -369,7 +369,12 @@ public class MainActivity extends Activity {
                 int available=stock.optInt("safe_available",0);
                 int cameraWaiting=stock.optInt("camera_waiting",0);
                 stockText.setText("Bestand: "+available+" sicher"+(cameraWaiting>0?" · Kamera wartet "+cameraWaiting:""));
-                stockText.setTextColor(available<=0?Color.rgb(255,120,120):Color.WHITE);
+                int stockColor;
+                if(available==0)stockColor=Color.rgb(190,120,255);
+                else if(available<=10)stockColor=Color.rgb(255,105,105);
+                else if(available<=20)stockColor=Color.rgb(255,180,70);
+                else stockColor=Color.rgb(90,220,140);
+                stockText.setTextColor(stockColor);
             }
         });
         rpc("fts_printer_orders_v73",obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken), result -> {
