@@ -487,6 +487,47 @@ struct ProductionSystemView: View {
     var body:some View { ProductionSystemContent(state:state,core:state.production,installing:$installing) }
 }
 
+struct V81PrinterConsumableRow: View {
+    let slot:LocalPrinterSlot
+    let consumable:V81Consumable?
+    @Binding var enabled:Bool
+    let loadPaper:()->Void
+    let loadFilm:()->Void
+
+    var statusColor:Color {
+        if slot.state=="ERROR" { return .red }
+        if slot.state=="IDLE" { return .green }
+        return .orange
+    }
+
+    var body:some View {
+        VStack(alignment:.leading,spacing:6) {
+            HStack {
+                Toggle("",isOn:$enabled).labelsHidden()
+                Text(slot.name).frame(maxWidth:.infinity,alignment:.leading)
+                Text(slot.state).font(.caption.bold()).foregroundStyle(statusColor)
+                if slot.eta>0{Text("\(slot.eta)s").font(.caption.monospacedDigit())}
+            }
+            HStack(spacing:12) {
+                Text("Papier: \(consumable?.paper_remaining.map(String.init) ?? "unbekannt") / 18")
+                    .font(.caption)
+                Text("Farbfilm: \(consumable?.film_remaining.map(String.init) ?? "unbekannt") / 54")
+                    .font(.caption)
+                Spacer()
+                Button("18 Blatt eingelegt",action:loadPaper).font(.caption)
+                Button("Farbfilm eingelegt",action:loadFilm).font(.caption)
+            }
+            if consumable?.paper_remaining==0 {
+                Text("Papierpaket leer · neues 18-Blatt-Paket einlegen.").font(.caption).foregroundStyle(.red)
+            }
+            if consumable?.film_remaining==0 {
+                Text("Farbfilm-Kassette leer · neue 54-Print-Kassette einsetzen.").font(.caption).foregroundStyle(.red)
+            }
+        }
+        .padding(.vertical,4)
+    }
+}
+
 struct ProductionSystemContent:View {
     @ObservedObject var state:AppState
     @ObservedObject var core:ProductionCore
@@ -509,16 +550,16 @@ struct ProductionSystemContent:View {
                     VStack(alignment:.leading,spacing:8) {
                         if core.printerSlots.isEmpty { Text("Keine macOS-Drucker erkannt.").foregroundStyle(.secondary) }
                         ForEach(core.printerSlots) { p in
-                            HStack {
-                                Toggle("",isOn:Binding(
+                            V81PrinterConsumableRow(
+                                slot:p,
+                                consumable:core.consumable(for:p.name),
+                                enabled:Binding(
                                     get:{p.enabled},
                                     set:{core.setPrinter(p.name,enabled:$0)}
-                                )).labelsHidden()
-                                Text(p.name).frame(maxWidth:.infinity,alignment:.leading)
-                                Text(p.state).font(.caption.bold())
-                                    .foregroundStyle(p.state=="ERROR" ? .red : (p.state=="IDLE" ? .green : .orange))
-                                if p.eta>0{Text("\(p.eta)s").font(.caption.monospacedDigit())}
-                            }
+                                ),
+                                loadPaper:{Task{await core.loadConsumable(printerName:p.name,component:"PAPER_PACK",state:state)}},
+                                loadFilm:{Task{await core.loadConsumable(printerName:p.name,component:"FILM_CASSETTE",state:state)}}
+                            )
                         }
                     }.padding(.vertical,5)
                 }
