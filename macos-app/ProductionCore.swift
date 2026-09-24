@@ -234,7 +234,55 @@ enum V80MacSpooler {
 
     @MainActor
     static func installedPrinterNames() -> [String] {
-        NSPrinter.printerNames.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        var names=NSPrinter.printerNames.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+
+        // If a Canon SELPHY is connected directly by USB, prefer that physical path
+        // and suppress stale Wi-Fi/AirPrint duplicates for the same SELPHY model.
+        let meta=Dictionary(uniqueKeysWithValues:names.map { name in
+            (name,(deviceURI(printerName:name),printerDetails(printerName:name)))
+        })
+        let hasUSBSELPHY=names.contains { name in
+            let info=meta[name] ?? ("","")
+            let hay=(name+" "+info.0+" "+info.1).lowercased()
+            return info.0.lowercased().hasPrefix("usb://") && (hay.contains("selphy") || hay.contains("cp1500"))
+        }
+        if hasUSBSELPHY {
+            names=names.filter { name in
+                let info=meta[name] ?? ("","")
+                let uri=info.0.lowercased()
+                let hay=(name+" "+info.0+" "+info.1).lowercased()
+                let isSELPHY=hay.contains("selphy") || hay.contains("cp1500")
+                let isNetwork=uri.hasPrefix("ipp://") || uri.hasPrefix("ipps://") || uri.hasPrefix("dnssd://") || uri.hasPrefix("lpd://") || uri.hasPrefix("socket://")
+                return !(isSELPHY && isNetwork)
+            }
+        }
+        return names
+    }
+
+    private static func deviceURI(printerName:String)->String {
+        runLPStat(["-v",printerName])
+    }
+
+    private static func printerDetails(printerName:String)->String {
+        runLPStat(["-l","-p",printerName])
+    }
+
+    private static func runLPStat(_ arguments:[String])->String {
+        let p=Process()
+        p.executableURL=URL(fileURLWithPath:"/usr/bin/lpstat")
+        p.arguments=arguments
+        let out=Pipe()
+        p.standardOutput=out
+        p.standardError=Pipe()
+        do {
+            try p.run()
+            p.waitUntilExit()
+            guard p.terminationStatus==0 else{return ""}
+            let d=out.fileHandleForReading.readDataToEndOfFile()
+            return String(data:d,encoding:.utf8)?.trimmingCharacters(in:.whitespacesAndNewlines) ?? ""
+        } catch {
+            return ""
+        }
     }
 
     @MainActor
@@ -342,8 +390,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.0.4-login-recovery"
-    static let build = 85
+    static let version = "1.0.5-printer-autosync"
+    static let build = 86
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -402,12 +450,20 @@ final class ProductionCore: ObservableObject {
     }
 
     func discoverPrinters() {
-        let names = V80MacSpooler.installedPrinterNames()
+        var names = V80MacSpooler.installedPrinterNames()
+        // Never make a printer disappear in the middle of an active transfer/print.
+        for old in printerSlots where ["PREPARING","TRANSFER","PRINTING"].contains(old.state) {
+            if !names.contains(old.name) { names.append(old.name) }
+        }
+        names.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+
         let enabled = Set(UserDefaults.standard.stringArray(forKey: "fts.enabled.printers.v80") ?? [])
         var next: [LocalPrinterSlot] = []
         for name in names {
             if let old = printerSlots.first(where: { $0.name == name }) {
-                var s = old; s.enabled = enabled.contains(name); next.append(s)
+                var slot = old
+                slot.enabled = enabled.contains(name)
+                next.append(slot)
             } else {
                 next.append(LocalPrinterSlot(name: name, enabled: enabled.contains(name), state: "IDLE", eta: 0, currentUnit: nil, lastError: nil))
             }
