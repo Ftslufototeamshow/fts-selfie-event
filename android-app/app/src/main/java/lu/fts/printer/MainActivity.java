@@ -51,6 +51,7 @@ public class MainActivity extends Activity {
     TextView statusText, stockText, userText;
     boolean onMain = false;
     boolean recoveringAuth = false;
+    long lastNetworkNoticeAt = 0L;
     String activeScreen = "orders";
     String pickupFilter = "";
     TextView eventInfoText;
@@ -965,6 +966,26 @@ public class MainActivity extends Activity {
             toast("Gerätefreigabe muss erneuert werden.");
             recoveringAuth=false;
             loadDeviceAdmins();
+            return;
+        }
+        String lower=msg.toLowerCase(Locale.ROOT);
+        boolean transientNetwork=
+                lower.contains("timeout")||
+                lower.contains("timed out")||
+                lower.contains("failed to connect")||
+                lower.contains("unable to resolve host")||
+                lower.contains("network")||
+                lower.contains("connection reset")||
+                lower.contains("connection refused")||
+                lower.contains("socket")||
+                lower.contains("no address associated");
+        if(transientNetwork){
+            status("Offline / Verbindung unterbrochen · Wiederholung automatisch");
+            long now=System.currentTimeMillis();
+            if(now-lastNetworkNoticeAt>30000L){
+                lastNetworkNoticeAt=now;
+                Toast.makeText(this,"Verbindung unterbrochen. FTS Printer versucht automatisch erneut.",Toast.LENGTH_SHORT).show();
+            }
             return;
         }
         new AlertDialog.Builder(this).setTitle("FTS Printer").setMessage(msg).setPositiveButton("OK",null).show();
