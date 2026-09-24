@@ -347,6 +347,8 @@ final class ProductionCore: ObservableObject {
     @Published var updateRelease: V80Release?
     @Published var updateAvailable = false
     @Published var lastError: String?
+    @Published var pickupActionsInFlight: Set<String> = []
+    @Published var archiveActionsInFlight: Set<String> = []
 
     private var activePrinterTasks: [String: Task<Void, Never>] = [:]
     private var lastDispatchedLocal = false
@@ -778,7 +780,10 @@ final class ProductionCore: ObservableObject {
     }
 
     func markPickedUp(_ pickup:V80Pickup,state:AppState) async {
+        guard !pickupActionsInFlight.contains(pickup.id) else { return }
         guard let dev=state.deviceToken,let session=state.sessionToken else{return}
+        pickupActionsInFlight.insert(pickup.id)
+        defer { pickupActionsInFlight.remove(pickup.id) }
         do {
             let name = pickup.kind.uppercased()=="LOCAL" ? "fts_printer_mark_local_picked_up_archive_v80" : "fts_printer_mark_picked_up_archive_v80"
             let body:[String:Any] = pickup.kind.uppercased()=="LOCAL"
@@ -794,7 +799,10 @@ final class ProductionCore: ObservableObject {
     }
 
     func hideArchived(_ row: V80ArchiveRow, state: AppState) async {
+        guard !archiveActionsInFlight.contains(row.id) else { return }
         guard let dev=state.deviceToken,let session=state.sessionToken else{return}
+        archiveActionsInFlight.insert(row.id)
+        defer { archiveActionsInFlight.remove(row.id) }
         do {
             let ok:Bool=try await api.rpc("fts_printer_hide_archived_v82",body:[
                 "p_device_token":dev,"p_session_token":session,
