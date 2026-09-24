@@ -92,6 +92,14 @@ struct V80LocalJobCreate: Codable, Hashable {
     let quantity: Int?
 }
 
+struct V92DayResetResult: Codable, Hashable {
+    let ok: Bool?
+    let reason: String?
+    let message: String?
+    let event_day: String?
+    let next_number: Int?
+}
+
 struct V81Consumable: Codable, Identifiable, Hashable {
     let printer_key: String
     let paper_remaining: Int?
@@ -147,6 +155,7 @@ struct V80LocalPrintJob: Codable, Identifiable, Hashable {
     enum Status: String, Codable { case waiting, printing, readyForPickup, archived, cancelled, uncertain }
     let id: UUID
     let eventToken: String
+    let eventDay: String?
     var customerCode: String
     let sourceType: String
     let sourceLabel: String
