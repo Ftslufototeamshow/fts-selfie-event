@@ -140,6 +140,7 @@ struct V80LocalPrintUnit: Codable, Identifiable, Hashable {
     var startedAt: Date?
     var printedAt: Date?
     var lastError: String?
+    var componentSynced: Bool?
 }
 
 struct V80LocalPrintJob: Codable, Identifiable, Hashable {
@@ -673,25 +674,28 @@ final class ProductionCore: ObservableObject {
             }
             try await V80MacSpooler.waitUntilLikelyFinished(printerName:printerName,started:start,estimated:estimate)
             V80MacSpooler.rememberDuration(Date().timeIntervalSince(start),printerName:printerName)
-            let _:Bool? = try? await api.rpc("fts_printer_consume_local_components_v81",body:[
-                "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
-                "p_printer_key":backendPrinterKey(printerName),"p_quantity":1
-            ],as:Bool.self)
-
             guard let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
                   let ui=localQueue.jobs[ji].units.firstIndex(where:{$0.imagePath==path && $0.status == .printing}) else{return}
+            let localUnitID=localQueue.jobs[ji].units[ui].id
+            do {
+                let componentResult:JSONValue = try await api.rpc("fts_printer_consume_local_unit_component_v87",body:[
+                    "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
+                    "p_printer_key":backendPrinterKey(printerName),"p_local_unit_id":localUnitID.uuidString
+                ])
+                localQueue.jobs[ji].units[ui].componentSynced = componentResult["ok"]?.bool == true
+            } catch {
+                localQueue.jobs[ji].units[ui].componentSynced = false
+            }
+
             localQueue.jobs[ji].units[ui].status = .printed
             localQueue.jobs[ji].units[ui].printedAt = Date()
             let allDone=localQueue.jobs[ji].units.allSatisfy{$0.status == .printed || $0.status == .cancelled}
             if allDone {
-                localQueue.jobs[ji].status = .readyForPickup
-                let summary=localQueue.jobs[ji].units.map{$0.originalName}.joined(separator:", ")
-                let _:JSONValue? = try? await api.rpc("fts_printer_complete_local_job_v80",body:[
-                    "p_device_token":dev,"p_session_token":session,"p_local_job_id":jobID.uuidString,
-                    "p_file_summary":summary
-                ],as:JSONValue.self)
+                await finalizeLocalJob(jobID:jobID,state:state)
+            } else {
+                localQueue.jobs[ji].status = .printing
+                saveLocalQueue()
             }
-            saveLocalQueue()
             setSlot(printerName,state:"IDLE",eta:0,current:nil,error:nil)
         } catch {
             guard let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
@@ -702,6 +706,103 @@ final class ProductionCore: ObservableObject {
             saveLocalQueue()
             setSlot(printerName,state:"ERROR",eta:0,current:"LOCAL:"+jobID.uuidString,error:"Lokaler Druck unklar – Ausdruck prüfen")
             lastError="\(customer): Druckstatus unklar. Nicht automatisch erneut drucken."
+        }
+    }
+
+    func confirmServerUnitPrinted(_ unit: V80WorkUnit, state: AppState) async {
+        guard let dev=state.deviceToken,let session=state.sessionToken else{return}
+        do {
+            let result:JSONValue = try await api.rpc("fts_printer_confirm_uncertain_printed_v87",body:[
+                "p_device_token":dev,"p_session_token":session,"p_unit_id":unit.unit_id
+            ])
+            guard result["ok"]?.bool == true else {
+                throw NSError(domain:"FTSPrinter",code:187,userInfo:[NSLocalizedDescriptionKey:"Druckeinheit konnte nicht bestätigt werden."])
+            }
+            if let i=printerSlots.firstIndex(where:{$0.currentUnit==unit.unit_id}) {
+                printerSlots[i].state="IDLE";printerSlots[i].eta=0;printerSlots[i].currentUnit=nil;printerSlots[i].lastError=nil
+            }
+            await refresh(state:state)
+        } catch { lastError=error.localizedDescription }
+    }
+
+    func confirmLocalUnitPrinted(jobID:UUID,unitID:UUID,state:AppState) async {
+        guard let dev=state.deviceToken,let session=state.sessionToken,
+              let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
+              let ui=localQueue.jobs[ji].units.firstIndex(where:{$0.id==unitID}),
+              localQueue.jobs[ji].units[ui].status == .uncertain else{return}
+
+        let printerName=localQueue.jobs[ji].units[ui].printerName
+        if let printerName {
+            do {
+                let result:JSONValue = try await api.rpc("fts_printer_consume_local_unit_component_v87",body:[
+                    "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
+                    "p_printer_key":backendPrinterKey(printerName),"p_local_unit_id":unitID.uuidString
+                ])
+                localQueue.jobs[ji].units[ui].componentSynced = result["ok"]?.bool == true
+            } catch {
+                localQueue.jobs[ji].units[ui].componentSynced = false
+            }
+        }
+
+        localQueue.jobs[ji].units[ui].status = .printed
+        localQueue.jobs[ji].units[ui].printedAt = Date()
+        localQueue.jobs[ji].units[ui].lastError = nil
+
+        let allDone=localQueue.jobs[ji].units.allSatisfy{$0.status == .printed || $0.status == .cancelled}
+        if allDone {
+            await finalizeLocalJob(jobID:jobID,state:state)
+        } else {
+            localQueue.jobs[ji].status = .printing
+            saveLocalQueue()
+        }
+
+        if let printerName { clearPrinterError(printerName) }
+    }
+
+    func retryLocalCompletion(jobID:UUID,state:AppState) async {
+        await finalizeLocalJob(jobID:jobID,state:state)
+    }
+
+    private func finalizeLocalJob(jobID:UUID,state:AppState) async {
+        guard let dev=state.deviceToken,let session=state.sessionToken,
+              let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}) else{return}
+
+        guard localQueue.jobs[ji].units.allSatisfy({$0.status == .printed || $0.status == .cancelled}) else{return}
+
+        // First reconcile every physical print with the per-printer RP-108 counters.
+        for ui in localQueue.jobs[ji].units.indices {
+            let unit=localQueue.jobs[ji].units[ui]
+            guard unit.status == .printed, unit.componentSynced != true, let printerName=unit.printerName else{continue}
+            do {
+                let result:JSONValue = try await api.rpc("fts_printer_consume_local_unit_component_v87",body:[
+                    "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
+                    "p_printer_key":backendPrinterKey(printerName),"p_local_unit_id":unit.id.uuidString
+                ])
+                localQueue.jobs[ji].units[ui].componentSynced = result["ok"]?.bool == true
+            } catch {
+                localQueue.jobs[ji].status = .uncertain
+                saveLocalQueue()
+                lastError="Drucke sind fertig. Material-/Auftragssynchronisierung wartet auf Verbindung."
+                return
+            }
+        }
+
+        let summary=localQueue.jobs[ji].units.map{$0.originalName}.joined(separator:", ")
+        do {
+            let result:JSONValue = try await api.rpc("fts_printer_complete_local_job_v80",body:[
+                "p_device_token":dev,"p_session_token":session,"p_local_job_id":jobID.uuidString,
+                "p_file_summary":summary
+            ])
+            guard result["ok"]?.bool == true else {
+                throw NSError(domain:"FTSPrinter",code:188,userInfo:[NSLocalizedDescriptionKey:"Lokaler Auftrag konnte nicht abgeschlossen werden."])
+            }
+            localQueue.jobs[ji].status = .readyForPickup
+            saveLocalQueue()
+            await refresh(state:state)
+        } catch {
+            localQueue.jobs[ji].status = .uncertain
+            saveLocalQueue()
+            lastError="Alle Ausdrucke sind fertig, aber der Abschluss konnte noch nicht synchronisiert werden. Keine Fotos erneut drucken."
         }
     }
 
@@ -739,7 +840,7 @@ final class ProductionCore: ObservableObject {
                     units.append(V80LocalPrintUnit(
                         id:UUID(),jobID:id,customerCode:code,mediaID:m.id,imagePath:m.importedPath,
                         originalName:m.originalName,copyIndex:copy,status:.waiting,printerName:nil,
-                        startedAt:nil,printedAt:nil,lastError:nil
+                        startedAt:nil,printedAt:nil,lastError:nil,componentSynced:false
                     ))
                 }
             }
