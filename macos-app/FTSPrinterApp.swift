@@ -222,28 +222,59 @@ final class FTSAPI {
     private let decoder = JSONDecoder()
 
     func rpc<T: Decodable>(_ name: String, body: [String: Any], as type: T.Type = T.self) async throws -> T {
-        var req = URLRequest(url: FTSConfig.supabaseURL.appendingPathComponent("rest/v1/rpc/\(name)"))
-        req.httpMethod = "POST"
-        req.setValue(FTSConfig.publishableKey, forHTTPHeaderField: "apikey")
-        req.setValue("Bearer \(FTSConfig.publishableKey)", forHTTPHeaderField: "Authorization")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            if let p = try? decoder.decode(APIErrorPayload.self, from: data) {
-                throw NSError(domain: "FTSPrinter", code: (response as? HTTPURLResponse)?.statusCode ?? -1,
-                              userInfo: [NSLocalizedDescriptionKey: p.message ?? p.hint ?? "Serverfehler"])
+        let payload=try JSONSerialization.data(withJSONObject: body)
+        var lastError:Error?
+
+        for attempt in 0..<3 {
+            var req = URLRequest(url: FTSConfig.supabaseURL.appendingPathComponent("rest/v1/rpc/\(name)"))
+            req.httpMethod = "POST"
+            req.timeoutInterval = 12
+            req.setValue(FTSConfig.publishableKey, forHTTPHeaderField: "apikey")
+            req.setValue("Bearer \(FTSConfig.publishableKey)", forHTTPHeaderField: "Authorization")
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = payload
+
+            do {
+                let (data, response) = try await URLSession.shared.data(for: req)
+                guard let http = response as? HTTPURLResponse else {
+                    throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine gültige Serverantwort."])
+                }
+                if (200..<300).contains(http.statusCode) {
+                    return try decoder.decode(T.self, from: data)
+                }
+
+                let apiMessage=(try? decoder.decode(APIErrorPayload.self,from:data))
+                let message=apiMessage?.message ?? apiMessage?.hint ?? String(data:data,encoding:.utf8) ?? "Serverfehler"
+                let error=NSError(domain:"FTSPrinter",code:http.statusCode,userInfo:[NSLocalizedDescriptionKey:message])
+
+                let retryable = http.statusCode == 401 || http.statusCode == 408 || http.statusCode == 429 || (500...504).contains(http.statusCode)
+                if retryable && attempt < 2 {
+                    lastError=error
+                    try? await Task.sleep(for:.milliseconds(attempt == 0 ? 700 : 1600))
+                    continue
+                }
+                throw error
+            } catch {
+                let ns=error as NSError
+                let retryableURL = ns.domain == NSURLErrorDomain
+                if retryableURL && attempt < 2 {
+                    lastError=error
+                    try? await Task.sleep(for:.milliseconds(attempt == 0 ? 700 : 1600))
+                    continue
+                }
+                throw error
             }
-            let text = String(data: data, encoding: .utf8) ?? "Serverfehler"
-            throw NSError(domain: "FTSPrinter", code: -1, userInfo: [NSLocalizedDescriptionKey: text])
         }
-        return try decoder.decode(T.self, from: data)
+
+        throw lastError ?? NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"FTS-Server vorübergehend nicht erreichbar."])
     }
 
     func imageData(storagePath: String) async throws -> Data {
         let encoded = storagePath.split(separator: "/").map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }.joined(separator: "/")
         let url = FTSConfig.supabaseURL.appendingPathComponent("storage/v1/object/public/\(FTSConfig.liveBucket)/\(encoded)")
-        let (data, response) = try await URLSession.shared.data(from: url)
+        var req=URLRequest(url:url)
+        req.timeoutInterval=15
+        let (data, response) = try await URLSession.shared.data(for:req)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             throw NSError(domain: "FTSPrinter", code: -1, userInfo: [NSLocalizedDescriptionKey: "Foto konnte nicht geladen werden."])
         }
@@ -628,7 +659,7 @@ final class AppState: ObservableObject {
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
-    static let appVersion = "0.2.7-mac-print-fix"
+    static let appVersion = "0.2.8-stability"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -715,7 +746,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.2.7-mac-print-fix"
+                "p_user_agent":"FTS Printer macOS 0.2.8-stability"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -746,7 +777,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.2.7-mac-print-fix"
+                "p_user_agent":"FTS Printer macOS 0.2.8-stability"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session
@@ -848,6 +879,9 @@ final class AppState: ObservableObject {
     }
 
     private func isTransientNetworkError(_ error:Error) -> Bool {
+        let ns=error as NSError
+        if ns.domain == NSURLErrorDomain { return true }
+        if [401,408,429,500,502,503,504].contains(ns.code) { return true }
         let m=error.localizedDescription.lowercased()
         return m.contains("timed out")
             || m.contains("timeout")
@@ -858,6 +892,8 @@ final class AppState: ObservableObject {
             || m.contains("host")
             || m.contains("socket")
             || m.contains("dns")
+            || m.contains("jwt")
+            || m.contains("temporarily")
     }
 
     func refreshSelected() async {
@@ -870,7 +906,7 @@ final class AppState: ObservableObject {
         } catch {
             if await recoverAuthentication(from:error) { return }
             if isTransientNetworkError(error) {
-                status="Offline · Verbindung wird automatisch erneut versucht"
+                status="Verbindung kurz unterbrochen · automatische Wiederholung aktiv"
                 return
             }
             errorMessage=error.localizedDescription
@@ -1189,9 +1225,33 @@ struct MainView: View {
         .frame(minWidth:1080,minHeight:720)
         .sheet(isPresented:$showStock){StockSheet(isPresented:$showStock).environmentObject(state)}
         .sheet(item:$state.currentReceipt){r in ReceiptSheet(receipt:r).environmentObject(state)}
-        .alert("FTS Printer",isPresented:Binding(get:{state.errorMessage != nil},set:{if !$0{state.errorMessage=nil}})){
-            Button("OK"){state.errorMessage=nil}
-        } message:{Text(state.errorMessage ?? "")}
+        .overlay(alignment:.topTrailing) {
+            if let message=state.errorMessage,!message.isEmpty {
+                HStack(alignment:.top,spacing:10) {
+                    Image(systemName:"exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    Text(message).font(.caption).lineLimit(3).frame(maxWidth:360,alignment:.leading)
+                    Button {
+                        state.errorMessage=nil
+                    } label: {
+                        Image(systemName:"xmark.circle.fill")
+                    }.buttonStyle(.plain).foregroundStyle(FTSTheme.muted)
+                }
+                .padding(12)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius:12))
+                .overlay(RoundedRectangle(cornerRadius:12).stroke(Color.orange.opacity(0.35)))
+                .padding(.top,10).padding(.trailing,14)
+                .transition(.move(edge:.top).combined(with:.opacity))
+            }
+        }
+        .animation(.easeInOut(duration:0.18),value:state.errorMessage)
+        .onChange(of:state.errorMessage){newValue in
+            guard let current=newValue,!current.isEmpty else{return}
+            Task {
+                try? await Task.sleep(for:.seconds(10))
+                if state.errorMessage == current { state.errorMessage=nil }
+            }
+        }
         .alert("Neue FTS Printer Version verfügbar",isPresented:$updatePrompt){
             Button("Jetzt aktualisieren"){
                 guard !printingActive else{return}
@@ -1211,7 +1271,7 @@ struct MainView: View {
         }
         .task(id:state.selectedEventToken){
             section = .dashboard
-            state.production.discoverPrinters()
+            await state.production.discoverPrinters()
             if let e=state.selectedEvent {
                 state.mediaIngest.load(event:e)
                 state.production.loadLocalQueue(folderPath:state.mediaIngest.activation?.folderPath)
@@ -1220,25 +1280,29 @@ struct MainView: View {
             if state.production.updateAvailable,
                state.production.updateRelease?.build_number != postponedUpdateBuild,
                !printingActive { updatePrompt=true }
-            var updateCheckTicks = 0
-            var printerDiscoveryTicks = 0
+            var updateElapsed:Double = 0
+            var printerDiscoveryElapsed:Double = 0
             while !Task.isCancelled {
                 await state.refreshSelected()
                 await state.production.refresh(state:state)
-                updateCheckTicks += 1
-                printerDiscoveryTicks += 1
-                if printerDiscoveryTicks >= 5 {
-                    printerDiscoveryTicks = 0
-                    state.production.discoverPrinters()
+
+                let active = printingActive || state.production.hasDispatchableWork
+                let delay:Double = active ? 3 : 6
+                updateElapsed += delay
+                printerDiscoveryElapsed += delay
+
+                if printerDiscoveryElapsed >= 12 {
+                    printerDiscoveryElapsed = 0
+                    await state.production.discoverPrinters()
                 }
-                if updateCheckTicks >= 450 {
-                    updateCheckTicks = 0
+                if updateElapsed >= 900 {
+                    updateElapsed = 0
                     await state.production.checkUpdate(platform:"macos")
                 }
                 if state.production.updateAvailable,
                    state.production.updateRelease?.build_number != postponedUpdateBuild,
                    !printingActive,!updatePrompt,!updateInstalling { updatePrompt=true }
-                try? await Task.sleep(for:.seconds(2))
+                try? await Task.sleep(for:.seconds(delay))
             }
         }
     }
