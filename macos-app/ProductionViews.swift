@@ -49,6 +49,9 @@ struct ProductionQueueContent: View {
                                 Text(p.name).font(.caption.bold()).lineLimit(1)
                                 Text(p.state).font(.caption2).foregroundStyle(p.state=="ERROR" ? .red : (p.state=="IDLE" ? .green : .orange))
                                 if p.eta>0 { Text("ca. \(p.eta) Sek.").font(.caption2.monospacedDigit()) }
+                                if let material = core.materialMessage(for:p.name) {
+                                    Text(material).font(.caption2.bold()).foregroundStyle(.red)
+                                }
                                 if p.state=="ERROR" {
                                     Button("Fehler geprüft"){core.clearPrinterError(p.name)}.font(.caption2)
                                 }
@@ -470,6 +473,11 @@ struct ProductionPickupContent: View {
                                     Text(a.kind).font(.caption).foregroundStyle(.secondary)
                                     Spacer()
                                     Text("\(a.quantity) ×").font(.caption)
+                                    if state.currentUser?.role=="printer_admin" {
+                                        Button("Aus Archiv entfernen",role:.destructive) {
+                                            Task{await core.hideArchived(a,state:state)}
+                                        }.font(.caption)
+                                    }
                                 }.padding(7)
                             }
                         }
