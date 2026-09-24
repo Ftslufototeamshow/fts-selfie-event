@@ -805,6 +805,19 @@ final class AppState: ObservableObject {
         await refreshSelected()
     }
 
+    private func isTransientNetworkError(_ error:Error) -> Bool {
+        let m=error.localizedDescription.lowercased()
+        return m.contains("timed out")
+            || m.contains("timeout")
+            || m.contains("network")
+            || m.contains("internet")
+            || m.contains("connection")
+            || m.contains("offline")
+            || m.contains("host")
+            || m.contains("socket")
+            || m.contains("dns")
+    }
+
     func refreshSelected() async {
         guard let dev=deviceToken,let session=sessionToken,!selectedEventToken.isEmpty else{return}
         do {
@@ -813,7 +826,12 @@ final class AppState: ObservableObject {
             let (oo,ss)=try await(o,s);orders=oo;stock=ss
             status="Aktuell · \(Date().formatted(date:.omitted,time:.shortened))"
         } catch {
-            if !(await recoverAuthentication(from:error)) { errorMessage=error.localizedDescription }
+            if await recoverAuthentication(from:error) { return }
+            if isTransientNetworkError(error) {
+                status="Offline · Verbindung wird automatisch erneut versucht"
+                return
+            }
+            errorMessage=error.localizedDescription
         }
     }
 
