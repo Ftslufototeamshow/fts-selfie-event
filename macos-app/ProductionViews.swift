@@ -608,6 +608,9 @@ struct V81PrinterConsumableRow: View {
                     .font(.caption)
                     .disabled(coreBusyFilm)
             }
+            if let e=slot.lastError,!e.isEmpty {
+                Text(e).font(.caption).foregroundStyle(slot.state=="ERROR" ? .red : .orange)
+            }
             if consumable?.paper_remaining==0 {
                 Text("Papierpaket leer · neues 18-Blatt-Paket einlegen.").font(.caption).foregroundStyle(.red)
             }
