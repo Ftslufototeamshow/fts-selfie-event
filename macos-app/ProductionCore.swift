@@ -256,6 +256,26 @@ enum V80MacSpooler {
         }
     }
 
+    static func isAccepting(printerName: String) -> Bool? {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/lpstat")
+        p.arguments = ["-a", printerName]
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = Pipe()
+        do {
+            try p.run()
+            p.waitUntilExit()
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            let text = String(data:data,encoding:.utf8)?.lowercased() ?? ""
+            if p.terminationStatus != 0 { return false }
+            if text.contains("not accepting") || text.contains("disabled") { return false }
+            return !text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty
+        } catch {
+            return nil
+        }
+    }
+
     static func queueHasJobs(printerName: String) -> Bool? {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/lpstat")
@@ -468,6 +488,12 @@ final class ProductionCore: ObservableObject {
     private func dispatchOne(printerName: String, state: AppState) async {
         guard let dev=state.deviceToken, let session=state.sessionToken else { return }
         setSlot(printerName, state:"PREPARING", eta:0, current:nil, error:nil)
+
+        if V80MacSpooler.isAccepting(printerName:printerName) == false {
+            setSlot(printerName,state:"ERROR",eta:0,current:nil,error:"Drucker nimmt keine Aufträge an / ist nicht verfügbar")
+            return
+        }
+
         defer {
             if let i=printerSlots.firstIndex(where:{$0.name==printerName}), printerSlots[i].state != "ERROR" {
                 setSlot(printerName, state:"IDLE", eta:0, current:nil, error:nil)
