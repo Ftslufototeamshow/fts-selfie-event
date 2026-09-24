@@ -1143,9 +1143,15 @@ struct MainView: View {
             if state.production.updateAvailable,
                state.production.updateRelease?.build_number != postponedUpdateBuild,
                !printingActive { updatePrompt=true }
+            var updateCheckTicks = 0
             while !Task.isCancelled {
                 await state.refreshSelected()
                 await state.production.refresh(state:state)
+                updateCheckTicks += 1
+                if updateCheckTicks >= 450 {
+                    updateCheckTicks = 0
+                    await state.production.checkUpdate(platform:"macos")
+                }
                 if state.production.updateAvailable,
                    state.production.updateRelease?.build_number != postponedUpdateBuild,
                    !printingActive,!updatePrompt,!updateInstalling { updatePrompt=true }

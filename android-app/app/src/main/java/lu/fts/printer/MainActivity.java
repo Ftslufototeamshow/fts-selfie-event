@@ -54,6 +54,7 @@ public class MainActivity extends Activity {
     boolean onMain = false;
     boolean recoveringAuth = false;
     long lastNetworkNoticeAt = 0L;
+    long lastUpdateCheckAt = 0L;
     String activeScreen = "orders";
     String pickupFilter = "";
     TextView eventInfoText;
@@ -323,7 +324,7 @@ public class MainActivity extends Activity {
         loadEvents(body);
         checkUpdate();
         handler.removeCallbacksAndMessages(null);
-        handler.postDelayed(new Runnable(){public void run(){if(onMain){refreshSelected();handler.postDelayed(this,5000);}}},5000);
+        handler.postDelayed(new Runnable(){public void run(){if(onMain){refreshSelected();if(System.currentTimeMillis()-lastUpdateCheckAt>=900000L)checkUpdate();handler.postDelayed(this,5000);}}},5000);
     }
 
     void loadEvents(LinearLayout body) {
@@ -870,6 +871,7 @@ public class MainActivity extends Activity {
     }
 
     void checkUpdate(){
+        lastUpdateCheckAt=System.currentTimeMillis();
         rpc("fts_printer_latest_release_v80",obj("p_platform","android"),result->{
             if(result instanceof JSONArray){
                 JSONArray a=(JSONArray)result;
