@@ -92,6 +92,17 @@ struct V80LocalJobCreate: Codable, Hashable {
     let quantity: Int?
 }
 
+struct V81Consumable: Codable, Identifiable, Hashable {
+    let printer_key: String
+    let paper_remaining: Int?
+    let film_remaining: Int?
+    let paper_loaded_at: String?
+    let film_loaded_at: String?
+    let last_print_at: String?
+    let updated_at: String?
+    var id:String { printer_key }
+}
+
 struct V80Release: Codable, Hashable {
     let version: String
     let build_number: Int
@@ -304,6 +315,7 @@ final class ProductionCore: ObservableObject {
     @Published var printerNodes: [V80PrinterNode] = []
     @Published var pickups: [V80Pickup] = []
     @Published var archived: [V80ArchiveRow] = []
+    @Published var consumables: [V81Consumable] = []
     @Published var localQueue = V80LocalQueueFile()
     @Published var printerSlots: [LocalPrinterSlot] = []
     @Published var autoDispatch = false
@@ -371,8 +383,11 @@ final class ProductionCore: ObservableObject {
             async let a: [V80ArchiveRow] = api.rpc("fts_printer_archived_v80", body: [
                 "p_device_token":dev, "p_session_token":session, "p_event_token":state.selectedEventToken, "p_limit":200
             ])
-            let (qq,nn,pp,aa) = try await (q,n,p,a)
-            workUnits = qq; printerNodes = nn; pickups = pp; archived = aa
+            async let cc: [V81Consumable] = api.rpc("fts_printer_consumables_v81", body: [
+                "p_device_token":dev, "p_session_token":session, "p_event_token":state.selectedEventToken
+            ])
+            let (qq,nn,pp,aa,cons) = try await (q,n,p,a,cc)
+            workUnits = qq; printerNodes = nn; pickups = pp; archived = aa; consumables = cons
             queueStatus = "\(qq.filter{$0.unit_status == "READY"}.count) Selfie-Einheiten warten · \(localWaitingCount) lokale Einheiten warten"
             await heartbeatAll(state: state)
             if autoDispatch { dispatchAvailable(state: state) }
@@ -515,6 +530,21 @@ final class ProductionCore: ObservableObject {
         printerSlots[i].lastError=error
     }
 
+    func loadConsumable(printerName:String,component:String,state:AppState) async {
+        guard let dev=state.deviceToken,let session=state.sessionToken,!state.selectedEventToken.isEmpty else{return}
+        do {
+            let _:JSONValue = try await api.rpc("fts_printer_load_component_v81",body:[
+                "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
+                "p_printer_key":printerName,"p_component":component
+            ])
+            await refresh(state:state)
+        } catch { lastError=error.localizedDescription }
+    }
+
+    func consumable(for printerName:String)->V81Consumable? {
+        consumables.first{$0.printer_key==printerName}
+    }
+
     func clearPrinterError(_ name:String) {
         setSlot(name,state:"IDLE",eta:0,current:nil,error:nil)
     }
@@ -565,6 +595,10 @@ final class ProductionCore: ObservableObject {
             }
             try await V80MacSpooler.waitUntilLikelyFinished(printerName:printerName,started:start,estimated:estimate)
             V80MacSpooler.rememberDuration(Date().timeIntervalSince(start),printerName:printerName)
+            let _:Bool? = try? await api.rpc("fts_printer_consume_local_components_v81",body:[
+                "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
+                "p_printer_key":printerName,"p_quantity":1
+            ],as:Bool.self)
 
             guard let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
                   let ui=localQueue.jobs[ji].units.firstIndex(where:{$0.imagePath==path && $0.status == .printing}) else{return}
