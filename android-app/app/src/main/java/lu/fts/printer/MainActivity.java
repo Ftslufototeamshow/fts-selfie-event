@@ -251,7 +251,7 @@ public class MainActivity extends Activity {
         content.addView(top);
         switcher.setOnClickListener(v->logoutAndSwitch());
 
-        addNote("Die App zeigt nur Printer-Funktionen. Firmenbuchhaltung und Umsätze anderer Events sind nicht freigegeben.");
+        addNote("Samsung ist die sichere Bedien- und Kontrollstation. Physische Fotoausgabe, SD-Karten und WLAN-Kamera laufen über den Mac-Print-Host, damit kein Doppelprint entsteht.");
         Button reloadEvents=secondaryButton("Events neu laden");
         content.addView(reloadEvents);
 
@@ -286,11 +286,9 @@ public class MainActivity extends Activity {
         Button ordersBtn=button("Druckaufträge");
         Button pickupBtn=secondaryButton("Abholung");
         Button printersBtn=secondaryButton("Printer");
-        Button cameraBtn=secondaryButton("Handyfoto");
         tab.addView(ordersBtn,new LinearLayout.LayoutParams(0,-2,1));
         tab.addView(pickupBtn,new LinearLayout.LayoutParams(0,-2,1));
         tab.addView(printersBtn,new LinearLayout.LayoutParams(0,-2,1));
-        tab.addView(cameraBtn,new LinearLayout.LayoutParams(0,-2,1));
         content.addView(tab);
 
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setTag("body");
@@ -298,7 +296,6 @@ public class MainActivity extends Activity {
         ordersBtn.setOnClickListener(v->{activeScreen="orders";renderOrders(body);});
         pickupBtn.setOnClickListener(v->{activeScreen="pickup";renderPickups(body,"");});
         printersBtn.setOnClickListener(v->{activeScreen="printers";renderPrinters(body);});
-        cameraBtn.setOnClickListener(v->{activeScreen="camera";renderCamera(body);});
 
         loadEvents(body);
         checkUpdate();
