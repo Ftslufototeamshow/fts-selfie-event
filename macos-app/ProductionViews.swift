@@ -157,6 +157,8 @@ struct ProductionMediaContent: View {
     @State private var quantities:[String:Int]=[:]
     @State private var lastCode=""
     @State private var submitting=false
+    @State private var showClearDay=false
+    @State private var clearingDay=false
 
     var event:EventRow? { state.selectedEvent }
 
@@ -209,18 +211,45 @@ struct ProductionMediaContent: View {
         .onAppear { prepareForEvent() }
         .onChange(of:ingest.items) { _ in normalizeSource() }
         .task(id:event?.event_token) { await monitorEvent() }
+        .alert("Tagesalbum leeren und Nummern zurücksetzen?",isPresented:$showClearDay) {
+            Button("Abbrechen",role:.cancel){}
+            Button("Tagesalbum leeren",role:.destructive){ clearSelectedDay() }
+        } message: {
+            Text("Das lokale Tagesalbum \(ingest.selectedDay) wird geleert. Die Albumstruktur bleibt bestehen und die nächste Kundennummer beginnt wieder bei 001. SD-Karten und WLAN-Quellen selbst werden nicht gelöscht.")
+        }
     }
 
     private var headerView: some View {
         HStack {
-            VStack(alignment:.leading) {
+            VStack(alignment:.leading,spacing:4) {
                 Text("SD-Karte / WLAN-Kamera").font(.title3.bold())
                 Text(ingest.status).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
+            if let e=event {
+                Picker("Eventtag",selection:Binding(
+                    get:{ingest.selectedDay},
+                    set:{day in
+                        ingest.selectDay(day,event:e)
+                        core.loadLocalQueue(folderPath:ingest.activation?.folderPath)
+                        quantities.removeAll()
+                        lastCode=""
+                        normalizeSource()
+                    }
+                )) {
+                    ForEach(ingest.eventDays(e),id:\.self){day in Text(day).tag(day)}
+                }
+                .frame(width:230)
+            }
             if ingest.activation != nil {
                 Button("Eventordner"){ingest.revealEventFolder()}
                 Button("WLAN-Eingang"){ingest.revealWLANFolder()}
+                if state.currentUser?.role=="printer_admin" {
+                    Button(clearingDay ? "Wird geleert …":"Tagesalbum leeren"){
+                        showClearDay=true
+                    }
+                    .disabled(clearingDay || !core.localQueue.jobs.isEmpty)
+                }
                 Button(ingest.scanning ? "Prüfe …":"Jetzt prüfen"){
                     if let e=event { Task{await ingest.scan(event:e)} }
                 }
@@ -332,11 +361,29 @@ struct ProductionMediaContent: View {
                 state:state,
                 media:selection,
                 sourceType:selectedType,
-                sourceLabel:selectedLabel
+                sourceLabel:selectedLabel,
+                eventDay:ingest.selectedDay
             ) {
                 lastCode=code
                 quantities.removeAll()
                 if core.autoDispatch { core.dispatchAvailable(state:state) }
+            }
+        }
+    }
+
+    private func clearSelectedDay() {
+        guard !clearingDay,!ingest.selectedDay.isEmpty else{return}
+        clearingDay=true
+        Task {
+            defer { clearingDay=false }
+            guard await core.resetLocalDay(state:state,eventDay:ingest.selectedDay) else{return}
+            do {
+                try ingest.clearCurrentDayLocal()
+                core.clearEmptyLocalQueue()
+                quantities.removeAll()
+                lastCode=""
+            } catch {
+                core.lastError=error.localizedDescription
             }
         }
     }
