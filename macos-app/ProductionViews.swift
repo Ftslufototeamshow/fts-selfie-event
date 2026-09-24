@@ -531,6 +531,8 @@ struct V81PrinterConsumableRow: View {
     @Binding var enabled:Bool
     let loadPaper:()->Void
     let loadFilm:()->Void
+    let coreBusyPaper:Bool
+    let coreBusyFilm:Bool
 
     var statusColor:Color {
         if slot.state=="ERROR" { return .red }
@@ -552,8 +554,12 @@ struct V81PrinterConsumableRow: View {
                 Text("Farbfilm: \(consumable?.film_remaining.map(String.init) ?? "unbekannt") / 54")
                     .font(.caption)
                 Spacer()
-                Button("18 Blatt eingelegt",action:loadPaper).font(.caption)
-                Button("Farbfilm eingelegt",action:loadFilm).font(.caption)
+                Button("18 Blatt eingelegt",action:loadPaper)
+                    .font(.caption)
+                    .disabled(coreBusyPaper)
+                Button("Farbfilm eingelegt",action:loadFilm)
+                    .font(.caption)
+                    .disabled(coreBusyFilm)
             }
             if consumable?.paper_remaining==0 {
                 Text("Papierpaket leer · neues 18-Blatt-Paket einlegen.").font(.caption).foregroundStyle(.red)
@@ -596,7 +602,9 @@ struct ProductionSystemContent:View {
                                     set:{core.setPrinter(p.name,enabled:$0)}
                                 ),
                                 loadPaper:{Task{await core.loadConsumable(printerName:p.name,component:"PAPER_PACK",state:state)}},
-                                loadFilm:{Task{await core.loadConsumable(printerName:p.name,component:"FILM_CASSETTE",state:state)}}
+                                loadFilm:{Task{await core.loadConsumable(printerName:p.name,component:"FILM_CASSETTE",state:state)}},
+                                coreBusyPaper:core.consumableActionBusy(printerName:p.name,component:"PAPER_PACK"),
+                                coreBusyFilm:core.consumableActionBusy(printerName:p.name,component:"FILM_CASSETTE")
                             )
                         }
                     }.padding(.vertical,5)
