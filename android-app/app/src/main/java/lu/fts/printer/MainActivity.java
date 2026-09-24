@@ -420,13 +420,29 @@ public class MainActivity extends Activity {
         else renderOrders(body);
     }
 
+    boolean hasActiveWorkUnits(String orderId){
+        for(JSONObject u:workUnits){
+            if(!orderId.equals(u.optString("order_id")))continue;
+            String s=u.optString("unit_status","");
+            if("READY".equals(s)||"CLAIMED".equals(s)||"PRINTING".equals(s)||"UNCERTAIN".equals(s))return true;
+        }
+        return false;
+    }
+
     void renderOrders(LinearLayout body) {
         activeScreen="orders";
         body.removeAllViews();
         TextView h=txt("Automatische Druckaufträge",20,Color.WHITE,true);body.addView(h);
         body.addView(noteView("Der Mac-Print-Host verteilt jedes bezahlte Exemplar automatisch auf den nächsten freien Drucker. Das Samsung löst keinen zweiten Druck aus."));
-        if(orders.isEmpty()){body.addView(noteView("Keine aktuellen Druckaufträge."));return;}
-        for(OrderModel o:orders) body.addView(orderCard(o));
+
+        int shown=0;
+        for(OrderModel o:orders){
+            boolean active=o.ready||hasActiveWorkUnits(o.id);
+            if(!active)continue;
+            shown++;
+            body.addView(orderCard(o));
+        }
+        if(shown==0)body.addView(noteView("Keine aktuellen Druckaufträge. Fertige Aufträge stehen unter Abholung."));
     }
 
     View orderCard(OrderModel o) {
