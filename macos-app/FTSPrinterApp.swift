@@ -1031,10 +1031,13 @@ struct MainView: View {
                 }.padding(.horizontal,16).padding(.vertical,10)
                 TabView(selection:$tab){
                     ProductionQueueView().environmentObject(state).tabItem{Label("Druckaufträge",systemImage:"printer.fill")}.tag(0)
-                    ProductionMediaView().environmentObject(state).tabItem{Label("SD / WLAN",systemImage:"sdcard")}.tag(1)
+                    if event.operation_mode=="print_only" || event.local_camera_photos==true {
+                        ProductionMediaView().environmentObject(state).tabItem{Label("SD / WLAN",systemImage:"sdcard")}.tag(1)
+                    }
                     ProductionPickupView().environmentObject(state).tabItem{Label("Kundenabholung",systemImage:"shippingbox")}.tag(2)
                     ProductionSystemView().environmentObject(state).tabItem{Label("System & Printer",systemImage:"gearshape.2")}.tag(3)
-                }.padding(.horizontal,12).padding(.bottom,12)
+                }
+                .padding(.horizontal,12).padding(.bottom,12)
             } else {
                 VStack(spacing:12){
                     Image(systemName:"calendar.badge.exclamationmark").font(.system(size:42)).foregroundStyle(.secondary)
@@ -1071,6 +1074,7 @@ struct MainView: View {
             }
         }
         .task(id:state.selectedEventToken){
+            tab=0
             state.production.discoverPrinters()
             if let e=state.selectedEvent {
                 state.mediaIngest.load(event:e)
