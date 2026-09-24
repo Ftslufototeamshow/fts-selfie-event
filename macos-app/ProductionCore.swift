@@ -342,8 +342,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.0.1-daily-albums"
-    static let build = 82
+    static let version = "1.0.2-printer-health"
+    static let build = 83
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -363,6 +363,7 @@ final class ProductionCore: ObservableObject {
 
     private var activePrinterTasks: [String: Task<Void, Never>] = [:]
     private var lastDispatchedLocal = false
+    private var lastPrinterConnectivityCheck = Date.distantPast
     private var loadedFolderPath = ""
     private let hostID: String = {
         let key = "fts.printer.host-id.v80"
@@ -462,6 +463,27 @@ final class ProductionCore: ObservableObject {
         localWaitingCount > 0 || workUnits.contains { $0.unit_status == "READY" }
     }
 
+    private func refreshPrinterConnectivity() async {
+        guard Date().timeIntervalSince(lastPrinterConnectivityCheck) >= 10 else { return }
+        lastPrinterConnectivityCheck = Date()
+        for slot in printerSlots where slot.enabled {
+            guard activePrinterTasks[slot.name] == nil else { continue }
+            guard slot.state == "IDLE" || slot.state == "OFFLINE" else { continue }
+            let name=slot.name
+            let accepting = await Task.detached(priority:.utility) {
+                V80MacSpooler.isAccepting(printerName:name)
+            }.value
+            guard let accepting else { continue }
+            if accepting {
+                if let i=printerSlots.firstIndex(where:{$0.name==name}), printerSlots[i].state=="OFFLINE" {
+                    setSlot(name,state:"IDLE",eta:0,current:nil,error:nil)
+                }
+            } else {
+                setSlot(name,state:"OFFLINE",eta:0,current:nil,error:"Drucker vorübergehend nicht erreichbar. WLAN/Druckerstatus prüfen.")
+            }
+        }
+    }
+
     private func heartbeatAll(state: AppState) async {
         guard let dev=state.deviceToken, let session=state.sessionToken, !state.selectedEventToken.isEmpty else { return }
         for slot in printerSlots where slot.enabled {
@@ -512,7 +534,7 @@ final class ProductionCore: ObservableObject {
         setSlot(printerName, state:"PREPARING", eta:0, current:nil, error:nil)
 
         if V80MacSpooler.isAccepting(printerName:printerName) == false {
-            setSlot(printerName,state:"ERROR",eta:0,current:nil,error:"Drucker nimmt keine Aufträge an / ist nicht verfügbar")
+            setSlot(printerName,state:"OFFLINE",eta:0,current:nil,error:"Drucker vorübergehend nicht erreichbar. WLAN/Druckerstatus prüfen.")
             return
         }
 
