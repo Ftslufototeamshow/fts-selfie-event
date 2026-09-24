@@ -342,8 +342,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.0.2-printer-health"
-    static let build = 83
+    static let version = "1.0.3-printer-wakeup"
+    static let build = 84
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -364,6 +364,7 @@ final class ProductionCore: ObservableObject {
     private var activePrinterTasks: [String: Task<Void, Never>] = [:]
     private var lastDispatchedLocal = false
     private var lastPrinterConnectivityCheck = Date.distantPast
+    private var printerConnectivityFailures: [String:Int] = [:]
     private var loadedFolderPath = ""
     private let hostID: String = {
         let key = "fts.printer.host-id.v80"
@@ -475,11 +476,19 @@ final class ProductionCore: ObservableObject {
             }.value
             guard let accepting else { continue }
             if accepting {
+                printerConnectivityFailures[name]=0
                 if let i=printerSlots.firstIndex(where:{$0.name==name}), printerSlots[i].state=="OFFLINE" {
                     setSlot(name,state:"IDLE",eta:0,current:nil,error:nil)
                 }
             } else {
-                setSlot(name,state:"OFFLINE",eta:0,current:nil,error:"Drucker vorübergehend nicht erreichbar. WLAN/Druckerstatus prüfen.")
+                let failures=(printerConnectivityFailures[name] ?? 0)+1
+                printerConnectivityFailures[name]=failures
+                // Never block a freshly queued print because of one transient AirPrint/CUPS probe.
+                // Let dispatch do its own short retry so a sleeping SELPHY has time to wake.
+                if hasDispatchableWork { continue }
+                if failures >= 3 {
+                    setSlot(name,state:"OFFLINE",eta:0,current:nil,error:"Drucker mehrfach nicht erreichbar. WLAN/Druckerstatus prüfen.")
+                }
             }
         }
     }
@@ -533,10 +542,21 @@ final class ProductionCore: ObservableObject {
         guard let dev=state.deviceToken, let session=state.sessionToken else { return }
         setSlot(printerName, state:"PREPARING", eta:0, current:nil, error:nil)
 
-        if V80MacSpooler.isAccepting(printerName:printerName) == false {
-            setSlot(printerName,state:"OFFLINE",eta:0,current:nil,error:"Drucker vorübergehend nicht erreichbar. WLAN/Druckerstatus prüfen.")
+        var accepting:Bool?=nil
+        for attempt in 0..<3 {
+            accepting=await Task.detached(priority:.utility) {
+                V80MacSpooler.isAccepting(printerName:printerName)
+            }.value
+            if accepting != false { break }
+            setSlot(printerName,state:"PREPARING",eta:0,current:nil,error:"Drucker wird geweckt / Verbindung wird geprüft …")
+            if attempt < 2 { try? await Task.sleep(for:.seconds(1.5)) }
+        }
+        if accepting == false {
+            printerConnectivityFailures[printerName]=(printerConnectivityFailures[printerName] ?? 0)+1
+            setSlot(printerName,state:"OFFLINE",eta:0,current:nil,error:"Drucker nach mehreren Versuchen nicht erreichbar. WLAN/Druckerstatus prüfen.")
             return
         }
+        printerConnectivityFailures[printerName]=0
 
         defer {
             if let i=printerSlots.firstIndex(where:{$0.name==printerName}), printerSlots[i].state != "ERROR" {
