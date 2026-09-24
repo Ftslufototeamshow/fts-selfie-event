@@ -31,17 +31,17 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.1.4.zip
-            dist/FTS-Printer-macOS-v0.1.4.dmg
+            dist/FTS-Printer-macOS-v0.2.0-core.zip
+            dist/FTS-Printer-macOS-v0.2.0-core.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.1.4"
+          TAG="fts-printer-mac-v0.2.0-core"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.1.4.zip dist/FTS-Printer-macOS-v0.1.4.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.2.0-core.zip dist/FTS-Printer-macOS-v0.2.0-core.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.1.4.zip dist/FTS-Printer-macOS-v0.1.4.dmg               --target "$GITHUB_SHA"               --title "FTS Printer macOS v0.1.4"               --notes "Erste installierbare FTS Printer Version für MacBook und iMac. Native Mitarbeiter-Anmeldung, Selfie-Druckaufträge, Kundenbelege, Materialbestand, lokaler Eventordner und automatische Kartenimporte mit SHA-256-Dublettenprüfung."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.2.0-core.zip dist/FTS-Printer-macOS-v0.2.0-core.dmg               --target "$GITHUB_SHA"               --title "FTS Printer macOS v0.2.0 CORE"               --notes "Interner FTS Printer Core-Build für Funktions- und Hardwaretests. Noch keine finale Design-/Produktionsfreigabe."
           fi
