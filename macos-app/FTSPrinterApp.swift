@@ -1080,6 +1080,7 @@ struct StaffLoginView: View {
     @EnvironmentObject var state:AppState
     @State private var selected:String=""
     @State private var code=""
+    @State private var showResetDevice=false
     var choice:StaffChoice?{state.staffChoices.first{$0.user_id==selected}}
     var body:some View {
         ZStack {
@@ -1108,7 +1109,8 @@ struct StaffLoginView: View {
                             .buttonStyle(.borderedProminent).disabled(choice==nil||code.isEmpty||state.busy)
                         Button("Liste aktualisieren"){Task{await state.loadChoices()}}
                     }
-                    Button("Gerätefreigabe zurücksetzen",role:.destructive){state.resetDevice()}.buttonStyle(.plain).foregroundStyle(FTSTheme.muted)
+                    Button("Mac-Kopplung zurücksetzen",role:.destructive){showResetDevice=true}
+                        .buttonStyle(.plain).foregroundStyle(FTSTheme.muted)
                     if !state.preLoginUpdateStatus.isEmpty {
                         Text(state.preLoginUpdateStatus).font(.caption).foregroundStyle(FTSTheme.cyan)
                     }
@@ -1128,6 +1130,12 @@ struct StaffLoginView: View {
                 await state.loadChoices()
                 try? await Task.sleep(for:.seconds(8))
             }
+        }
+        .alert("Mac-Kopplung wirklich zurücksetzen?",isPresented:$showResetDevice) {
+            Button("Abbrechen",role:.cancel){}
+            Button("Mac-Kopplung zurücksetzen",role:.destructive){state.resetDevice()}
+        } message: {
+            Text("Nicht für einen normalen Mitarbeiterwechsel verwenden. Dadurch wird nur die Gerätefreigabe dieses Macs gelöscht und anschließend neu geladen.")
         }
     }
 }
