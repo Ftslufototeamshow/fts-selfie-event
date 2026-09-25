@@ -287,7 +287,7 @@ struct ProductionMediaContent: View {
     }
 
     private var registeredCardsView: some View {
-        GroupBox("SD-Karten A / B / C / D") {
+        GroupBox("SD-Karten A / B / C / D / E") {
             VStack(alignment:.leading,spacing:8) {
                 if ingest.detectedCards.isEmpty {
                     Text("Keine SD-Karte eingesteckt.")
@@ -448,7 +448,7 @@ struct V80CardRegistrationRow: View {
             }
             Spacer()
             if card.marker == nil {
-                ForEach(["A","B","C","D"],id:\.self) { label in
+                ForEach(["A","B","C","D","E"],id:\.self) { label in
                     Button(usedLabels.contains(label) ? "\(label) ersetzen" : label) {
                         if usedLabels.contains(label) {
                             replaceLabel=label
