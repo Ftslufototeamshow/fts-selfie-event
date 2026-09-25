@@ -408,6 +408,23 @@ enum V80MacSpooler {
         return (active,completed,reachable)
     }
 
+    static func diagnosticSnapshot(printerName:String) -> [String:String] {
+        let uri=deviceURI(printerName:printerName)
+        let details=printerDetails(printerName:printerName)
+        let accepting=runLPStat(["-a",printerName])
+        let active=runLPStat(["-W","not-completed","-o",printerName])
+        let completed=runLPStat(["-W","completed","-o",printerName])
+        let options=runProcess("/usr/bin/lpoptions",["-p",printerName,"-l"],timeout:2.0) ?? ""
+        return [
+            "device_uri":String(uri.prefix(1200)),
+            "printer_details":String(details.prefix(2000)),
+            "accepting":String(accepting.prefix(1200)),
+            "active_jobs":String(active.prefix(2000)),
+            "completed_jobs":String(completed.prefix(2000)),
+            "lpoptions":String(options.prefix(6000))
+        ]
+    }
+
     static func learnedSeconds(printerName: String) -> TimeInterval {
         let k = "fts.printer.duration.v80." + printerName
         let v = UserDefaults.standard.double(forKey: k)
@@ -460,8 +477,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.0.8-spooler"
-    static let build = 89
+    static let version = "1.0.9-diagnostics"
+    static let build = 90
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -906,6 +923,17 @@ final class ProductionCore: ObservableObject {
             }
             setSlot(printerName,state:"IDLE",eta:0,current:nil,error:nil)
         } catch {
+            let diagnostic = await Task.detached(priority:.utility) {
+                V80MacSpooler.diagnosticSnapshot(printerName:printerName)
+            }.value
+            let _:Bool? = try? await api.rpc("fts_printer_mark_local_uncertain_v95",body:[
+                "p_device_token":dev,
+                "p_session_token":session,
+                "p_local_job_id":jobID.uuidString,
+                "p_printer_key":backendPrinterKey(printerName),
+                "p_error":error.localizedDescription,
+                "p_details":diagnostic
+            ],as:Bool.self)
             guard let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
                   let ui=localQueue.jobs[ji].units.firstIndex(where:{$0.imagePath==path && $0.status == .printing}) else{return}
             localQueue.jobs[ji].units[ui].status = .uncertain
@@ -1014,17 +1042,36 @@ final class ProductionCore: ObservableObject {
         }
     }
 
-    func requeueLocalUnit(jobID:UUID,unitID:UUID,confirmedNotPrinted:Bool) {
+    func requeueLocalUnit(jobID:UUID,unitID:UUID,confirmedNotPrinted:Bool,state:AppState) async {
         guard confirmedNotPrinted,
+              let dev=state.deviceToken,let session=state.sessionToken,
               let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
               let ui=localQueue.jobs[ji].units.firstIndex(where:{$0.id==unitID}),
               localQueue.jobs[ji].units[ui].status == .uncertain else{return}
-        localQueue.jobs[ji].units[ui].status = .waiting
-        localQueue.jobs[ji].units[ui].printerName = nil
-        localQueue.jobs[ji].units[ui].startedAt = nil
-        localQueue.jobs[ji].units[ui].lastError = nil
-        localQueue.jobs[ji].status = .waiting
-        saveLocalQueue()
+
+        let oldPrinter=localQueue.jobs[ji].units[ui].printerName
+        do {
+            let ok:Bool = try await api.rpc("fts_printer_requeue_local_job_v95",body:[
+                "p_device_token":dev,"p_session_token":session,"p_local_job_id":jobID.uuidString
+            ])
+            guard ok else {
+                throw NSError(domain:"FTSPrinter",code:195,userInfo:[NSLocalizedDescriptionKey:"Auftrag konnte serverseitig nicht erneut freigegeben werden."])
+            }
+
+            localQueue.jobs[ji].units[ui].status = .waiting
+            localQueue.jobs[ji].units[ui].printerName = nil
+            localQueue.jobs[ji].units[ui].startedAt = nil
+            localQueue.jobs[ji].units[ui].lastError = nil
+            localQueue.jobs[ji].status = .waiting
+            saveLocalQueue()
+
+            if let oldPrinter { clearPrinterError(oldPrinter) }
+            lastError=nil
+            await refresh(state:state)
+            dispatchAvailable(state:state)
+        } catch {
+            lastError=error.localizedDescription
+        }
     }
 
     func createLocalJob(state:AppState, media:[V80MediaItem:Int], sourceType:String, sourceLabel:String, eventDay:String) async -> String? {
