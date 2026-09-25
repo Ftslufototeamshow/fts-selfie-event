@@ -25,16 +25,48 @@ ICON_SRC="$ROOT/macos-app/Resources/fts_printer_icon.jpg"
 ICONSET="$DIST/build/FTSPrinter.iconset"
 rm -rf "$ICONSET"
 mkdir -p "$ICONSET"
-sips -s format png -z 16 16 "$ICON_SRC" --out "$ICONSET/icon_16x16.png" >/dev/null
-sips -s format png -z 32 32 "$ICON_SRC" --out "$ICONSET/icon_16x16@2x.png" >/dev/null
-sips -s format png -z 32 32 "$ICON_SRC" --out "$ICONSET/icon_32x32.png" >/dev/null
-sips -s format png -z 64 64 "$ICON_SRC" --out "$ICONSET/icon_32x32@2x.png" >/dev/null
-sips -s format png -z 128 128 "$ICON_SRC" --out "$ICONSET/icon_128x128.png" >/dev/null
-sips -s format png -z 256 256 "$ICON_SRC" --out "$ICONSET/icon_128x128@2x.png" >/dev/null
-sips -s format png -z 256 256 "$ICON_SRC" --out "$ICONSET/icon_256x256.png" >/dev/null
-sips -s format png -z 512 512 "$ICON_SRC" --out "$ICONSET/icon_256x256@2x.png" >/dev/null
-sips -s format png -z 512 512 "$ICON_SRC" --out "$ICONSET/icon_512x512.png" >/dev/null
-sips -s format png -z 1024 1024 "$ICON_SRC" --out "$ICONSET/icon_512x512@2x.png" >/dev/null
+ICON_SOURCE="$ICON_SRC" ICON_OUTPUT="$ICONSET" xcrun swift - <<'SWIFT'
+import AppKit
+import Foundation
+
+guard let source=ProcessInfo.processInfo.environment["ICON_SOURCE"],
+      let output=ProcessInfo.processInfo.environment["ICON_OUTPUT"],
+      let image=NSImage(contentsOfFile:source) else {
+    fatalError("FTS app icon source could not be opened")
+}
+
+let specs:[(String,Int)] = [
+    ("icon_16x16.png",16),
+    ("icon_16x16@2x.png",32),
+    ("icon_32x32.png",32),
+    ("icon_32x32@2x.png",64),
+    ("icon_128x128.png",128),
+    ("icon_128x128@2x.png",256),
+    ("icon_256x256.png",256),
+    ("icon_256x256@2x.png",512),
+    ("icon_512x512.png",512),
+    ("icon_512x512@2x.png",1024)
+]
+
+for (name,size) in specs {
+    let canvas=NSImage(size:NSSize(width:size,height:size))
+    canvas.lockFocus()
+    NSGraphicsContext.current?.imageInterpolation = .high
+    image.draw(
+        in:NSRect(x:0,y:0,width:size,height:size),
+        from:NSRect(origin:.zero,size:image.size),
+        operation:.copy,
+        fraction:1.0
+    )
+    canvas.unlockFocus()
+    guard let tiff=canvas.tiffRepresentation,
+          let rep=NSBitmapImageRep(data:tiff),
+          let png=rep.representation(using:.png,properties:[:]) else {
+        fatalError("FTS app icon PNG rendering failed at \(size)")
+    }
+    try png.write(to:URL(fileURLWithPath:output).appendingPathComponent(name),options:.atomic)
+}
+SWIFT
 iconutil -c icns "$ICONSET" -o "$RES/FTSPrinter.icns"
 test -s "$RES/FTSPrinter.icns"
 
