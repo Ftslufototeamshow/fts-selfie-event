@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import Foundation
 import CryptoKit
+import ApplicationServices
 
 // MARK: - Production queue models
 
@@ -131,6 +132,7 @@ struct LocalPrinterSlot: Identifiable, Hashable {
     var eta: Int
     var currentUnit: String?
     var lastError: String?
+    var connection: String
     var id: String { name }
 }
 
@@ -232,6 +234,45 @@ enum V80MacSpooler {
     // Never declare a photo finished merely because the CUPS queue clears early.
     static let minimumPhysicalSeconds: TimeInterval = 42
     static let defaultSeconds: TimeInterval = 44
+
+    static func nativeQueueState(printerName:String) -> String? {
+        guard let printer=PMPrinterCreateFromPrinterID(printerName as CFString) else { return nil }
+        defer { PMRelease(printer) }
+        var state:PMPrinterState = PMPrinterState(kPMPrinterIdle)
+        guard PMPrinterGetState(printer,&state) == noErr else { return nil }
+        switch Int(state) {
+        case kPMPrinterProcessing: return "PROCESSING"
+        case kPMPrinterStopped: return "STOPPED"
+        default: return "IDLE"
+        }
+    }
+
+    static func nativeDeviceURI(printerName:String) -> String? {
+        guard let printer=PMPrinterCreateFromPrinterID(printerName as CFString) else { return nil }
+        defer { PMRelease(printer) }
+        var unmanaged:Unmanaged<CFURL>?
+        guard PMPrinterCopyDeviceURI(printer,&unmanaged) == noErr, let url=unmanaged?.takeRetainedValue() else { return nil }
+        return url.absoluteString
+    }
+
+    static func connectionSummary(printerName:String) -> String {
+        let uri=(nativeDeviceURI(printerName:printerName) ?? "").lowercased()
+        let usbPresent=usbSELPHYPresent()
+        if uri.hasPrefix("usb:") || uri.contains("usb") {
+            return usbPresent ? "USB · physisch erkannt" : "USB-Warteschlange · Kabel nicht erkannt"
+        }
+        if uri.hasPrefix("dnssd:") || uri.hasPrefix("ipp:") || uri.hasPrefix("ipps:") || uri.contains("_ipp") {
+            return usbPresent ? "AirPrint/WLAN · USB-Kabel zusätzlich erkannt" : "AirPrint/WLAN"
+        }
+        if usbPresent && (printerName.lowercased().contains("selphy") || printerName.lowercased().contains("cp1500")) {
+            return "macOS-Drucker · USB-Kabel erkannt"
+        }
+        return uri.isEmpty ? "macOS-Drucker erkannt" : String(uri.prefix(90))
+    }
+
+    private static func firstExecutable(_ candidates:[String]) -> String? {
+        candidates.first { FileManager.default.isExecutableFile(atPath:$0) }
+    }
 
     static func installedPrinterNames() async -> [String] {
         let configured = await MainActor.run {
@@ -556,9 +597,10 @@ final class ProductionCore: ObservableObject {
                     slot.currentUnit = nil
                     slot.lastError = nil
                 }
+                slot.connection = V80MacSpooler.connectionSummary(printerName:name)
                 next.append(slot)
             } else {
-                next.append(LocalPrinterSlot(name: name, enabled: enabled.contains(name), state: "IDLE", eta: 0, currentUnit: nil, lastError: nil))
+                next.append(LocalPrinterSlot(name: name, enabled: enabled.contains(name), state: "IDLE", eta: 0, currentUnit: nil, lastError: nil, connection: V80MacSpooler.connectionSummary(printerName:name)))
             }
         }
         printerSlots = next
@@ -625,27 +667,38 @@ final class ProductionCore: ObservableObject {
     private func refreshPrinterConnectivity() async {
         guard Date().timeIntervalSince(lastPrinterConnectivityCheck) >= 10 else { return }
         lastPrinterConnectivityCheck = Date()
+        let installed=Set(await V80MacSpooler.installedPrinterNames())
+
         for slot in printerSlots where slot.enabled {
             guard activePrinterTasks[slot.name] == nil else { continue }
-            guard slot.state == "IDLE" || slot.state == "OFFLINE" else { continue }
+            guard slot.state == "IDLE" || slot.state == "OFFLINE" || slot.state == "ERROR" else { continue }
             let name=slot.name
-            let accepting = await Task.detached(priority:.utility) {
-                V80MacSpooler.isAccepting(printerName:name)
-            }.value
-            guard let accepting else { continue }
-            if accepting {
+
+            // macOS Print Center is authoritative. Do not flip a ready printer
+            // OFFLINE because lpstat is missing or reports a transient AirPrint state.
+            if installed.contains(name) {
                 printerConnectivityFailures[name]=0
-                if let i=printerSlots.firstIndex(where:{$0.name==name}), printerSlots[i].state=="OFFLINE" {
+                let nativeState=await Task.detached(priority:.utility) {
+                    V80MacSpooler.nativeQueueState(printerName:name)
+                }.value
+                let connection=await Task.detached(priority:.utility) {
+                    V80MacSpooler.connectionSummary(printerName:name)
+                }.value
+                if let i=printerSlots.firstIndex(where:{$0.name==name}) {
+                    printerSlots[i].connection=connection
+                }
+                if nativeState=="STOPPED" {
+                    if slot.state != "ERROR" {
+                        setSlot(name,state:"ERROR",eta:0,current:nil,error:"macOS-Druckwarteschlange ist gestoppt. Drucker in macOS prüfen.")
+                    }
+                } else if slot.state=="OFFLINE" {
                     setSlot(name,state:"IDLE",eta:0,current:nil,error:nil)
                 }
             } else {
                 let failures=(printerConnectivityFailures[name] ?? 0)+1
                 printerConnectivityFailures[name]=failures
-                // Never block a freshly queued print because of one transient AirPrint/CUPS probe.
-                // Let dispatch do its own short retry so a sleeping SELPHY has time to wake.
-                if hasDispatchableWork { continue }
-                if failures >= 3 {
-                    setSlot(name,state:"OFFLINE",eta:0,current:nil,error:"Drucker mehrfach nicht erreichbar. WLAN/Druckerstatus prüfen.")
+                if failures>=3 && slot.state != "ERROR" {
+                    setSlot(name,state:"OFFLINE",eta:0,current:nil,error:"Drucker ist in macOS nicht mehr installiert/erkannt.")
                 }
             }
         }
