@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.8-card-recovery.zip
-            dist/FTS-Printer-macOS-v0.3.8-card-recovery.dmg
+            dist/FTS-Printer-macOS-v0.3.9-card-readonly.zip
+            dist/FTS-Printer-macOS-v0.3.9-card-readonly.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.8-card-recovery"
+          TAG="fts-printer-mac-v0.3.9-card-readonly"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.8-card-recovery.zip dist/FTS-Printer-macOS-v0.3.8-card-recovery.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.9-card-readonly.zip dist/FTS-Printer-macOS-v0.3.9-card-readonly.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.8-card-recovery.zip dist/FTS-Printer-macOS-v0.3.8-card-recovery.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.8 · SD Card Recovery Fix" --notes "Build 98: SD-/USB-Karten unterscheiden jetzt dauerhaft zwischen nur bekannten Altdateien und tatsächlich bereits kopierten Fotos. Dadurch werden auch Fotos nachträglich übernommen, die Build 96 fälschlich als bekannt markiert hatte, während bereits wirklich importierte Bilder per SHA-256 nicht doppelt kopiert werden. Orientation-Fix, WLAN/AirPrint, SD A-E und Postcard-fullbleed bleiben erhalten."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.9-card-readonly.zip dist/FTS-Printer-macOS-v0.3.9-card-readonly.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.9 · Read-Only SD Cards" --notes "Build 99: FTS schreibt keine Registrierungsdatei mehr auf SD-/USB-Karten. A/B/C/D/E wird ausschließlich lokal auf dem Mac gespeichert; vorhandene alte Kartenmarker werden nur noch gelesen. Karten dürfen read-only sein. Der Recovery-Import übernimmt weiterhin neue bzw. zuvor verschluckte Fotos und verhindert echte Duplikate per SHA-256. Orientation-Fix, WLAN/AirPrint und Postcard-fullbleed bleiben erhalten."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.8-card-recovery"
+          CURRENT="fts-printer-mac-v0.3.9-card-readonly"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

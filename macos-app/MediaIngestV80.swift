@@ -60,9 +60,11 @@ struct V80MediaManifest: Codable {
     var baselines: [String: V80CardBaseline] = [:]
     var wlanKnownSourceKeys: Set<String> = []
     var wlanFingerprints: [String:String]?
-    // Separate durable ledger of files that were actually copied. This lets FTS
-    // distinguish "known old stock" from "new photo accidentally marked known".
     var importedHashes: Set<String>?
+}
+
+struct V80LocalCardRegistry: Codable {
+    var cards: [String:V80CardMarker] = [:]
 }
 
 @MainActor
@@ -348,23 +350,25 @@ final class MediaIngestV80: ObservableObject {
     nonisolated private static func registerSync(card:V80DetectedCard,label:String,eventToken:String,activation:V80MediaActivation,replaceExisting:Bool) throws -> (items:[V80MediaItem],cards:[V80DetectedCard],baselineCount:Int,labels:Set<String>) {
         let fm=FileManager.default
         let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
-        guard fm.isWritableFile(atPath:volume.path) else {
-            throw NSError(domain:"FTSPrinter",code:100,userInfo:[NSLocalizedDescriptionKey:"SD-Karte ist schreibgeschützt."])
-        }
 
         var manifest=try loadManifestSync(activation)
+        var registry=loadCardRegistry(activation)
+        let existingRegistryIDs=registry.cards.filter{$0.value.eventToken==eventToken && $0.value.label==label}.map{$0.key}
         let existingIDs=manifest.baselines.filter{$0.value.label==label}.map{$0.key}
-        if !existingIDs.isEmpty && !replaceExisting {
+        if (!existingRegistryIDs.isEmpty || !existingIDs.isEmpty) && !replaceExisting {
             throw NSError(domain:"FTSPrinter",code:101,userInfo:[NSLocalizedDescriptionKey:"Karte \(label) ist für dieses Event bereits registriert. Zum Ersetzen ausdrücklich „\(label) ersetzen“ wählen."])
         }
         if replaceExisting {
             for id in existingIDs { manifest.baselines.removeValue(forKey:id) }
+            for id in existingRegistryIDs { registry.cards.removeValue(forKey:id) }
         }
 
         let cardUUID=UUID().uuidString
-        let marker=V80CardMarker(version:80,eventToken:eventToken,cardUUID:cardUUID,label:label,registeredAt:Date())
-        let markerURL=volume.appendingPathComponent(".fts-printer-card-v80.json")
-        try JSONEncoder().encode(marker).write(to:markerURL,options:.atomic)
+        let marker=V80CardMarker(version:81,eventToken:eventToken,cardUUID:cardUUID,label:label,registeredAt:Date())
+        // Important: never write registration metadata to the camera card.
+        // Cards stay read-only from FTS; registration is persisted on the Mac.
+        registry.cards[card.technicalID]=marker
+        try saveCardRegistry(registry,activation)
 
         let files=mediaFiles(on:volume)
         var keys=Set<String>()
@@ -380,7 +384,7 @@ final class MediaIngestV80: ObservableObject {
             knownFingerprints:fingerprints,createdAt:Date()
         )
         try saveManifestSync(manifest,activation)
-        let cards=detectCardsSync(eventToken:eventToken)
+        let cards=detectCardsSync(eventToken:eventToken,activation:activation)
         return (manifest.items,cards,keys.count,Set(manifest.baselines.values.map{$0.label}))
     }
 
@@ -396,10 +400,15 @@ final class MediaIngestV80: ObservableObject {
         manifest.importedHashes=localLedger
         hashes.formUnion(localLedger)
         var newCount=0
-        let cards=detectCardsSync(eventToken:eventToken)
+        var registry=loadCardRegistry(activation)
+        let cards=detectCardsSync(eventToken:eventToken,activation:activation)
 
         for card in cards {
             guard let marker=card.marker,marker.eventToken==eventToken else{continue}
+            if registry.cards[card.technicalID] == nil {
+                registry.cards[card.technicalID]=marker
+                try? saveCardRegistry(registry,activation)
+            }
             let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
             let recoveringBaseline = manifest.baselines[marker.cardUUID] == nil
             var baseline = manifest.baselines[marker.cardUUID] ?? V80CardBaseline(
@@ -507,8 +516,9 @@ final class MediaIngestV80: ObservableObject {
         return (manifest.items,cards,newCount,Set(manifest.baselines.values.map{$0.label}))
     }
 
-    nonisolated private static func detectCardsSync(eventToken:String) -> [V80DetectedCard] {
+    nonisolated private static func detectCardsSync(eventToken:String,activation:V80MediaActivation) -> [V80DetectedCard] {
         let fm=FileManager.default
+        let registry=loadCardRegistry(activation)
         let keys:Set<URLResourceKey>=[.volumeIsRemovableKey,.volumeIsEjectableKey,.volumeIsInternalKey,.volumeNameKey,.volumeIdentifierKey,.isWritableKey]
         let volumes=fm.mountedVolumeURLs(includingResourceValuesForKeys:Array(keys),options:[.skipHiddenVolumes]) ?? []
         var out:[V80DetectedCard]=[]
@@ -519,9 +529,14 @@ final class MediaIngestV80: ObservableObject {
             let name=rv?.volumeName ?? v.lastPathComponent
             let tid=rv?.volumeIdentifier.map{String(describing:$0)} ?? v.path
             let markerURL=v.appendingPathComponent(".fts-printer-card-v80.json")
-            var marker:V80CardMarker?=nil
-            if let d=try? Data(contentsOf:markerURL),let m=try? JSONDecoder().decode(V80CardMarker.self,from:d),m.eventToken==eventToken {
-                marker=m
+            var marker=registry.cards[tid]
+            if marker?.eventToken != eventToken { marker=nil }
+            if marker == nil,
+               let d=try? Data(contentsOf:markerURL),
+               let legacy=try? JSONDecoder().decode(V80CardMarker.self,from:d),
+               legacy.eventToken==eventToken {
+                // Legacy compatibility only: read old marker, never modify the card.
+                marker=legacy
             }
             out.append(V80DetectedCard(
                 id:tid,volumePath:v.path,volumeName:name,technicalID:tid,marker:marker,
@@ -584,6 +599,25 @@ final class MediaIngestV80: ObservableObject {
         let mod=Int((rv.contentModificationDate ?? .distantPast).timeIntervalSince1970)
         let capture=captureTimestamp(file) ?? ""
         return "\(rel)|\(size)|\(mod)|\(capture)"
+    }
+
+    nonisolated private static func cardRegistryURL(_ activation:V80MediaActivation) -> URL {
+        URL(fileURLWithPath:activation.folderPath,isDirectory:true)
+            .deletingLastPathComponent()
+            .appendingPathComponent(".fts-card-registry-v81.json")
+    }
+
+    nonisolated private static func loadCardRegistry(_ activation:V80MediaActivation) -> V80LocalCardRegistry {
+        let url=cardRegistryURL(activation)
+        guard let data=try? Data(contentsOf:url),
+              let registry=try? JSONDecoder().decode(V80LocalCardRegistry.self,from:data) else {
+            return V80LocalCardRegistry()
+        }
+        return registry
+    }
+
+    nonisolated private static func saveCardRegistry(_ registry:V80LocalCardRegistry,_ activation:V80MediaActivation) throws {
+        try JSONEncoder().encode(registry).write(to:cardRegistryURL(activation),options:.atomic)
     }
 
     nonisolated private static func importedHashesAcrossEvent(_ activation:V80MediaActivation) -> Set<String> {
