@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.13-live-printer-links.zip
-            dist/FTS-Printer-macOS-v0.3.13-live-printer-links.dmg
+            dist/FTS-Printer-macOS-v0.3.14-live-device-panel.zip
+            dist/FTS-Printer-macOS-v0.3.14-live-device-panel.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.13-live-printer-links"
+          TAG="fts-printer-mac-v0.3.14-live-device-panel"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.13-live-printer-links.zip dist/FTS-Printer-macOS-v0.3.13-live-printer-links.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.14-live-device-panel.zip dist/FTS-Printer-macOS-v0.3.14-live-device-panel.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.13-live-printer-links.zip dist/FTS-Printer-macOS-v0.3.13-live-printer-links.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.13 · Live Printer Connections" --notes "Build 103: FTS zeigt nur Drucker, deren USB-Verbindung physisch erkannt oder deren AirPrint/IPP-Netzwerkweg aktuell erreichbar ist. Alte/offline macOS-Warteschlangen verschwinden aus der App. WLAN zeigt Mac-RSSI, SNR, Linkrate und die TCP-Antwortzeit zum Drucker; der FTS-Server erhält eine eigene Erreichbarkeits-/Latenzanzeige. USB zeigt die ausgehandelte USB-Link-Geschwindigkeit und verfügbare Stromstärke, soweit macOS diese Werte liefert. Der Karten- und Medienarchiv-Workflow aus Build 102 bleibt erhalten."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.14-live-device-panel.zip dist/FTS-Printer-macOS-v0.3.14-live-device-panel.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.14 · Live Device Panel" --notes "Build 104: Neues kompaktes Live-Gerätepanel für Canon SELPHY, WLAN-Kamera und SD-Karten. Nur tatsächlich verbundene/relevante Geräte werden angezeigt. Unbekannte SD-Karten bieten nur freie A-E-Zuordnungen an; registrierte Karten erscheinen als kompakte FTS-SD-Karte mit Importstatus. WLAN-Kameras werden aus echten Foto-Metadaten benannt und zeigen eine fünfstufige Verbindungsanzeige. Die Fotoübersicht ist deutlich kompakter, neu eingegangene Fotos stehen vorne und jedes Foto erhält eine stabile Nummer pro Quelle. Zusätzlich ist das freigegebene FTS-Bild jetzt als echtes macOS-App-Icon (Finder/Dock/App) im Bundle hinterlegt."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.13-live-printer-links"
+          CURRENT="fts-printer-mac-v0.3.14-live-device-panel"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

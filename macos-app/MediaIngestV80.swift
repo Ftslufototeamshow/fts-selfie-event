@@ -94,6 +94,11 @@ final class MediaIngestV80: ObservableObject {
     @Published var status = "Lokales Event-Album noch nicht aktiviert."
     @Published var scanning = false
     @Published var lastImportedCount = 0
+    @Published var wlanCameraActive = false
+    @Published var wlanCameraName = ""
+    @Published var wlanCameraBars = 0
+    @Published var wlanCameraQuality = ""
+    @Published var wlanCameraDetail = ""
 
     private func legacyActivationKey(_ event: EventRow) -> String { "fts.media.activation.v80.\(event.event_token)" }
     private func activationKey(_ event: EventRow, day: String) -> String { "fts.media.activation.v92.\(event.event_token).\(day)" }
@@ -153,6 +158,7 @@ final class MediaIngestV80: ObservableObject {
               let a=try? JSONDecoder().decode(V80MediaActivation.self,from:d),
               FileManager.default.fileExists(atPath:a.folderPath) else {
             activation=nil;items=[];detectedCards=[];registeredCardLabels=[]
+            wlanCameraActive=false;wlanCameraName="";wlanCameraBars=0;wlanCameraQuality="";wlanCameraDetail=""
             status="Tagesalbum \(selectedDay) noch nicht aktiviert.";return
         }
         activation=a
@@ -338,7 +344,11 @@ final class MediaIngestV80: ObservableObject {
                 try Self.scanSync(eventToken:event.event_token,activation:a)
             }.value
             let designed=await ensureDesignedCopies(event:event,activation:a,items:r.items)
+            let wifiSignal=await Task.detached(priority:.utility) {
+                V80MacSpooler.wifiSignalStatus()
+            }.value
             items=designed.items.sorted{$0.importedAt>$1.importedAt}
+            updateWLANCameraStatus(items:designed.items,signal:wifiSignal)
             detectedCards=r.cards
             registeredCardLabels=r.labels
             lastImportedCount=r.newCount
@@ -354,6 +364,38 @@ final class MediaIngestV80: ObservableObject {
         } catch {
             status="Importprüfung: \(error.localizedDescription)"
         }
+    }
+
+    private func updateWLANCameraStatus(items:[V80MediaItem],signal:(bars:Int,label:String,detail:String)) {
+        let wifiItems=items
+            .filter{$0.sourceType.uppercased()=="WIFI"}
+            .sorted{$0.importedAt>$1.importedAt}
+        guard let latest=wifiItems.first,
+              Date().timeIntervalSince(latest.importedAt) <= 90 else {
+            wlanCameraActive=false
+            wlanCameraName=""
+            wlanCameraBars=0
+            wlanCameraQuality=""
+            wlanCameraDetail=""
+            return
+        }
+        wlanCameraActive=true
+        wlanCameraName=cameraDisplayName(latest.cameraID)
+        wlanCameraBars=max(1,signal.bars)
+        wlanCameraQuality=signal.bars>0 ? signal.label : "Transfer aktiv"
+        wlanCameraDetail=signal.detail
+    }
+
+    private func cameraDisplayName(_ raw:String?) -> String {
+        guard let raw,!raw.isEmpty else{return "WLAN-Kamera"}
+        let parts=raw.split(separator:"·").map{String($0).trimmingCharacters(in:.whitespacesAndNewlines)}.filter{!$0.isEmpty}
+        if parts.count>=2 {
+            let make=parts[0]
+            let model=parts[1]
+            if model.lowercased().contains(make.lowercased()) { return model }
+            return "\(make) \(model)"
+        }
+        return parts.first ?? "WLAN-Kamera"
     }
 
     private func ensureDesignedCopies(event:EventRow,activation:V80MediaActivation,items:[V80MediaItem]) async -> (items:[V80MediaItem],created:Int,failed:Int) {

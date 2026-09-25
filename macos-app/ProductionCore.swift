@@ -408,9 +408,11 @@ enum V80MacSpooler {
         return ConnectionProbe(connected:false,summary:"Drucker nicht physisch erreichbar")
     }
 
-    private static func wifiLinkSummary() -> String {
+    static func wifiSignalStatus() -> (bars:Int,label:String,detail:String) {
         let airport="/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport"
-        guard let text=runProcess(airport,["-I"],timeout:1.2) else{return ""}
+        guard let text=runProcess(airport,["-I"],timeout:1.2) else {
+            return (0,"nicht messbar","")
+        }
         func number(_ key:String)->Int? {
             for line in text.split(separator:"\n") {
                 let s=String(line).trimmingCharacters(in:.whitespaces)
@@ -424,21 +426,29 @@ enum V80MacSpooler {
         let rssi=number("agrCtlRSSI")
         let noise=number("agrCtlNoise")
         let tx=number("lastTxRate")
-        guard rssi != nil || tx != nil else{return ""}
+        guard rssi != nil || tx != nil else{return (0,"nicht messbar","")}
         var parts:[String]=[]
+        var bars=3
+        var label="mittel"
         if let rssi {
-            let quality:String
             switch rssi {
-            case -50...0: quality="sehr stark"
-            case -60 ... -51: quality="stark"
-            case -70 ... -61: quality="mittel"
-            default: quality="schwach"
+            case -50...0: bars=5;label="sehr gut"
+            case -60 ... -51: bars=4;label="gut"
+            case -70 ... -61: bars=3;label="mittel"
+            case -80 ... -71: bars=2;label="schwach"
+            default: bars=1;label="sehr schwach"
             }
-            parts.append("Mac-WLAN \(rssi) dBm (\(quality))")
+            parts.append("\(rssi) dBm")
         }
         if let noise,let rssi { parts.append("SNR \(max(0,rssi-noise)) dB") }
-        if let tx { parts.append("Linkrate \(tx) Mb/s") }
-        return parts.joined(separator:" · ")
+        if let tx { parts.append("\(tx) Mb/s") }
+        return (bars,label,parts.joined(separator:" · "))
+    }
+
+    private static func wifiLinkSummary() -> String {
+        let status=wifiSignalStatus()
+        guard status.bars>0 else{return ""}
+        return "Mac-WLAN \(status.detail) (\(status.label))"
     }
 
     private static func usbLinkSummary() -> String {
@@ -763,8 +773,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.12-live-printer-links"
-    static let build = 103
+    static let version = "1.1.13-live-device-panel"
+    static let build = 104
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []

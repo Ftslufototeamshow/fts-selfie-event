@@ -164,6 +164,176 @@ struct ProductionQueueContent: View {
     }
 }
 
+private struct FTSConnectionDots: View {
+    let bars:Int
+    let activeColor:Color
+    var body:some View {
+        HStack(spacing:3) {
+            ForEach(1...5,id:\.self) { i in
+                Circle()
+                    .fill(i <= max(0,min(5,bars)) ? activeColor : Color.secondary.opacity(0.20))
+                    .frame(width:6,height:6)
+            }
+        }
+    }
+}
+
+private struct FTSSDCardShape: Shape {
+    func path(in rect:CGRect)->Path {
+        var p=Path()
+        let cut=min(rect.width,rect.height)*0.22
+        p.move(to:CGPoint(x:rect.minX,y:rect.minY))
+        p.addLine(to:CGPoint(x:rect.maxX-cut,y:rect.minY))
+        p.addLine(to:CGPoint(x:rect.maxX,y:rect.minY+cut))
+        p.addLine(to:CGPoint(x:rect.maxX,y:rect.maxY))
+        p.addLine(to:CGPoint(x:rect.minX,y:rect.maxY))
+        p.closeSubpath()
+        return p
+    }
+}
+
+private struct FTSSDCardBadge: View {
+    let label:String?
+    let accent:Color
+    var body:some View {
+        ZStack {
+            FTSSDCardShape()
+                .fill(Color.black.opacity(0.88))
+                .overlay(FTSSDCardShape().stroke(accent.opacity(0.9),lineWidth:1.5))
+            VStack(spacing:1) {
+                Text("FTS").font(.system(size:15,weight:.black,design:.rounded)).foregroundStyle(.white)
+                Text("SD").font(.system(size:9,weight:.bold)).foregroundStyle(accent)
+                if let label {
+                    Text("KARTE \(label)").font(.system(size:8,weight:.black,design:.rounded)).foregroundStyle(.white)
+                }
+            }
+        }
+        .frame(width:58,height:72)
+    }
+}
+
+private struct FTSSelphyBadge: View {
+    let color:Color
+    var body:some View {
+        ZStack {
+            RoundedRectangle(cornerRadius:11).fill(Color.black.opacity(0.88))
+            VStack(spacing:0) {
+                RoundedRectangle(cornerRadius:5)
+                    .fill(Color.secondary.opacity(0.35))
+                    .frame(width:48,height:13)
+                    .offset(y:4)
+                RoundedRectangle(cornerRadius:8)
+                    .fill(Color(nsColor:.darkGray))
+                    .frame(width:68,height:36)
+                    .overlay(alignment:.topTrailing) {
+                        Circle().fill(color).frame(width:6,height:6).padding(6)
+                    }
+                Rectangle()
+                    .fill(Color.white.opacity(0.92))
+                    .frame(width:42,height:18)
+                    .overlay(Rectangle().stroke(Color.secondary.opacity(0.5),lineWidth:1))
+                    .offset(y:-2)
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius:11).stroke(color.opacity(0.8),lineWidth:1.5))
+        .frame(width:82,height:72)
+    }
+}
+
+private struct FTSPrinterLiveTile: View {
+    let slot:LocalPrinterSlot
+
+    var stateColor:Color {
+        switch slot.state {
+        case "ERROR": return .red
+        case "IDLE": return .green
+        default: return .orange
+        }
+    }
+    var stateText:String {
+        switch slot.state {
+        case "IDLE": return "Bereit"
+        case "PRINTING": return "Druckt"
+        case "TRANSFER","PREPARING": return "Übertragung"
+        case "ERROR": return "Fehler"
+        default: return slot.state.capitalized
+        }
+    }
+    var bars:Int {
+        let c=slot.connection.lowercased()
+        if c.contains("usb") && c.contains("verbunden") { return 5 }
+        if c.contains("sehr gut") || c.contains("sehr stark") { return 5 }
+        if c.contains("(gut)") || c.contains("(stark)") { return 4 }
+        if c.contains("mittel") { return 3 }
+        if c.contains("sehr schwach") { return 1 }
+        if c.contains("schwach") { return 2 }
+        return 3
+    }
+    var displayName:String {
+        let l=slot.name.lowercased()
+        return (l.contains("selphy") || l.contains("cp1500")) ? "Canon SELPHY CP1500" : slot.name
+    }
+
+    var body:some View {
+        HStack(spacing:9) {
+            FTSSelphyBadge(color:stateColor)
+            VStack(alignment:.leading,spacing:4) {
+                Text(displayName).font(.caption.bold()).lineLimit(1)
+                HStack(spacing:5) {
+                    Circle().fill(stateColor).frame(width:7,height:7)
+                    Text(stateText).font(.caption2.bold()).foregroundStyle(stateColor)
+                    FTSConnectionDots(bars:bars,activeColor:slot.connection.contains("USB") ? .green : .blue)
+                }
+                Text(slot.connection.replacingOccurrences(of:"\n",with:" · "))
+                    .font(.system(size:9))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(8)
+        .frame(width:260,height:92,alignment:.leading)
+        .background(Color(nsColor:.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius:12))
+    }
+}
+
+private struct FTSCameraLiveTile: View {
+    let name:String
+    let bars:Int
+    let quality:String
+    let detail:String
+    var body:some View {
+        HStack(spacing:9) {
+            ZStack {
+                RoundedRectangle(cornerRadius:11)
+                    .fill(Color.black.opacity(0.88))
+                    .overlay(RoundedRectangle(cornerRadius:11).stroke(Color.blue.opacity(0.8),lineWidth:1.5))
+                Image(systemName:"camera.fill")
+                    .font(.system(size:29,weight:.medium))
+                    .foregroundStyle(.white)
+            }
+            .frame(width:72,height:72)
+            VStack(alignment:.leading,spacing:4) {
+                Text(name).font(.caption.bold()).lineLimit(2)
+                HStack(spacing:5) {
+                    Image(systemName:"wifi").font(.caption2).foregroundStyle(.blue)
+                    Text(quality.isEmpty ? "WLAN aktiv" : quality.capitalized)
+                        .font(.caption2.bold())
+                    FTSConnectionDots(bars:bars,activeColor:.blue)
+                }
+                if !detail.isEmpty {
+                    Text(detail).font(.system(size:9)).foregroundStyle(.secondary).lineLimit(2)
+                }
+                Text("WLAN-Fotoeingang aktiv").font(.system(size:9)).foregroundStyle(.green)
+            }
+        }
+        .padding(8)
+        .frame(width:245,height:92,alignment:.leading)
+        .background(Color(nsColor:.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius:12))
+    }
+}
+
 struct ProductionMediaView: View {
     @EnvironmentObject var state: AppState
     var body: some View {
@@ -190,17 +360,30 @@ struct ProductionMediaContent: View {
         for card in ingest.detectedCards {
             if let label=card.label { result.insert(label) }
         }
-        result.insert("W")
-        return result.sorted()
+        return result.sorted {
+            if $0=="W" { return false }
+            if $1=="W" { return true }
+            return $0<$1
+        }
     }
 
     var visibleItems:[V80MediaItem] {
-        var result:[V80MediaItem]=[]
-        for item in ingest.items where item.sourceLabel==sourceLabel && item.visibleInPrinter {
-            result.append(item)
-            if result.count>=120 { break }
-        }
-        return result
+        Array(
+            ingest.items
+                .filter{$0.sourceLabel==sourceLabel && $0.visibleInPrinter}
+                .sorted{$0.importedAt>$1.importedAt}
+                .prefix(120)
+        )
+    }
+
+    func stablePhotoNumber(_ item:V80MediaItem)->Int {
+        let ordered=ingest.items
+            .filter{$0.sourceLabel==item.sourceLabel && $0.sourceType==item.sourceType}
+            .sorted {
+                if $0.importedAt == $1.importedAt { return $0.id < $1.id }
+                return $0.importedAt < $1.importedAt
+            }
+        return (ordered.firstIndex(where:{$0.id==item.id}) ?? 0)+1
     }
 
     var total:Int {
@@ -223,7 +406,7 @@ struct ProductionMediaContent: View {
             if ingest.activation == nil {
                 inactiveView
             } else {
-                registeredCardsView
+                liveDevicesView
                 sourceToolbar
                 lastCodeView
                 mediaGrid
@@ -291,45 +474,64 @@ struct ProductionMediaContent: View {
         .frame(maxWidth:.infinity,maxHeight:.infinity)
     }
 
-    private var registeredCardsView: some View {
-        GroupBox("SD-Karten A / B / C / D / E") {
-            VStack(alignment:.leading,spacing:8) {
-                if ingest.detectedCards.isEmpty {
-                    Text("Keine SD-Karte eingesteckt.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                ForEach(ingest.detectedCards) { card in
-                    V80CardRegistrationRow(
-                        card:card,
-                        usedLabels:usedCardLabels,
-                        onReveal:{ ingest.reveal(card:card) },
-                        onRelease:{
-                            guard let e=event else{return}
-                            Task{await ingest.release(card:card,event:e)}
-                        },
-                        onRegister:{ label in
-                            guard let e=event else{return}
-                            Task{await ingest.register(card:card,label:label,event:e)}
-                        },
-                        onReplace:{ label in
-                            guard let e=event else{return}
-                            Task{await ingest.register(card:card,label:label,event:e,replaceExisting:true)}
+    @ViewBuilder private var liveDevicesView: some View {
+        let hasDevices = !core.printerSlots.isEmpty || ingest.wlanCameraActive || !ingest.detectedCards.isEmpty
+        if hasDevices {
+            VStack(alignment:.leading,spacing:5) {
+                Text("Live-Geräte").font(.caption.bold()).foregroundStyle(.secondary)
+                ScrollView(.horizontal,showsIndicators:false) {
+                    HStack(spacing:8) {
+                        ForEach(core.printerSlots) { printer in
+                            FTSPrinterLiveTile(slot:printer)
                         }
-                    )
-                    .disabled(ingest.scanning)
+                        if ingest.wlanCameraActive {
+                            FTSCameraLiveTile(
+                                name:ingest.wlanCameraName.isEmpty ? "WLAN-Kamera" : ingest.wlanCameraName,
+                                bars:ingest.wlanCameraBars,
+                                quality:ingest.wlanCameraQuality,
+                                detail:ingest.wlanCameraDetail
+                            )
+                        }
+                        ForEach(ingest.detectedCards) { card in
+                            V80CardRegistrationRow(
+                                card:card,
+                                usedLabels:usedCardLabels,
+                                isScanning:ingest.scanning,
+                                onReveal:{ ingest.reveal(card:card) },
+                                onRelease:{
+                                    guard let e=event else{return}
+                                    Task{await ingest.release(card:card,event:e)}
+                                },
+                                onRegister:{ label in
+                                    guard let e=event else{return}
+                                    Task{await ingest.register(card:card,label:label,event:e)}
+                                },
+                                onReplace:{ label in
+                                    guard let e=event else{return}
+                                    Task{await ingest.register(card:card,label:label,event:e,replaceExisting:true)}
+                                }
+                            )
+                            .disabled(ingest.scanning)
+                        }
+                    }
                 }
-            }.padding(.vertical,4)
+            }
         }
     }
 
     private var sourceToolbar: some View {
         HStack {
-            Picker("Quelle",selection:$sourceLabel) {
-                ForEach(sourceChoices,id:\.self) { source in
-                    Text(source=="W" ? "WLAN" : "Karte \(source)").tag(source)
+            if sourceChoices.isEmpty {
+                Text("Noch keine neuen Fotos verfügbar.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Picker("Quelle",selection:$sourceLabel) {
+                    ForEach(sourceChoices,id:\.self) { source in
+                        Text(source=="W" ? "WLAN-Kamera" : "Karte \(source)").tag(source)
+                    }
                 }
+                .frame(width:220)
             }
-            .frame(width:220)
             Spacer()
             if total>0 {
                 Text("\(total) Ausdruck\(total==1 ? "" : "e") ausgewählt").font(.headline)
@@ -349,10 +551,11 @@ struct ProductionMediaContent: View {
 
     private var mediaGrid: some View {
         ScrollView(.vertical,showsIndicators:true) {
-            LazyVGrid(columns:[GridItem(.adaptive(minimum:180),spacing:10)],spacing:10) {
+            LazyVGrid(columns:[GridItem(.adaptive(minimum:145),spacing:8)],spacing:8) {
                 ForEach(visibleItems) { item in
                     V80MediaItemCell(
                         item:item,
+                        photoNumber:stablePhotoNumber(item),
                         quantity:Binding(
                             get:{quantities[item.id] ?? 0},
                             set:{quantities[item.id]=$0}
@@ -430,7 +633,7 @@ struct ProductionMediaContent: View {
 
     private func normalizeSource() {
         if !sourceChoices.contains(sourceLabel) {
-            sourceLabel=sourceChoices.first ?? "A"
+            sourceLabel=sourceChoices.first ?? ""
         }
     }
 
@@ -448,6 +651,7 @@ struct ProductionMediaContent: View {
 struct V80CardRegistrationRow: View {
     let card:V80DetectedCard
     let usedLabels:Set<String>
+    let isScanning:Bool
     let onReveal:()->Void
     let onRelease:()->Void
     let onRegister:(String)->Void
@@ -456,42 +660,65 @@ struct V80CardRegistrationRow: View {
     @State private var showReplace=false
     @State private var showRelease=false
 
+    var freeLabels:[String] {
+        ["A","B","C","D","E"].filter{!usedLabels.contains($0)}
+    }
+    var statusColor:Color {
+        if card.marker == nil { return .orange }
+        return isScanning ? .orange : .green
+    }
+    var statusText:String {
+        if card.marker == nil { return "Neu · Zuteilung wählen" }
+        return isScanning ? "Import läuft" : "Bereit"
+    }
+
     var body: some View {
-        HStack {
-            Image(systemName:"sdcard")
-            VStack(alignment:.leading,spacing:2) {
-                Text(card.label.map{"Karte \($0)"} ?? "Unbekannte Karte").bold()
-                Text(card.volumeName).font(.caption).foregroundStyle(.secondary)
-                Text(card.writable ? "beschreibbar · Finder + FTS" : "schreibgeschützt · Lesen/Import möglich · Lock-Schieber prüfen")
-                    .font(.caption2)
-                    .foregroundStyle(card.writable ? .green : .orange)
-            }
-            Spacer()
-            Button("Im Finder öffnen"){onReveal()}
-                .font(.caption)
-            if card.marker == nil {
-                ForEach(["A","B","C","D","E"],id:\.self) { label in
-                    Button(usedLabels.contains(label) ? "\(label) ersetzen" : label) {
-                        if usedLabels.contains(label) {
-                            replaceLabel=label
-                            showReplace=true
-                        } else {
-                            onRegister(label)
-                        }
-                    }
-                    .font(.caption)
+        HStack(spacing:9) {
+            FTSSDCardBadge(label:card.label,accent:statusColor)
+            VStack(alignment:.leading,spacing:4) {
+                Text(card.label.map{"SD-Karte \($0)"} ?? "Neue SD-Karte")
+                    .font(.caption.bold())
+                Text(card.volumeName).font(.system(size:9)).foregroundStyle(.secondary).lineLimit(1)
+                HStack(spacing:5) {
+                    Circle().fill(statusColor).frame(width:7,height:7)
+                    Text(statusText).font(.caption2.bold()).foregroundStyle(statusColor)
                 }
-            } else {
-                Text("erkannt").font(.caption.bold()).foregroundStyle(.green)
-                Button("Karte \(card.label ?? "") freigeben",role:.destructive){showRelease=true}
-                    .font(.caption)
+                if card.marker == nil {
+                    if !freeLabels.isEmpty {
+                        HStack(spacing:4) {
+                            ForEach(freeLabels,id:\.self) { label in
+                                Button(label){onRegister(label)}
+                                    .font(.caption2.bold())
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.mini)
+                            }
+                        }
+                    } else {
+                        Menu("Kennung ersetzen") {
+                            ForEach(["A","B","C","D","E"],id:\.self) { label in
+                                Button("Karte \(label) ersetzen") {
+                                    replaceLabel=label
+                                    showReplace=true
+                                }
+                            }
+                        }
+                        .font(.caption2)
+                    }
+                } else {
+                    HStack(spacing:6) {
+                        Button("Öffnen"){onReveal()}.font(.caption2).controlSize(.mini)
+                        Button("Freigeben",role:.destructive){showRelease=true}.font(.caption2).controlSize(.mini)
+                    }
+                }
             }
         }
+        .padding(8)
+        .frame(width:card.marker == nil ? 255 : 205,height:92,alignment:.leading)
+        .background(Color(nsColor:.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius:12))
         .alert("Karte \(replaceLabel) ersetzen?",isPresented:$showReplace) {
             Button("Abbrechen",role:.cancel){}
-            Button("Karte \(replaceLabel) ersetzen",role:.destructive) {
-                onReplace(replaceLabel)
-            }
+            Button("Karte \(replaceLabel) ersetzen",role:.destructive) { onReplace(replaceLabel) }
         } message: {
             Text("Die bisherige Zuordnung von Karte \(replaceLabel) wird für dieses Event gesperrt. Die neu eingesteckte Karte übernimmt diese Kennung.")
         }
@@ -499,45 +726,76 @@ struct V80CardRegistrationRow: View {
             Button("Abbrechen",role:.cancel){}
             Button("Freigeben",role:.destructive){onRelease()}
         } message: {
-            Text("Nur die FTS-Zuordnung A–E wird entfernt. Fotos auf der Karte und bereits importierte Originale bleiben erhalten. Ein alter FTS-Marker wird, falls die Karte beschreibbar ist, entfernt.")
+            Text("Nur die FTS-Zuordnung A–E wird entfernt. Fotos auf der Karte und bereits importierte Originale bleiben erhalten.")
         }
     }
 }
 
 struct V80MediaItemCell: View {
     let item:V80MediaItem
+    let photoNumber:Int
     @Binding var quantity:Int
     let onHide:()->Void
     @State private var showHide=false
 
+    var sourceTitle:String {
+        if item.sourceType=="WIFI" {
+            if let camera=item.cameraID,!camera.isEmpty {
+                let parts=camera.split(separator:"·").map{String($0).trimmingCharacters(in:.whitespacesAndNewlines)}
+                if parts.count>=2 { return parts[1] }
+            }
+            return "WLAN-Kamera"
+        }
+        return "Karte \(item.sourceLabel)"
+    }
+
     var body: some View {
-        VStack(alignment:.leading,spacing:7) {
+        VStack(alignment:.leading,spacing:5) {
             let previewPath=(item.designedPath?.isEmpty == false) ? item.designedPath! : item.importedPath
             if let image=NSImage(contentsOfFile:previewPath) {
-                let landscape=image.size.width >= image.size.height
                 Image(nsImage:image)
                     .resizable()
                     .scaledToFit()
-                    .frame(width:landscape ? 220 : 105,height:145)
-                    .frame(maxWidth:.infinity,alignment:.center)
-                    .background(Color.black.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius:8))
+                    .frame(maxWidth:.infinity)
+                    .frame(height:100)
+                    .background(Color.black.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius:7))
             }
-            Text(item.originalName).font(.caption.bold()).lineLimit(1)
-            Text(item.sourceType=="WIFI" ? "WLAN" : "Karte \(item.sourceLabel)")
-                .font(.caption2).foregroundStyle(.secondary)
-            if item.designedPath?.isEmpty == false {
-                Text("Selfie-Design angewendet").font(.caption2).foregroundStyle(.green)
+            Text("\(sourceTitle) · Foto \(String(format:"%03d",photoNumber))")
+                .font(.caption.bold())
+                .lineLimit(1)
+            HStack(spacing:5) {
+                Circle().fill(Color.green).frame(width:6,height:6)
+                Text("Neu").font(.caption2.bold()).foregroundStyle(.green)
+                Spacer()
+                Text(item.originalName).font(.system(size:9)).foregroundStyle(.secondary).lineLimit(1)
             }
-            Stepper(value:$quantity,in:0...20) {
-                Text("Anzahl: \(quantity)").font(.caption.bold())
+            HStack(spacing:6) {
+                Button {
+                    quantity=max(0,quantity-1)
+                } label: {
+                    Image(systemName:"minus")
+                }
+                .controlSize(.small)
+                .disabled(quantity==0)
+                Text("\(quantity)").font(.caption.bold().monospacedDigit()).frame(minWidth:18)
+                Button {
+                    quantity=min(20,quantity+1)
+                } label: {
+                    Image(systemName:"plus")
+                }
+                .controlSize(.small)
+                Spacer()
+                Button(role:.destructive){showHide=true} label:{
+                    Image(systemName:"eye.slash")
+                }
+                .buttonStyle(.borderless)
+                .help("Aus Programm entfernen")
             }
-            Button("Aus Programm entfernen",role:.destructive){showHide=true}
-                .font(.caption)
         }
-        .padding(9)
+        .padding(7)
         .background(Color(nsColor:.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius:12))
+        .clipShape(RoundedRectangle(cornerRadius:10))
         .alert("Foto aus der Printer-Ansicht entfernen?",isPresented:$showHide) {
             Button("Abbrechen",role:.cancel){}
             Button("Nur aus Programm entfernen",role:.destructive){onHide()}
