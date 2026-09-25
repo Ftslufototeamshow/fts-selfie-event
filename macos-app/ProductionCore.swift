@@ -366,37 +366,11 @@ enum V80MacSpooler {
     }
 
     private static func filterConfiguredPrinters(_ configured:[String]) -> [String] {
-        var names=configured
-
-        // If a Canon SELPHY is connected directly by USB, prefer that physical path
-        // and suppress stale Wi-Fi/AirPrint duplicates for the same SELPHY model.
-        let meta=Dictionary(uniqueKeysWithValues:names.map { name in
-            (name,(deviceURI(printerName:name),printerDetails(printerName:name)))
-        })
-        let usbSELPHYPresence=usbSELPHYPresent()
-        names=names.filter { name in
-            let info=meta[name] ?? ("","")
-            let hay=(name+" "+info.0+" "+info.1).lowercased()
-            let isUSBSELPHY=info.0.lowercased().hasPrefix("usb://") && (hay.contains("selphy") || hay.contains("cp1500"))
-            return !(isUSBSELPHY && !usbSELPHYPresence)
-        }
-
-        let hasUSBSELPHY=usbSELPHYPresence && names.contains { name in
-            let info=meta[name] ?? ("","")
-            let hay=(name+" "+info.0+" "+info.1).lowercased()
-            return info.0.lowercased().hasPrefix("usb://") && (hay.contains("selphy") || hay.contains("cp1500"))
-        }
-        if hasUSBSELPHY {
-            names=names.filter { name in
-                let info=meta[name] ?? ("","")
-                let uri=info.0.lowercased()
-                let hay=(name+" "+info.0+" "+info.1).lowercased()
-                let isSELPHY=hay.contains("selphy") || hay.contains("cp1500")
-                let isNetwork=uri.hasPrefix("ipp://") || uri.hasPrefix("ipps://") || uri.hasPrefix("dnssd://") || uri.hasPrefix("lpd://") || uri.hasPrefix("socket://")
-                return !(isSELPHY && isNetwork)
-            }
-        }
-        return names
+        // Keep every printer queue that macOS has configured.
+        // We intentionally do NOT hide the SELPHY WLAN/AirPrint queue when USB is
+        // connected. At an event the operator must be able to switch immediately
+        // between USB (ippusb) and WLAN/AirPrint if one transport has problems.
+        return configured
     }
 
     private static func usbSELPHYPresent()->Bool {
@@ -604,8 +578,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.3-fullbleed"
-    static let build = 94
+    static let version = "1.1.4-wlan-cards"
+    static let build = 95
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
