@@ -326,31 +326,63 @@ enum V80MacSpooler {
     }
 
     @MainActor
-    static func submit(image: NSImage, printerName: String, title: String) throws {
-        guard let printer = NSPrinter(name: printerName) else {
+    static func submit(image: NSImage, printerName: String, title: String) throws -> String {
+        guard NSPrinter(name: printerName) != nil else {
             throw NSError(domain: "FTSPrinter", code: 80, userInfo: [NSLocalizedDescriptionKey: "Drucker \(printerName) ist nicht mehr installiert."])
         }
 
         let landscape = image.size.width > image.size.height
-        // True 10x15 family ratio, with fill/crop rather than contain/white bars.
+        // SELPHY postcard media is 100 × 148 mm. Create an exact PDF page and let
+        // CUPS submit that immutable page. /usr/bin/lp returns a real CUPS request
+        // id that we can track before declaring a print finished.
         let portrait = NSSize(width: 283.46, height: 419.53)
         let paper = landscape ? NSSize(width: portrait.height, height: portrait.width) : portrait
-        let info = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
-        info.printer = printer
-        info.paperSize = paper
-        info.topMargin = 0; info.bottomMargin = 0; info.leftMargin = 0; info.rightMargin = 0
-        info.horizontalPagination = .clip
-        info.verticalPagination = .clip
-        info.isHorizontallyCentered = true
-        info.isVerticallyCentered = true
-
         let view = V80BorderlessPrintView(image: image, size: paper)
-        let op = NSPrintOperation(view: view, printInfo: info)
-        op.jobTitle = title
-        op.showsPrintPanel = false
-        op.showsProgressPanel = false
-        guard op.run() else {
-            throw NSError(domain: "FTSPrinter", code: 81, userInfo: [NSLocalizedDescriptionKey: "Druckauftrag wurde vom macOS-Drucksystem nicht angenommen."])
+        let pdf = view.dataWithPDF(inside: view.bounds)
+
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fts-print-" + UUID().uuidString + ".pdf")
+        try pdf.write(to: temp, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/lp")
+        p.arguments = ["-d", printerName, "-t", title, temp.path]
+        let out = Pipe(), err = Pipe()
+        p.standardOutput = out
+        p.standardError = err
+
+        do {
+            try p.run()
+            let deadline = Date().addingTimeInterval(12)
+            while p.isRunning && Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.03)
+            }
+            if p.isRunning {
+                p.terminate()
+                throw NSError(domain:"FTSPrinter",code:181,userInfo:[NSLocalizedDescriptionKey:"macOS-Drucksystem antwortet beim Senden nicht."])
+            }
+            let stdout = String(data:out.fileHandleForReading.readDataToEndOfFile(),encoding:.utf8) ?? ""
+            let stderr = String(data:err.fileHandleForReading.readDataToEndOfFile(),encoding:.utf8) ?? ""
+            guard p.terminationStatus == 0 else {
+                let msg = stderr.trimmingCharacters(in:.whitespacesAndNewlines)
+                throw NSError(domain:"FTSPrinter",code:182,userInfo:[NSLocalizedDescriptionKey:msg.isEmpty ? "CUPS hat den Druckauftrag abgelehnt." : msg])
+            }
+
+            let marker = "request id is "
+            if let r = stdout.lowercased().range(of: marker) {
+                let offset = stdout.distance(from: stdout.startIndex, to: r.upperBound)
+                let originalStart = stdout.index(stdout.startIndex, offsetBy: offset)
+                let tail = stdout[originalStart...]
+                if let id = tail.split(whereSeparator: { $0.isWhitespace || $0 == "(" }).first, !id.isEmpty {
+                    return String(id)
+                }
+            }
+            throw NSError(domain:"FTSPrinter",code:183,userInfo:[NSLocalizedDescriptionKey:"Druckauftrag wurde gesendet, aber macOS lieferte keine CUPS-Auftragsnummer. Nicht automatisch als gedruckt markieren."])
+        } catch let e as NSError where e.domain == "FTSPrinter" {
+            throw e
+        } catch {
+            throw NSError(domain:"FTSPrinter",code:184,userInfo:[NSLocalizedDescriptionKey:"Druckauftrag konnte nicht an CUPS übergeben werden: \(error.localizedDescription)"])
         }
     }
 
@@ -366,6 +398,16 @@ enum V80MacSpooler {
         return !raw.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty
     }
 
+    static func cupsJobState(printerName:String, requestID:String) -> (active:Bool, completed:Bool, reachable:Bool) {
+        let activeText=runProcess("/usr/bin/lpstat",["-W","not-completed","-o",printerName],timeout:1.5)
+        let completedText=runProcess("/usr/bin/lpstat",["-W","completed","-o",printerName],timeout:1.5)
+        let reachable = activeText != nil || completedText != nil
+        let needle=requestID.lowercased()
+        let active=(activeText ?? "").lowercased().contains(needle)
+        let completed=(completedText ?? "").lowercased().contains(needle)
+        return (active,completed,reachable)
+    }
+
     static func learnedSeconds(printerName: String) -> TimeInterval {
         let k = "fts.printer.duration.v80." + printerName
         let v = UserDefaults.standard.double(forKey: k)
@@ -379,24 +421,37 @@ enum V80MacSpooler {
         UserDefaults.standard.set(blended, forKey: "fts.printer.duration.v80." + printerName)
     }
 
-    static func waitUntilLikelyFinished(printerName: String, started: Date, estimated: TimeInterval) async throws {
-        var sawQueue = false
-        let timeout = max(estimated * 2.6, 120)
+    static func waitUntilLikelyFinished(printerName: String, requestID:String, started: Date, estimated: TimeInterval) async throws {
+        var sawActive = false
+        var sawCompleted = false
+        var sawReachable = false
+        let timeout = max(estimated * 2.8, 125)
+
         while true {
             try Task.checkCancellation()
             let elapsed = Date().timeIntervalSince(started)
             if elapsed > timeout {
-                throw NSError(domain: "FTSPrinter", code: 82, userInfo: [NSLocalizedDescriptionKey: "Druckstatus nach \(Int(timeout)) Sekunden unklar. Ausdruck am Drucker prüfen."])
+                throw NSError(domain:"FTSPrinter",code:82,userInfo:[NSLocalizedDescriptionKey:"CUPS-Auftrag \(requestID) wurde nicht sicher abgeschlossen. Ausdruck am Drucker prüfen."])
             }
-            let q = await Task.detached(priority:.utility) {
-                queueHasJobs(printerName: printerName)
+
+            let state = await Task.detached(priority:.utility) {
+                cupsJobState(printerName:printerName,requestID:requestID)
             }.value
-            if q == true { sawQueue = true }
+            sawActive = sawActive || state.active
+            sawCompleted = sawCompleted || state.completed
+            sawReachable = sawReachable || state.reachable
+
             if elapsed >= minimumPhysicalSeconds {
-                if sawQueue, q == false { return }
-                if !sawQueue, elapsed >= estimated { return }
+                if sawCompleted || (sawActive && !state.active) { return }
+
+                if elapsed >= estimated + 8 && !sawActive && !sawCompleted {
+                    let why = sawReachable
+                      ? "macOS hat den Auftrag nicht in der CUPS-Warteschlange bestätigt."
+                      : "CUPS konnte während des Drucks nicht abgefragt werden."
+                    throw NSError(domain:"FTSPrinter",code:185,userInfo:[NSLocalizedDescriptionKey:"\(why) Kein automatisches 'gedruckt'. Bitte Drucker prüfen."])
+                }
             }
-            try await Task.sleep(for: .seconds(2))
+            try await Task.sleep(for:.seconds(2))
         }
     }
 }
@@ -405,8 +460,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.0.7-stability"
-    static let build = 88
+    static let version = "1.0.8-spooler"
+    static let build = 89
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -667,7 +722,7 @@ final class ProductionCore: ObservableObject {
                 let start=Date()
                 let estimate=V80MacSpooler.learnedSeconds(printerName:printerName)
                 setSlot(printerName,state:"PRINTING",eta:Int(estimate),current:unitID,error:nil)
-                try V80MacSpooler.submit(image:image,printerName:printerName,title:"FTS Selfie · \(claim.pickup_code ?? unitID.prefix(8).description)")
+                let cupsRequestID = try V80MacSpooler.submit(image:image,printerName:printerName,title:"FTS Selfie · \(claim.pickup_code ?? unitID.prefix(8).description)")
                 let ticker=Task { [weak self] in
                     while !Task.isCancelled {
                         try? await Task.sleep(for:.seconds(1))
@@ -682,7 +737,7 @@ final class ProductionCore: ObservableObject {
                     }
                 }
                 do {
-                    try await V80MacSpooler.waitUntilLikelyFinished(printerName:printerName,started:start,estimated:estimate)
+                    try await V80MacSpooler.waitUntilLikelyFinished(printerName:printerName,requestID:cupsRequestID,started:start,estimated:estimate)
                     ticker.cancel()
                     V80MacSpooler.rememberDuration(Date().timeIntervalSince(start),printerName:printerName)
                     let _:V80FinishResult = try await api.rpc("fts_printer_finish_unit_v80",body:[
@@ -810,14 +865,22 @@ final class ProductionCore: ObservableObject {
             let estimate=V80MacSpooler.learnedSeconds(printerName:printerName)
             let start=Date()
             setSlot(printerName,state:"PRINTING",eta:Int(estimate),current:"LOCAL:"+jobID.uuidString,error:nil)
-            try V80MacSpooler.submit(image:rendered,printerName:printerName,title:"FTS Kamera · \(customer) · \(original)")
-            while true {
-                let elapsed=Date().timeIntervalSince(start)
-                setSlot(printerName,state:"PRINTING",eta:max(0,Int(estimate-elapsed)),current:"LOCAL:"+jobID.uuidString,error:nil)
-                if elapsed >= estimate { break }
-                try await Task.sleep(for:.seconds(1))
+            let cupsRequestID = try V80MacSpooler.submit(image:rendered,printerName:printerName,title:"FTS Kamera · \(customer) · \(original)")
+            let ticker=Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for:.seconds(1))
+                    guard let self else{return}
+                    let elapsed=Date().timeIntervalSince(start)
+                    self.setSlot(printerName,state:"PRINTING",eta:max(0,Int(estimate-elapsed)),current:"LOCAL:"+jobID.uuidString,error:nil)
+                }
             }
-            try await V80MacSpooler.waitUntilLikelyFinished(printerName:printerName,started:start,estimated:estimate)
+            do {
+                try await V80MacSpooler.waitUntilLikelyFinished(printerName:printerName,requestID:cupsRequestID,started:start,estimated:estimate)
+                ticker.cancel()
+            } catch {
+                ticker.cancel()
+                throw error
+            }
             V80MacSpooler.rememberDuration(Date().timeIntervalSince(start),printerName:printerName)
             guard let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
                   let ui=localQueue.jobs[ji].units.firstIndex(where:{$0.imagePath==path && $0.status == .printing}) else{return}
