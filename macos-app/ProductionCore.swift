@@ -376,42 +376,8 @@ enum V80MacSpooler {
         let portrait=NSSize(width:283.46,height:419.53)
         let paper=landscape ? NSSize(width:portrait.height,height:portrait.width) : portrait
 
-        if let lp=firstExecutable(["/usr/bin/lp","/usr/sbin/lp","/bin/lp"]) {
-            let view=V80BorderlessPrintView(image:image,size:paper)
-            let pdf=view.dataWithPDF(inside:view.bounds)
-            let temp=FileManager.default.temporaryDirectory.appendingPathComponent("fts-print-"+UUID().uuidString+".pdf")
-            try pdf.write(to:temp,options:.atomic)
-            defer { try? FileManager.default.removeItem(at:temp) }
-
-            let p=Process()
-            p.executableURL=URL(fileURLWithPath:lp)
-            p.arguments=["-d",printerName,"-t",title,temp.path]
-            let out=Pipe(),err=Pipe()
-            p.standardOutput=out;p.standardError=err
-            try p.run()
-            let deadline=Date().addingTimeInterval(12)
-            while p.isRunning && Date()<deadline { Thread.sleep(forTimeInterval:0.03) }
-            if p.isRunning {
-                p.terminate()
-                throw NSError(domain:"FTSPrinter",code:181,userInfo:[NSLocalizedDescriptionKey:"macOS-Drucksystem antwortet beim Senden nicht."])
-            }
-            let stdout=String(data:out.fileHandleForReading.readDataToEndOfFile(),encoding:.utf8) ?? ""
-            let stderr=String(data:err.fileHandleForReading.readDataToEndOfFile(),encoding:.utf8) ?? ""
-            guard p.terminationStatus==0 else {
-                throw NSError(domain:"FTSPrinter",code:182,userInfo:[NSLocalizedDescriptionKey:stderr.isEmpty ? "CUPS hat den Druckauftrag abgelehnt." : stderr])
-            }
-            let marker="request id is "
-            if let r=stdout.lowercased().range(of:marker) {
-                let offset=stdout.distance(from:stdout.startIndex,to:r.upperBound)
-                let originalStart=stdout.index(stdout.startIndex,offsetBy:offset)
-                if let id=stdout[originalStart...].split(whereSeparator:{$0.isWhitespace || $0=="("}).first,!id.isEmpty {
-                    return "CUPS:"+String(id)
-                }
-            }
-        }
-
-        // On current macOS the Print Center can be fully operational even when
-        // the legacy lp/lpstat binaries are absent. Fall back to native AppKit.
+        // Native-only path. The user's macOS exposes the SELPHY correctly in Print Center
+        // but rejects the legacy /usr/bin/lp executable. Do not call lp at all.
         let info=(NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
         info.printer=printer
         info.paperSize=paper
@@ -541,8 +507,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.0-native-print"
-    static let build = 91
+    static let version = "1.1.1-native-only"
+    static let build = 92
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -1203,6 +1169,30 @@ final class ProductionCore: ObservableObject {
             }
             await refresh(state:state)
         } catch { lastError=error.localizedDescription }
+    }
+
+    func purgeFailedLocalJobs(state: AppState) async {
+        guard let dev=state.deviceToken,let session=state.sessionToken,!state.selectedEventToken.isEmpty else{return}
+        do {
+            let deleted:Int = try await api.rpc("fts_printer_purge_failed_local_jobs_v96",body:[
+                "p_device_token":dev,
+                "p_session_token":session,
+                "p_event_token":state.selectedEventToken
+            ])
+            localQueue.jobs.removeAll {
+                $0.status == .uncertain || $0.status == .cancelled || $0.status == .waiting
+            }
+            saveLocalQueue()
+            // A failed local print can leave the slot red. Purging the failed jobs
+            // is an explicit operator decision that none of them should run.
+            for slot in printerSlots where slot.state == "ERROR" || slot.state == "OFFLINE" {
+                clearPrinterError(slot.name)
+            }
+            lastError = deleted > 0 ? "\(deleted) alte/fehlgeschlagene Druckaufträge entfernt." : nil
+            await refresh(state:state)
+        } catch {
+            lastError=error.localizedDescription
+        }
     }
 
     func cancelLocalJob(_ job: V80LocalPrintJob, state: AppState) async {
