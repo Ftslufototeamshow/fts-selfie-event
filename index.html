@@ -770,13 +770,13 @@ async function reviewOnlinePrivacy(){
   }catch(e){console.warn('Online-Hintergrundschutz',e);showMessage(String(e?.message||e),'err')}
   finally{if(btn){btn.textContent=old||tr('privacyReview');btn.disabled=false}}
 }
-async function readExifOrientation(file){
+async function readJpegMeta(file){
+  const meta={orientation:1,width:0,height:0};
   try{
     const type=String(file?.type||'').toLowerCase(),name=String(file?.name||'').toLowerCase();
-    if(!type.includes('jpeg')&&!/\.jpe?g$/.test(name))return 1;
-    const buf=await file.slice(0,Math.min(file.size||0,262144)).arrayBuffer();
-    const v=new DataView(buf);
-    if(v.byteLength<4||v.getUint16(0,false)!==0xffd8)return 1;
+    if(!type.includes('jpeg')&&!/\.jpe?g$/.test(name))return meta;
+    const buf=await file.slice(0,Math.min(file.size||0,524288)).arrayBuffer(),v=new DataView(buf);
+    if(v.byteLength<4||v.getUint16(0,false)!==0xffd8)return meta;
     let off=2;
     while(off+4<v.byteLength){
       if(v.getUint8(off)!==0xff){off++;continue}
@@ -787,30 +787,31 @@ async function readExifOrientation(file){
       const len=v.getUint16(off,false);
       if(len<2||off+len>v.byteLength)break;
       if(marker===0xe1&&len>=14){
-        const start=off+2;
-        if(v.getUint32(start,false)===0x45786966&&v.getUint16(start+4,false)===0){
-          const tiff=start+6;
-          if(tiff+8>v.byteLength)return 1;
-          const magic=v.getUint16(tiff,false),little=magic===0x4949;
-          if(!little&&magic!==0x4d4d)return 1;
-          const u16=p=>v.getUint16(p,little),u32=p=>v.getUint32(p,little);
-          const ifd=tiff+u32(tiff+4);
-          if(ifd+2>v.byteLength)return 1;
-          const count=u16(ifd);
-          for(let i=0;i<count;i++){
-            const e=ifd+2+i*12;
-            if(e+12>v.byteLength)break;
-            if(u16(e)===0x0112){
-              const o=u16(e+8);
-              return o>=1&&o<=8?o:1;
+        const p=off+2;
+        if(v.getUint32(p,false)===0x45786966&&v.getUint16(p+4,false)===0){
+          const tiff=p+6;
+          if(tiff+8<=v.byteLength){
+            const magic=v.getUint16(tiff,false),little=magic===0x4949;
+            if(little||magic===0x4d4d){
+              const u16=q=>v.getUint16(q,little),u32=q=>v.getUint32(q,little),ifd=tiff+u32(tiff+4);
+              if(ifd+2<=v.byteLength){
+                const count=u16(ifd);
+                for(let i=0;i<count;i++){
+                  const e=ifd+2+i*12;if(e+12>v.byteLength)break;
+                  if(u16(e)===0x0112){const o=u16(e+8);if(o>=1&&o<=8)meta.orientation=o;break}
+                }
+              }
             }
           }
         }
       }
+      if([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf].includes(marker)&&len>=7){
+        meta.height=v.getUint16(off+3,false);meta.width=v.getUint16(off+5,false);
+      }
       off+=len;
     }
-  }catch(e){console.warn('EXIF orientation',e)}
-  return 1;
+  }catch(e){console.warn('JPEG metadata',e)}
+  return meta;
 }
 function loadPlainImageFile(file){
   return new Promise((resolve,reject)=>{
@@ -820,31 +821,49 @@ function loadPlainImageFile(file){
     img.src=url;
   });
 }
-async function loadImageFile(file){
-  const orientation=await readExifOrientation(file);
-  if(orientation===1||typeof createImageBitmap!=='function')return loadPlainImageFile(file);
-  try{
-    const bitmap=await createImageBitmap(file,{imageOrientation:'none'});
-    const sw=bitmap.width,sh=bitmap.height,swap=[5,6,7,8].includes(orientation);
-    const c=document.createElement('canvas');c.width=swap?sh:sw;c.height=swap?sw:sh;
-    const x=c.getContext('2d');
-    switch(orientation){
-      case 2:x.setTransform(-1,0,0,1,sw,0);break;
-      case 3:x.setTransform(-1,0,0,-1,sw,sh);break;
-      case 4:x.setTransform(1,0,0,-1,0,sh);break;
-      case 5:x.setTransform(0,1,1,0,0,0);break;
-      case 6:x.setTransform(0,1,-1,0,sh,0);break;
-      case 7:x.setTransform(0,-1,-1,0,sh,sw);break;
-      case 8:x.setTransform(0,-1,1,0,0,sw);break;
-    }
-    x.drawImage(bitmap,0,0,sw,sh);
-    bitmap.close?.();
-    c.dataset.ftsExifOrientation=String(orientation);
-    return c;
-  }catch(e){
-    console.warn('FTS EXIF normalization fallback',e);
-    return loadPlainImageFile(file);
+function drawRawWithExif(ctx,source,orientation,sw,sh){
+  switch(orientation){
+    case 2:ctx.setTransform(-1,0,0,1,sw,0);break;
+    case 3:ctx.setTransform(-1,0,0,-1,sw,sh);break;
+    case 4:ctx.setTransform(1,0,0,-1,0,sh);break;
+    case 5:ctx.setTransform(0,1,1,0,0,0);break;
+    case 6:ctx.setTransform(0,1,-1,0,sh,0);break;
+    case 7:ctx.setTransform(0,-1,-1,0,sh,sw);break;
+    case 8:ctx.setTransform(0,-1,1,0,0,sw);break;
   }
+  ctx.drawImage(source,0,0,sw,sh);
+}
+async function loadImageFile(file){
+  const meta=await readJpegMeta(file),o=meta.orientation||1,swap=[5,6,7,8].includes(o);
+  if(typeof createImageBitmap==='function'){
+    try{
+      // Default createImageBitmap follows EXIF on modern Chrome/Samsung/Safari.
+      // We compare its dimensions with the raw JPEG dimensions so EXIF is never applied twice.
+      const bitmap=await createImageBitmap(file);
+      const bw=bitmap.width,bh=bitmap.height,rawW=meta.width||bw,rawH=meta.height||bh;
+      const expectedW=swap?rawH:rawW,expectedH=swap?rawW:rawH;
+      const alreadyOriented=Math.abs(bw-expectedW)<=2&&Math.abs(bh-expectedH)<=2;
+      const rawSized=Math.abs(bw-rawW)<=2&&Math.abs(bh-rawH)<=2;
+      const c=document.createElement('canvas');
+      if(o!==1&&!alreadyOriented&&rawSized){
+        c.width=expectedW;c.height=expectedH;
+        drawRawWithExif(c.getContext('2d'),bitmap,o,rawW,rawH);
+      }else{
+        c.width=bw;c.height=bh;
+        c.getContext('2d').drawImage(bitmap,0,0,bw,bh);
+      }
+      bitmap.close?.();
+      c.dataset.ftsExifOrientation=String(o);
+      c.dataset.ftsRawSize=rawW+'x'+rawH;
+      c.dataset.ftsNormalizedSize=c.width+'x'+c.height;
+      return c;
+    }catch(e){console.warn('FTS EXIF bitmap normalization fallback',e)}
+  }
+  const img=await loadPlainImageFile(file);
+  // Last-resort browser path: keep the browser-rendered orientation, but expose the
+  // EXIF orientation so the layout engine can choose the correct 10x15 direction.
+  img.dataset.ftsExifOrientation=String(o);
+  return img;
 }
 function loadRemoteImage(url){return new Promise((resolve,reject)=>{if(!url)return resolve(null);const img=new Image();img.crossOrigin='anonymous';img.onload=()=>resolve(img);img.onerror=()=>resolve(null);img.src=url})}
 function roundRect(c,x,y,w,h,r){const rr=Math.min(r,w/2,h/2);c.beginPath();c.moveTo(x+rr,y);c.arcTo(x+w,y,x+w,y+h,rr);c.arcTo(x+w,y+h,x,y+h,rr);c.arcTo(x,y+h,x,y,rr);c.arcTo(x,y,x+w,y,rr);c.closePath()}
