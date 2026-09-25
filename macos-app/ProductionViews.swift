@@ -129,7 +129,9 @@ struct ProductionQueueContent: View {
                                     Text("\(unit.originalName) · Status unklar").font(.caption)
                                     Spacer()
                                     Button("Nicht gedruckt · erneut") {
-                                        core.requeueLocalUnit(jobID:job.id,unitID:unit.id,confirmedNotPrinted:true)
+                                        Task {
+                                            await core.requeueLocalUnit(jobID:job.id,unitID:unit.id,confirmedNotPrinted:true,state:state)
+                                        }
                                     }.font(.caption)
                                 }
                                 .padding(8).background(Color.orange.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius:8))
