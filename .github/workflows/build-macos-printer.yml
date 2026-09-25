@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.3-paper-profile.zip
-            dist/FTS-Printer-macOS-v0.3.3-paper-profile.dmg
+            dist/FTS-Printer-macOS-v0.3.4-fullbleed.zip
+            dist/FTS-Printer-macOS-v0.3.4-fullbleed.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.3-paper-profile"
+          TAG="fts-printer-mac-v0.3.4-fullbleed"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.3-paper-profile.zip dist/FTS-Printer-macOS-v0.3.3-paper-profile.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.4-fullbleed.zip dist/FTS-Printer-macOS-v0.3.4-fullbleed.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.3-paper-profile.zip dist/FTS-Printer-macOS-v0.3.3-paper-profile.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.3 · SELPHY Paper Profile" --notes "Build 93: Der letzte SELPHY-Schritt wurde angepasst. FTS verwendet jetzt das 4x6/Postcard-Papierprofil, das der Canon selbst an macOS meldet, statt eines benutzerdefinierten 100x148-Formats. Außerdem wird der echte PrintCore-Drucker über seinen Anzeigenamen aufgelöst und Papierliste, Queue-Status und Geräte-URI werden diagnostiziert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.4-fullbleed.zip dist/FTS-Printer-macOS-v0.3.4-fullbleed.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.4 · SELPHY Full-Bleed" --notes "Build 94: FTS wählt für den Canon SELPHY jetzt ausdrücklich das vom Drucker gemeldete randlose Postkartenprofil (Postcard-fullbleed) statt des normalen Postcard-Profils. Das beseitigt den Medienkonflikt zwischen 0-mm-Rändern und dem nicht-randlosen Profil; USB/AirPrint-Diagnose bleibt aktiv."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.3-paper-profile"
+          CURRENT="fts-printer-mac-v0.3.4-fullbleed"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
