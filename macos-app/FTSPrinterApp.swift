@@ -455,8 +455,8 @@ final class LocalImportManager: ObservableObject {
             let removable = rv?.volumeIsRemovable == true || rv?.volumeIsEjectable == true
             let internalVol = rv?.volumeIsInternal == true
             if internalVol { continue }
-            let dcim = volume.appendingPathComponent("DCIM", isDirectory: true)
-            let cameraMedia = removable || fm.fileExists(atPath: dcim.path)
+            let dcimFolder = volume.appendingPathComponent("DCIM", isDirectory: true)
+            let cameraMedia = removable || fm.fileExists(atPath: dcimFolder.path)
             if !cameraMedia { continue }
             let volumeName = rv?.volumeName ?? volume.lastPathComponent
             let volumeID = rv?.volumeIdentifier.map { String(describing: $0) } ?? volumeName
