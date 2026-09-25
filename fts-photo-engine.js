@@ -154,13 +154,21 @@
     const d=adaptiveDefaults(),a=config?.adaptive&&typeof config.adaptive==='object'?config.adaptive:{};
     return {...d,...a,portrait:{...d.portrait,...(a.portrait||{})},landscape:{...d.landscape,...(a.landscape||{})},print:{...d.print,...(a.print||{})}};
   }
+  function requestedOrientation(selectedLayout){
+    const key=String(selectedLayout||'').trim().toLowerCase();
+    if(key==='groupwide'||key==='wide'||key==='landscape'||key.includes('wide'))return'landscape';
+    if(key==='solo'||key==='duo'||key==='grouptall'||key==='portrait'||key==='tall'||key.includes('tall'))return'portrait';
+    return null;
+  }
   function sourceOrientation(img,selectedLayout,config){
+    const forced=requestedOrientation(selectedLayout);
+    if(forced)return forced;
     const a=adaptiveConfig(config),w=Math.max(1,img?.naturalWidth||img?.width||1),h=Math.max(1,img?.naturalHeight||img?.height||1),ratio=w/h;
     if(a.enabled!==false&&a.auto_orientation!==false){
       if(ratio>1.04)return'landscape';
       if(ratio<.96)return'portrait';
     }
-    return String(selectedLayout||'').includes('wide')?'landscape':'portrait';
+    return ratio>=1?'landscape':'portrait';
   }
   function outputSpec(img,selectedLayout,config){
     const orientation=sourceOrientation(img,selectedLayout,config);
@@ -268,5 +276,5 @@
     if(helpers.drawEventDecorations)await Promise.resolve(helpers.drawEventDecorations(ctx,w,h,'photo'));
   }
 
-  window.FTS_PHOTO_ENGINE={version:76,catalog,filterInfo,applyFilter:pxFilter,filterCss,drawOverlay,fontStack,pumpkinFrame,adaptiveDefaults,adaptiveConfig,sourceOrientation,outputSpec,buildPlan,drawPhoto};
+  window.FTS_PHOTO_ENGINE={version:77,catalog,filterInfo,applyFilter:pxFilter,filterCss,drawOverlay,fontStack,pumpkinFrame,adaptiveDefaults,adaptiveConfig,sourceOrientation,outputSpec,buildPlan,drawPhoto};
 })();
