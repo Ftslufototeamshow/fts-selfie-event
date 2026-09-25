@@ -659,7 +659,7 @@ final class AppState: ObservableObject {
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
-    static let appVersion = "0.3.4-fullbleed"
+    static let appVersion = "0.3.5-wlan-cards"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -746,7 +746,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.4-fullbleed"
+                "p_user_agent":"FTS Printer macOS 0.3.5-wlan-cards"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -777,7 +777,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.4-fullbleed"
+                "p_user_agent":"FTS Printer macOS 0.3.5-wlan-cards"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session
@@ -1466,7 +1466,7 @@ struct FTSDashboardView:View {
                         VStack(alignment:.leading,spacing:10){
                             HStack{Label("SD-Karte / Import",systemImage:"sdcard.fill").font(.headline).foregroundStyle(FTSTheme.gold);Spacer();Image(systemName:"chevron.right")}
                             Text(state.mediaIngest.status).font(.callout).foregroundStyle(.white)
-                            Text("SD-Karten A/B/C/D und WLAN-Kamera-Album").font(.caption).foregroundStyle(FTSTheme.muted)
+                            Text("SD-Karten A/B/C/D/E und WLAN-Kamera-Album").font(.caption).foregroundStyle(FTSTheme.muted)
                         }.ftsCard()
                     }.buttonStyle(.plain)
 
