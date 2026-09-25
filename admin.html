@@ -325,7 +325,7 @@
         <div class="uploadBox" style="margin-top:12px">
           <label>Werbebanner hinzufügen</label>
           <input id="adFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple>
-          <div class="hint">Empfohlen: 1200 × 300 Pixel (4:1). Andere Bildgrößen werden automatisch sauber auf 1200 × 300 zugeschnitten und als platzsparendes WebP gespeichert.</div>
+          <div class="hint">Empfohlen: 1200 × 300 Pixel (4:1). Andere Bildgrößen werden automatisch sauber auf 1200 × 300 zugeschnitten und als platzsparendes WebP gespeichert. Es gibt keine feste Stückzahlbegrenzung für Werbebanner.</div>
         </div>
         <div class="adManager" id="adManager"></div>
         <div class="hint" id="noAdsHint">Noch keine Werbung hinterlegt.</div>
@@ -983,7 +983,7 @@ async function normalizeAdFile(file){
 }
 async function addAdFiles(files){
   let added=0;
-  for(const raw of [...files].slice(0,12-adItems.length)){
+  for(const raw of [...files]){
     try{
       const file=await normalizeAdFile(raw);
       const cleanName=(raw.name.replace(/\.[^.]+$/,'')||'Werbung').replace(/^file_[0-9a-f_-]+$/i,'Werbung');
