@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.1-native-print.zip
-            dist/FTS-Printer-macOS-v0.3.1-native-print.dmg
+            dist/FTS-Printer-macOS-v0.3.2-native-only.zip
+            dist/FTS-Printer-macOS-v0.3.2-native-only.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.1-native-print"
+          TAG="fts-printer-mac-v0.3.2-native-only"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.1-native-print.zip dist/FTS-Printer-macOS-v0.3.1-native-print.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.2-native-only.zip dist/FTS-Printer-macOS-v0.3.2-native-only.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.1-native-print.zip dist/FTS-Printer-macOS-v0.3.1-native-print.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.1 · Native Print" --notes "Build 88: Supabase-401/Netzwerkfehler werden automatisch mit Retry abgefangen; nichtkritische Fehler erscheinen als dezente Hinweise statt modaler Fenster; Druckererkennung/CUPS läuft außerhalb des UI-Threads und kann die App nicht mehr blockieren."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.2-native-only.zip dist/FTS-Printer-macOS-v0.3.2-native-only.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.2 · Native Only" --notes "Build 92: FTS benutzt auf diesem Mac ausschließlich den nativen macOS/AppKit-Druckweg und ruft /usr/bin/lp nicht mehr auf. Alte fehlgeschlagene Testaufträge werden einmalig lokal bereinigt; zusätzlich gibt es einen Button zum Löschen fehlgeschlagener Aufträge und die genaue Druckerfehlermeldung wird direkt angezeigt."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.1-native-print"
+          CURRENT="fts-printer-mac-v0.3.2-native-only"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
