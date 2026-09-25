@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.2-native-only.zip
-            dist/FTS-Printer-macOS-v0.3.2-native-only.dmg
+            dist/FTS-Printer-macOS-v0.3.3-paper-profile.zip
+            dist/FTS-Printer-macOS-v0.3.3-paper-profile.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.2-native-only"
+          TAG="fts-printer-mac-v0.3.3-paper-profile"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.2-native-only.zip dist/FTS-Printer-macOS-v0.3.2-native-only.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.3-paper-profile.zip dist/FTS-Printer-macOS-v0.3.3-paper-profile.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.2-native-only.zip dist/FTS-Printer-macOS-v0.3.2-native-only.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.2 · Native Only" --notes "Build 92: FTS benutzt auf diesem Mac ausschließlich den nativen macOS/AppKit-Druckweg und ruft /usr/bin/lp nicht mehr auf. Alte fehlgeschlagene Testaufträge werden einmalig lokal bereinigt; zusätzlich gibt es einen Button zum Löschen fehlgeschlagener Aufträge und die genaue Druckerfehlermeldung wird direkt angezeigt."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.3-paper-profile.zip dist/FTS-Printer-macOS-v0.3.3-paper-profile.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.3 · SELPHY Paper Profile" --notes "Build 93: Der letzte SELPHY-Schritt wurde angepasst. FTS verwendet jetzt das 4x6/Postcard-Papierprofil, das der Canon selbst an macOS meldet, statt eines benutzerdefinierten 100x148-Formats. Außerdem wird der echte PrintCore-Drucker über seinen Anzeigenamen aufgelöst und Papierliste, Queue-Status und Geräte-URI werden diagnostiziert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.2-native-only"
+          CURRENT="fts-printer-mac-v0.3.3-paper-profile"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
