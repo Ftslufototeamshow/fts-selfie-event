@@ -662,7 +662,7 @@ final class AppState: ObservableObject {
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
-    static let appVersion = "0.3.12-media-workflow"
+    static let appVersion = "0.3.13-live-printer-links"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -749,7 +749,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.12-media-workflow"
+                "p_user_agent":"FTS Printer macOS 0.3.13-live-printer-links"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -780,7 +780,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.12-media-workflow"
+                "p_user_agent":"FTS Printer macOS 0.3.13-live-printer-links"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session
@@ -1476,8 +1476,13 @@ struct FTSDashboardView:View {
                     Button(action:openPrinters){
                         VStack(alignment:.leading,spacing:10){
                             HStack{Label("Printer-Aktivität",systemImage:"waveform.path.ecg").font(.headline).foregroundStyle(FTSTheme.gold);Spacer();Image(systemName:"chevron.right")}
-                            Text("\(state.production.printerNodes.count) Printer verbunden").font(.title3.bold())
-                            Text(state.production.printerNodes.prefix(2).map{"\($0.display_name): \($0.state)"}.joined(separator:" · ")).font(.caption).foregroundStyle(FTSTheme.muted).lineLimit(2)
+                            Text("\(state.production.printerSlots.count) Printer verbunden").font(.title3.bold())
+                            if state.production.printerSlots.isEmpty {
+                                Text("Kein USB-/WLAN-Drucker erreichbar").font(.caption).foregroundStyle(FTSTheme.muted)
+                            } else {
+                                Text(state.production.printerSlots.prefix(2).map{"\($0.name): \($0.connection.replacingOccurrences(of:"\n",with:" · "))"}.joined(separator:" · "))
+                                    .font(.caption).foregroundStyle(FTSTheme.muted).lineLimit(3)
+                            }
                         }.ftsCard()
                     }.buttonStyle(.plain)
                 }

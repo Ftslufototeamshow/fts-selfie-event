@@ -49,8 +49,11 @@ struct ProductionQueueContent: View {
                 }
             }
 
-            if core.printerSlots.filter(\.enabled).isEmpty {
-                Text("Noch kein Ausgabedrucker aktiviert. Unter „System & Printer“ mindestens einen Canon-Drucker auswählen.")
+            if core.printerSlots.isEmpty {
+                Text("Kein Drucker angeschlossen oder im Netzwerk erreichbar.")
+                    .font(.callout).foregroundStyle(.secondary)
+            } else if core.printerSlots.filter(\.enabled).isEmpty {
+                Text("Drucker erkannt, aber noch nicht als Ausgabedrucker aktiviert.")
                     .font(.callout).foregroundStyle(.orange)
             } else {
                 ScrollView(.horizontal,showsIndicators:true) {
@@ -659,7 +662,10 @@ struct V81PrinterConsumableRow: View {
             HStack(spacing:8) {
                 Image(systemName:slot.connection.contains("USB") ? "cable.connector" : "wifi")
                     .foregroundStyle(slot.connection.contains("USB") ? .green : .secondary)
-                Text(slot.connection).font(.caption).foregroundStyle(.secondary)
+                Text(slot.connection)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal:false,vertical:true)
             }
             HStack(spacing:12) {
                 Text("Papier: \(consumable?.paper_remaining.map(String.init) ?? "unbekannt") / 18")
@@ -697,6 +703,11 @@ struct ProductionSystemContent:View {
         core.printerSlots.contains{["PREPARING","TRANSFER","PRINTING"].contains($0.state)}
     }
 
+    var visiblePrinterNodes:[V80PrinterNode] {
+        let connected=Set(core.printerSlots.map{$0.name})
+        return core.printerNodes.filter{connected.contains($0.display_name)}
+    }
+
     var body:some View {
         ScrollView(.vertical,showsIndicators:true) {
             VStack(alignment:.leading,spacing:16) {
@@ -706,9 +717,19 @@ struct ProductionSystemContent:View {
                     Button("Drucker neu erkennen"){Task{await core.discoverPrinters()}}
                 }
 
-                GroupBox("Installierte Drucker") {
+                GroupBox("Verbindung FTS / Internet") {
+                    VStack(alignment:.leading,spacing:5) {
+                        Text(core.internetStatus)
+                            .font(.callout)
+                            .fixedSize(horizontal:false,vertical:true)
+                        Text("WLAN wird als RSSI/Linkrate gemessen. Bei USB zeigt FTS Link-Geschwindigkeit und Stromversorgung – ein Kabel hat keine WLAN-artige Signalstärke.")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }.padding(.vertical,5)
+                }
+
+                GroupBox("Aktuell verbundene Drucker") {
                     VStack(alignment:.leading,spacing:8) {
-                        if core.printerSlots.isEmpty { Text("Keine macOS-Drucker erkannt.").foregroundStyle(.secondary) }
+                        if core.printerSlots.isEmpty { Text("Kein Drucker angeschlossen oder erreichbar.").foregroundStyle(.secondary) }
                         ForEach(core.printerSlots) { p in
                             V81PrinterConsumableRow(
                                 slot:p,
@@ -728,8 +749,8 @@ struct ProductionSystemContent:View {
 
                 GroupBox("Printer-Aktivität") {
                     VStack(alignment:.leading,spacing:7) {
-                        if core.printerNodes.isEmpty{Text("Noch keine aktiven Printer-Nodes.").foregroundStyle(.secondary)}
-                        ForEach(core.printerNodes) { n in
+                        if visiblePrinterNodes.isEmpty{Text("Keine aktuell verbundenen Printer-Nodes.").foregroundStyle(.secondary)}
+                        ForEach(visiblePrinterNodes) { n in
                             HStack {
                                 Text(n.display_name).bold()
                                 Spacer()

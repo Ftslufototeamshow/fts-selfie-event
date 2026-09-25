@@ -335,19 +335,206 @@ enum V80MacSpooler {
         }.joined(separator:" | ")
     }
 
+    private struct ConnectionProbe {
+        let connected:Bool
+        let summary:String
+    }
+
     static func connectionSummary(printerName:String) -> String {
-        let uri=(nativeDeviceURI(printerName:printerName) ?? "").lowercased()
-        let usbPresent=usbSELPHYPresent()
-        if uri.hasPrefix("usb:") || uri.contains("usb") {
-            return usbPresent ? "USB · physisch erkannt" : "USB-Warteschlange · Kabel nicht erkannt"
+        connectionProbe(printerName:printerName).summary
+    }
+
+    static func internetConnectionSummary() -> String {
+        let wifi=wifiLinkSummary()
+        let started=Date()
+        let output=runProcess(
+            "/usr/bin/curl",
+            ["-sS","-o","/dev/null","--connect-timeout","2","--max-time","3","-w","%{http_code}",
+             "https://hivmiqktbaatghuaxfvg.supabase.co/rest/v1/"],
+            timeout:3.5
+        )
+        let ms=max(1,Int(Date().timeIntervalSince(started)*1000))
+        if let output,!output.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty {
+            return "FTS-Server: erreichbar · \(ms) ms" + (wifi.isEmpty ? "" : "\n"+wifi)
         }
-        if uri.hasPrefix("dnssd:") || uri.hasPrefix("ipp:") || uri.hasPrefix("ipps:") || uri.contains("_ipp") {
-            return usbPresent ? "AirPrint/WLAN · USB-Kabel zusätzlich erkannt" : "AirPrint/WLAN"
+        return "FTS-Server: nicht erreichbar" + (wifi.isEmpty ? "" : "\n"+wifi)
+    }
+
+    private static func connectionProbe(printerName:String) -> ConnectionProbe {
+        let rawURI=nativeDeviceURI(printerName:printerName) ?? ""
+        let uri=rawURI.lowercased()
+        let lowerName=printerName.lowercased()
+        let isSelphy=lowerName.contains("selphy") || lowerName.contains("cp1500")
+        let usbPresent=isSelphy ? usbSELPHYPresent() : false
+        let usbTransport=uri.hasPrefix("usb:")
+            || uri.contains("ippusb")
+            || uri.contains("ipp-usb")
+            || (uri.contains("localhost") && isSelphy)
+
+        if usbTransport || (rawURI.isEmpty && usbPresent) {
+            guard usbPresent else {
+                return ConnectionProbe(connected:false,summary:"USB · nicht angeschlossen")
+            }
+            let details=usbLinkSummary()
+            return ConnectionProbe(
+                connected:true,
+                summary:"USB · verbunden" + (details.isEmpty ? "" : " · "+details)
+            )
         }
-        if usbPresent && (printerName.lowercased().contains("selphy") || printerName.lowercased().contains("cp1500")) {
-            return "macOS-Drucker · USB-Kabel erkannt"
+
+        let networkTransport=uri.hasPrefix("dnssd:")
+            || uri.hasPrefix("ipp:")
+            || uri.hasPrefix("ipps:")
+            || uri.hasPrefix("http:")
+            || uri.hasPrefix("https:")
+            || uri.contains("_ipp")
+
+        if networkTransport {
+            guard let latency=networkPrinterLatency(uri:rawURI) else {
+                return ConnectionProbe(connected:false,summary:"AirPrint/WLAN · Drucker nicht erreichbar")
+            }
+            let wifi=wifiLinkSummary()
+            return ConnectionProbe(
+                connected:true,
+                summary:"AirPrint/WLAN · Drucker erreichbar · \(latency) ms" + (wifi.isEmpty ? "" : "\n"+wifi)
+            )
         }
-        return uri.isEmpty ? "macOS-Drucker erkannt" : String(uri.prefix(90))
+
+        // Unknown queues are shown only while macOS says they are actively processing.
+        // A configured-but-disconnected queue must not appear as an available printer.
+        if nativeQueueState(printerName:printerName)=="PROCESSING" {
+            return ConnectionProbe(connected:true,summary:"macOS-Drucker · aktive Verbindung")
+        }
+        return ConnectionProbe(connected:false,summary:"Drucker nicht physisch erreichbar")
+    }
+
+    private static func wifiLinkSummary() -> String {
+        let airport="/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport"
+        guard let text=runProcess(airport,["-I"],timeout:1.2) else{return ""}
+        func number(_ key:String)->Int? {
+            for line in text.split(separator:"\n") {
+                let s=String(line).trimmingCharacters(in:.whitespaces)
+                if s.lowercased().hasPrefix(key.lowercased()+":"),
+                   let value=Int(s.split(separator:":",maxSplits:1).last?.trimmingCharacters(in:.whitespaces) ?? "") {
+                    return value
+                }
+            }
+            return nil
+        }
+        let rssi=number("agrCtlRSSI")
+        let noise=number("agrCtlNoise")
+        let tx=number("lastTxRate")
+        guard rssi != nil || tx != nil else{return ""}
+        var parts:[String]=[]
+        if let rssi {
+            let quality:String
+            switch rssi {
+            case -50...0: quality="sehr stark"
+            case -60 ... -51: quality="stark"
+            case -70 ... -61: quality="mittel"
+            default: quality="schwach"
+            }
+            parts.append("Mac-WLAN \(rssi) dBm (\(quality))")
+        }
+        if let noise,let rssi { parts.append("SNR \(max(0,rssi-noise)) dB") }
+        if let tx { parts.append("Linkrate \(tx) Mb/s") }
+        return parts.joined(separator:" · ")
+    }
+
+    private static func usbLinkSummary() -> String {
+        guard let text=runProcess("/usr/sbin/system_profiler",["SPUSBDataType","-detailLevel","mini"],timeout:2.5) else{return ""}
+        let lines=text.components(separatedBy:.newlines)
+        guard let start=lines.firstIndex(where:{
+            let l=$0.lowercased()
+            return l.contains("selphy") || l.contains("cp1500")
+        }) else{return ""}
+        let end=min(lines.count,start+18)
+        let block=Array(lines[start..<end])
+        func value(containing keys:[String])->String? {
+            for line in block {
+                let lower=line.lowercased()
+                if keys.contains(where:{lower.contains($0)}),
+                   let colon=line.firstIndex(of:":") {
+                    let v=String(line[line.index(after:colon)...]).trimmingCharacters(in:.whitespaces)
+                    if !v.isEmpty { return v }
+                }
+            }
+            return nil
+        }
+        var parts:[String]=[]
+        if let speed=value(containing:["speed","geschwindigkeit"]) { parts.append("Link \(speed)") }
+        if let current=value(containing:["current available","verfügbarer strom","available current"]) {
+            parts.append("USB-Strom \(current)")
+        }
+        return parts.joined(separator:" · ")
+    }
+
+    private static func networkPrinterLatency(uri:String) -> Int? {
+        let lower=uri.lowercased()
+        var host:String?
+        var port:Int=631
+
+        if lower.hasPrefix("dnssd:") || lower.contains("._ipp") {
+            if let endpoint=resolveDNSSD(uri:uri) {
+                host=endpoint.host
+                port=endpoint.port
+            }
+        } else if let url=URL(string:uri),let h=url.host {
+            host=h
+            if let p=url.port { port=p }
+            else if url.scheme?.lowercased()=="https" { port=443 }
+        }
+
+        guard let host,!host.isEmpty else{return nil}
+        let started=Date()
+        guard runProcess("/usr/bin/nc",["-G","1","-z",host,String(port)],timeout:1.4) != nil else{return nil}
+        return max(1,Int(Date().timeIntervalSince(started)*1000))
+    }
+
+    private static func resolveDNSSD(uri:String) -> (host:String,port:Int)? {
+        guard let decoded=uri.removingPercentEncoding else{return nil}
+        let body=decoded.replacingOccurrences(of:"dnssd://",with:"",options:[.caseInsensitive])
+        let serviceTypes=["._ipps._tcp","._ipp._tcp"]
+        guard let type=serviceTypes.first(where:{body.lowercased().contains($0)}) else{return nil}
+        guard let range=body.lowercased().range(of:type) else{return nil}
+        let instance=String(body[..<range.lowerBound]).trimmingCharacters(in:CharacterSet(charactersIn:"/"))
+        guard !instance.isEmpty else{return nil}
+        let serviceType=type.contains("_ipps") ? "_ipps._tcp" : "_ipp._tcp"
+        guard let output=runTimedOutput("/usr/bin/dns-sd",["-L",instance,serviceType,"local."],timeout:1.4) else{return nil}
+        for line in output.split(separator:"\n") {
+            for tokenSub in line.split(whereSeparator:{$0==" " || $0=="\t"}) {
+                let token=String(tokenSub)
+                if token.contains(".local.:") || token.contains(".local:") {
+                    let clean=token.trimmingCharacters(in:CharacterSet(charactersIn:"()"))
+                    guard let colon=clean.lastIndex(of:":"),
+                          let p=Int(clean[clean.index(after:colon)...]) else{continue}
+                    let h=String(clean[..<colon]).trimmingCharacters(in:CharacterSet(charactersIn:"."))
+                    if !h.isEmpty { return (h,p) }
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func runTimedOutput(_ executable:String,_ arguments:[String],timeout:TimeInterval)->String? {
+        let p=Process()
+        p.executableURL=URL(fileURLWithPath:executable)
+        p.arguments=arguments
+        let out=Pipe()
+        p.standardOutput=out
+        p.standardError=Pipe()
+        do {
+            try p.run()
+            let deadline=Date().addingTimeInterval(timeout)
+            while p.isRunning && Date()<deadline { Thread.sleep(forTimeInterval:0.03) }
+            if p.isRunning {
+                p.terminate()
+                Thread.sleep(forTimeInterval:0.08)
+            }
+            let data=out.fileHandleForReading.readDataToEndOfFile()
+            let text=String(data:data,encoding:.utf8) ?? ""
+            return text.isEmpty ? nil : text
+        } catch { return nil }
     }
 
     private static func firstExecutable(_ candidates:[String]) -> String? {
@@ -358,25 +545,15 @@ enum V80MacSpooler {
         let configured = await MainActor.run {
             NSPrinter.printerNames.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
         }
-        // CUPS/ioreg can occasionally pause while a network printer is changing state.
-        // Run those probes off the UI thread so the Mac cursor never beachballs the app.
         return await Task.detached(priority:.utility) {
-            filterConfiguredPrinters(configured)
+            configured.filter { connectionProbe(printerName:$0).connected }
         }.value
-    }
-
-    private static func filterConfiguredPrinters(_ configured:[String]) -> [String] {
-        // Keep every printer queue that macOS has configured.
-        // We intentionally do NOT hide the SELPHY WLAN/AirPrint queue when USB is
-        // connected. At an event the operator must be able to switch immediately
-        // between USB (ippusb) and WLAN/AirPrint if one transport has problems.
-        return configured
     }
 
     private static func usbSELPHYPresent()->Bool {
         guard let text=runProcess("/usr/sbin/ioreg",["-p","IOUSB","-l","-w","0"],timeout:1.5) else {
-            // If hardware enumeration itself fails, do not hide a valid configured queue.
-            return true
+            // Build 103 is strict: if hardware cannot be confirmed, do not show a ghost USB printer.
+            return false
         }
         let lower=text.lowercased()
         return lower.contains("selphy") || lower.contains("cp1500")
@@ -586,8 +763,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.11-media-workflow"
-    static let build = 102
+    static let version = "1.1.12-live-printer-links"
+    static let build = 103
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -596,6 +773,7 @@ final class ProductionCore: ObservableObject {
     @Published var consumables: [V81Consumable] = []
     @Published var localQueue = V80LocalQueueFile()
     @Published var printerSlots: [LocalPrinterSlot] = []
+    @Published var internetStatus = "FTS-Server: Verbindung wird geprüft …"
     @Published var autoDispatch = UserDefaults.standard.object(forKey: "fts.autodispatch.v80") == nil ? true : UserDefaults.standard.bool(forKey: "fts.autodispatch.v80")
     @Published var queueStatus = ""
     @Published var updateRelease: V80Release?
@@ -696,11 +874,12 @@ final class ProductionCore: ObservableObject {
     }
 
     func discoverPrinters() async {
-        var names = await V80MacSpooler.installedPrinterNames()
-        // Never make a printer disappear in the middle of an active transfer/print.
-        for old in printerSlots where ["PREPARING","TRANSFER","PRINTING"].contains(old.state) {
-            if !names.contains(old.name) { names.append(old.name) }
-        }
+        async let namesTask = V80MacSpooler.installedPrinterNames()
+        async let internetTask = Task.detached(priority:.utility) {
+            V80MacSpooler.internetConnectionSummary()
+        }.value
+        var names = await namesTask
+        internetStatus = await internetTask
         names.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
 
         let enabled = Set(UserDefaults.standard.stringArray(forKey: "fts.enabled.printers.v80") ?? [])
@@ -785,39 +964,34 @@ final class ProductionCore: ObservableObject {
     private func refreshPrinterConnectivity() async {
         guard Date().timeIntervalSince(lastPrinterConnectivityCheck) >= 10 else { return }
         lastPrinterConnectivityCheck = Date()
-        let installed=Set(await V80MacSpooler.installedPrinterNames())
+        async let installedTask = V80MacSpooler.installedPrinterNames()
+        async let internetTask = Task.detached(priority:.utility) {
+            V80MacSpooler.internetConnectionSummary()
+        }.value
+        let installed=Set(await installedTask)
+        internetStatus=await internetTask
+
+        // Build 103: no ghost printers. As soon as a transport is no longer physically
+        // confirmed/reachable, remove that printer from every local display.
+        printerSlots.removeAll { !installed.contains($0.name) }
+        printerConnectivityFailures=printerConnectivityFailures.filter{installed.contains($0.key)}
 
         for slot in printerSlots where slot.enabled {
             guard activePrinterTasks[slot.name] == nil else { continue }
-            guard slot.state == "IDLE" || slot.state == "OFFLINE" || slot.state == "ERROR" else { continue }
+            guard slot.state == "IDLE" || slot.state == "ERROR" else { continue }
             let name=slot.name
-
-            // macOS Print Center is authoritative. Do not flip a ready printer
-            // OFFLINE because lpstat is missing or reports a transient AirPrint state.
-            if installed.contains(name) {
-                printerConnectivityFailures[name]=0
-                let nativeState=await Task.detached(priority:.utility) {
-                    V80MacSpooler.nativeQueueState(printerName:name)
-                }.value
-                let connection=await Task.detached(priority:.utility) {
-                    V80MacSpooler.connectionSummary(printerName:name)
-                }.value
-                if let i=printerSlots.firstIndex(where:{$0.name==name}) {
-                    printerSlots[i].connection=connection
-                }
-                if nativeState=="STOPPED" {
-                    if slot.state != "ERROR" {
-                        setSlot(name,state:"ERROR",eta:0,current:nil,error:"macOS-Druckwarteschlange ist gestoppt. Drucker in macOS prüfen.")
-                    }
-                } else if slot.state=="OFFLINE" {
-                    setSlot(name,state:"IDLE",eta:0,current:nil,error:nil)
-                }
-            } else {
-                let failures=(printerConnectivityFailures[name] ?? 0)+1
-                printerConnectivityFailures[name]=failures
-                if failures>=3 && slot.state != "ERROR" {
-                    setSlot(name,state:"OFFLINE",eta:0,current:nil,error:"Drucker ist in macOS nicht mehr installiert/erkannt.")
-                }
+            printerConnectivityFailures[name]=0
+            let nativeState=await Task.detached(priority:.utility) {
+                V80MacSpooler.nativeQueueState(printerName:name)
+            }.value
+            let connection=await Task.detached(priority:.utility) {
+                V80MacSpooler.connectionSummary(printerName:name)
+            }.value
+            if let i=printerSlots.firstIndex(where:{$0.name==name}) {
+                printerSlots[i].connection=connection
+            }
+            if nativeState=="STOPPED" && slot.state != "ERROR" {
+                setSlot(name,state:"ERROR",eta:0,current:nil,error:"macOS-Druckwarteschlange ist gestoppt. Drucker in macOS prüfen.")
             }
         }
     }
