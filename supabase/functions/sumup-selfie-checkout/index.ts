@@ -212,7 +212,7 @@ Deno.serve(async(req)=>{
     const setting=await eventSetting(admin,event.id),active=windowActive(setting);
     const provider=String(setting?.payment_provider||"paypal").toLowerCase();
     const environment=String(setting?.sumup_environment||"live").toLowerCase()==="sandbox"?"sandbox":"live";
-    const configured=!!sumupKey();
+    const configured=sumupKey().startsWith("sup_sk_");
     const stock=await stockSnapshot(admin,event.id),stockBlocked=stock?.managed===true&&Number(stock?.safe_available||0)<=0;
 
     if(action==="config"){
