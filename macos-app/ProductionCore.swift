@@ -547,6 +547,14 @@ final class ProductionCore: ObservableObject {
         if folderPath != loadedFolderPath {
             loadedFolderPath = folderPath
             localQueue = V80QueueStore.load(folderPath: folderPath)
+
+            // One-time cleanup for the failed test queue from the pre-native print builds.
+            // Do not touch successful/ready jobs.
+            let migrationKey="fts.printer.cleanup.failed.v92"
+            if !UserDefaults.standard.bool(forKey:migrationKey) {
+                localQueue.jobs.removeAll { $0.status == .uncertain || $0.status == .cancelled }
+                UserDefaults.standard.set(true,forKey:migrationKey)
+            }
             try? V80QueueStore.save(localQueue, folderPath: folderPath)
         }
     }
