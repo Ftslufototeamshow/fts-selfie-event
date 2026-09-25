@@ -65,6 +65,7 @@ struct V80MediaManifest: Codable {
 
 struct V80LocalCardRegistry: Codable {
     var cards: [String:V80CardMarker] = [:]
+    var signatures: [String:V80CardMarker]? = nil
 }
 
 @MainActor
@@ -368,6 +369,11 @@ final class MediaIngestV80: ObservableObject {
         // Important: never write registration metadata to the camera card.
         // Cards stay read-only from FTS; registration is persisted on the Mac.
         registry.cards[card.technicalID]=marker
+        if let signature=cardSignature(volume) {
+            var signatures=registry.signatures ?? [:]
+            signatures[signature]=marker
+            registry.signatures=signatures
+        }
         try saveCardRegistry(registry,activation)
 
         let files=mediaFiles(on:volume)
@@ -407,6 +413,11 @@ final class MediaIngestV80: ObservableObject {
             guard let marker=card.marker,marker.eventToken==eventToken else{continue}
             if registry.cards[card.technicalID] == nil {
                 registry.cards[card.technicalID]=marker
+                if let signature=cardSignature(URL(fileURLWithPath:card.volumePath,isDirectory:true)) {
+                    var signatures=registry.signatures ?? [:]
+                    signatures[signature]=marker
+                    registry.signatures=signatures
+                }
                 try? saveCardRegistry(registry,activation)
             }
             let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
@@ -525,12 +536,21 @@ final class MediaIngestV80: ObservableObject {
         for v in volumes {
             let rv=try? v.resourceValues(forKeys:keys)
             let removable=rv?.volumeIsRemovable==true || rv?.volumeIsEjectable==true
-            if !removable || rv?.volumeIsInternal==true{continue}
+            if rv?.volumeIsInternal==true{continue}
+            let dcim=v.appendingPathComponent("DCIM",isDirectory:true)
+            let cameraMedia=removable || fm.fileExists(atPath:dcim.path)
+            if !cameraMedia{continue}
             let name=rv?.volumeName ?? v.lastPathComponent
             let tid=rv?.volumeIdentifier.map{String(describing:$0)} ?? v.path
             let markerURL=v.appendingPathComponent(".fts-printer-card-v80.json")
             var marker=registry.cards[tid]
             if marker?.eventToken != eventToken { marker=nil }
+            if marker == nil,
+               let signature=cardSignature(v),
+               let matched=registry.signatures?[signature],
+               matched.eventToken==eventToken {
+                marker=matched
+            }
             if marker == nil,
                let d=try? Data(contentsOf:markerURL),
                let legacy=try? JSONDecoder().decode(V80CardMarker.self,from:d),
@@ -544,6 +564,29 @@ final class MediaIngestV80: ObservableObject {
             ))
         }
         return out.sorted{$0.volumeName.localizedCaseInsensitiveCompare($1.volumeName) == .orderedAscending}
+    }
+
+    nonisolated private static func cardSignature(_ volume:URL) -> String? {
+        let fm=FileManager.default
+        let dcim=volume.appendingPathComponent("DCIM",isDirectory:true)
+        let root=fm.fileExists(atPath:dcim.path) ? dcim : volume
+        guard let en=fm.enumerator(
+            at:root,
+            includingPropertiesForKeys:[.isRegularFileKey,.contentModificationDateKey,.fileSizeKey],
+            options:[.skipsHiddenFiles,.skipsPackageDescendants]
+        ) else{return nil}
+        var seeds:[String]=[]
+        for case let file as URL in en {
+            guard supported(file),
+                  (try? file.resourceValues(forKeys:[.isRegularFileKey]).isRegularFile)==true,
+                  let key=sourceKey(file,root:volume) else{continue}
+            seeds.append(key)
+            if seeds.count>=8{break}
+        }
+        guard !seeds.isEmpty else{return nil}
+        let raw=seeds.sorted().prefix(4).joined(separator:"\n")
+        let digest=SHA256.hash(data:Data(raw.utf8))
+        return digest.map{String(format:"%02x",$0)}.joined()
     }
 
     nonisolated private static func mediaFiles(on volume:URL) -> [URL] {

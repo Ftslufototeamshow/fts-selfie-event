@@ -77,7 +77,7 @@ button.main{width:100%;border:0;border-radius:15px;padding:16px;font:inherit;fon
 <body>
 <main class="wrap"><section class="card" id="card"><div class="loading">Event wird geladen …</div></section></main>
 <script src="./config.js"></script>
-<script src="./social-share.js"></script>\n<script src="./fts-photo-engine.js?v=77"></script>
+<script src="./social-share.js"></script>\n<script src="./fts-photo-engine.js?v=78"></script>
 <script>
 const cfg=window.FTS_CONFIG;
 const GUEST_VAPID_PUBLIC_KEY='BA4ooYZBIcpChVCyvDWS-ovJF6I6VFJ5UVOrDdv0EoDHJ7hCUOQXxShbV9VJ-KPKAKVXdiYDaZ4bLOwidSUSgtA';
@@ -1602,7 +1602,7 @@ window.addEventListener('online',()=>{updateNet();processQueue()});
 window.addEventListener('fts:pickup-status-changed',()=>{if(document.getElementById('mySelfiesPanel')?.classList.contains('show'))setTimeout(()=>showMySelfies(),250)});
 navigator.serviceWorker?.addEventListener?.('message',e=>{if(e.data?.type==='FTS_QUEUE_FLUSHED'){refreshMySelfiesAccess();if(document.getElementById('mySelfiesPanel')?.classList.contains('show'))showMySelfies()}});
 window.addEventListener('offline',updateNet);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)processQueue()});
-if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=76',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(console.warn);boot();
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=78',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(console.warn);boot();
 </script>
 <script src="./print-pickup-guest-v57.js"></script>
 <script src="./camera-live.js">async function resumeSumUpHostedCheckout(){

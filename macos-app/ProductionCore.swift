@@ -586,8 +586,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.8-card-readonly"
-    static let build = 99
+    static let version = "1.1.9-usb-update-portrait"
+    static let build = 100
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -1371,26 +1371,48 @@ final class ProductionCore: ObservableObject {
             lastError="Update wurde nicht geladen: veröffentlichte SHA-256-Prüfsumme fehlt."
             return nil
         }
-        do {
-            let (tmp,response) = try await URLSession.shared.download(from:u)
-            if let http=response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                throw NSError(domain:"FTSPrinter",code:http.statusCode,userInfo:[NSLocalizedDescriptionKey:"Update-Server HTTP \(http.statusCode)"])
-            }
-            let actual=try Self.fileSHA256(tmp)
-            guard actual==expected else {
-                try? FileManager.default.removeItem(at:tmp)
-                throw NSError(domain:"FTSPrinter",code:88,userInfo:[NSLocalizedDescriptionKey:"Update-Prüfsumme stimmt nicht. Datei wurde verworfen."])
-            }
-            let ext=u.pathExtension.isEmpty ? "dmg" : u.pathExtension
-            let dest=FileManager.default.urls(for:.downloadsDirectory,in:.userDomainMask).first!
-                .appendingPathComponent("FTS-Printer-\(r.version).\(ext)")
-            try? FileManager.default.removeItem(at:dest)
-            try FileManager.default.moveItem(at:tmp,to:dest)
+
+        let fm=FileManager.default
+        let ext=u.pathExtension.isEmpty ? "dmg" : u.pathExtension
+        let dest=fm.urls(for:.downloadsDirectory,in:.userDomainMask).first!
+            .appendingPathComponent("FTS-Printer-\(r.version).\(ext)")
+
+        // If a previous attempt already completed correctly, reuse it instead of downloading again.
+        if fm.fileExists(atPath:dest.path),
+           (try? Self.fileSHA256(dest))==expected {
+            lastError=nil
             return dest
-        } catch {
-            lastError="Update konnte nicht geladen werden: \(error.localizedDescription)"
-            return nil
         }
+        try? fm.removeItem(at:dest)
+
+        var finalError:Error?
+        for attempt in 1...3 {
+            do {
+                var request=URLRequest(url:u,cachePolicy:.reloadIgnoringLocalAndRemoteCacheData,timeoutInterval:180)
+                request.setValue("application/octet-stream",forHTTPHeaderField:"Accept")
+                let (tmp,response)=try await URLSession.shared.download(for:request)
+                if let http=response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                    throw NSError(domain:"FTSPrinter",code:http.statusCode,userInfo:[NSLocalizedDescriptionKey:"Update-Server HTTP \(http.statusCode)"])
+                }
+                let actual=try Self.fileSHA256(tmp)
+                guard actual==expected else {
+                    try? fm.removeItem(at:tmp)
+                    throw NSError(domain:"FTSPrinter",code:88,userInfo:[NSLocalizedDescriptionKey:"Update-Prüfsumme stimmt nicht. Datei wurde verworfen."])
+                }
+                try? fm.removeItem(at:dest)
+                try fm.moveItem(at:tmp,to:dest)
+                lastError=nil
+                return dest
+            } catch {
+                finalError=error
+                if attempt<3 {
+                    try? await Task.sleep(for:.seconds(Double(attempt)))
+                }
+            }
+        }
+
+        lastError="Update konnte nach 3 Versuchen nicht geladen werden: \(finalError?.localizedDescription ?? "Unbekannter Fehler")"
+        return nil
     }
 
     private static func fileSHA256(_ url:URL) throws -> String {

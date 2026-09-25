@@ -98,8 +98,16 @@ enum ProductionRendererV76 {
         }
 
         let mode=(landscape ? adaptive["landscape"] : adaptive["portrait"])?.object ?? [:]
-        let normal=clamp(CGFloat(mode["banner_max_pct"]?.double ?? (landscape ? 22:18)), landscape ? 14:12, landscape ? 26:22)
-        let minimum=clamp(CGFloat(mode["banner_min_pct"]?.double ?? (landscape ? 14:12)),10,normal)
+        let normal:CGFloat
+        let minimum:CGFloat
+        if landscape {
+            normal=clamp(CGFloat(mode["banner_max_pct"]?.double ?? 22),14,26)
+            minimum=clamp(CGFloat(mode["banner_min_pct"]?.double ?? 14),10,normal)
+        } else {
+            // Portrait must stay visually compact: the photo remains the hero, not the footer.
+            normal=clamp(CGFloat(mode["banner_max_pct"]?.double ?? 12),9,13)
+            minimum=min(clamp(CGFloat(mode["banner_min_pct"]?.double ?? 8),6,normal),8)
+        }
         let gap=clamp(CGFloat(adaptive["face_gap_pct"]?.double ?? 2.5),1,8)
         let padding=clamp(CGFloat(adaptive["face_padding_ratio"]?.double ?? 0.34),0.12,0.65)
         let adaptiveEnabled=adaptive["enabled"]?.bool != false
@@ -292,11 +300,19 @@ enum ProductionRendererV76 {
 
         let adaptive=config["adaptive"]?.object ?? [:]
         let mode=(plan.landscape ? adaptive["landscape"] : adaptive["portrait"])?.object ?? [:]
-        let normalCap=clamp(CGFloat(mode["banner_max_pct"]?.double ?? (plan.landscape ? 22:18)),plan.landscape ? 14:12,plan.landscape ? 26:22)
-        let minimum=clamp(CGFloat(mode["banner_min_pct"]?.double ?? (plan.landscape ? 14:12)),10,normalCap)
+        let normalCap:CGFloat
+        let minimum:CGFloat
+        if plan.landscape {
+            normalCap=clamp(CGFloat(mode["banner_max_pct"]?.double ?? 22),14,26)
+            minimum=clamp(CGFloat(mode["banner_min_pct"]?.double ?? 14),10,normalCap)
+        } else {
+            normalCap=clamp(CGFloat(mode["banner_max_pct"]?.double ?? 12),9,13)
+            minimum=min(clamp(CGFloat(mode["banner_min_pct"]?.double ?? 8),6,normalCap),8)
+        }
         let automatic=adaptive["enabled"]?.bool != false
-        let heightPct=automatic ? clamp(plan.bannerPct,minimum,normalCap) : requested
+        let heightPct=automatic ? clamp(plan.bannerPct,minimum,normalCap) : (plan.landscape ? requested : min(requested,normalCap))
         let bh=h*heightPct/100
+        let visualTextScale=plan.textScale*(plan.landscape ? 1.0:0.72)
 
         if banner["enabled"]?.bool != false {
             let color=NSColor(hex:banner["color"]?.string ?? "#071315")
@@ -342,7 +358,7 @@ enum ProductionRendererV76 {
                 defaultSize:5.8,
                 defaultWeight:900,
                 defaultColor:"#ffffff",
-                textScale:plan.textScale,
+                textScale:visualTextScale,
                 pad:pad,maxWidth:maxW,canvas:plan.canvas
             )
         }
@@ -356,7 +372,7 @@ enum ProductionRendererV76 {
                 defaultSize:3.2,
                 defaultWeight:800,
                 defaultColor:event.accent ?? "#d9b56d",
-                textScale:plan.textScale,
+                textScale:visualTextScale,
                 pad:pad,maxWidth:maxW,canvas:plan.canvas
             )
         }
@@ -375,13 +391,15 @@ enum ProductionRendererV76 {
                 defaultSize:2.1,
                 defaultWeight:600,
                 defaultColor:"#e8efed",
-                textScale:plan.textScale,
+                textScale:visualTextScale,
                 pad:pad,maxWidth:maxW,canvas:plan.canvas
             )
         }
 
         if event.photo_branding != "none" && ov["branding"]?.bool != false {
-            let base=min(w,h),font=NSFont.systemFont(ofSize:max(11,base*0.014*plan.textScale),weight:.semibold)
+            let base=min(w,h)
+            let brandScale=plan.landscape ? 0.014:0.010
+            let font=NSFont.systemFont(ofSize:max(10,base*brandScale*visualTextScale),weight:.semibold)
             let attrs:[NSAttributedString.Key:Any]=[
                 .font:font,
                 .foregroundColor:NSColor.white.withAlphaComponent(0.68)
