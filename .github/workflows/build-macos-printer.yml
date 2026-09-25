@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.10-usb-update-portrait.zip
-            dist/FTS-Printer-macOS-v0.3.10-usb-update-portrait.dmg
+            dist/FTS-Printer-macOS-v0.3.11-finder-cards.zip
+            dist/FTS-Printer-macOS-v0.3.11-finder-cards.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.10-usb-update-portrait"
+          TAG="fts-printer-mac-v0.3.11-finder-cards"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.10-usb-update-portrait.zip dist/FTS-Printer-macOS-v0.3.10-usb-update-portrait.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.11-finder-cards.zip dist/FTS-Printer-macOS-v0.3.11-finder-cards.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.10-usb-update-portrait.zip dist/FTS-Printer-macOS-v0.3.10-usb-update-portrait.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.10 · USB Cards + Stable Updates + Compact Portrait" --notes "Build 100: USB-/SD-Karten werden auch dann erkannt, wenn macOS sie über einen Kartenleser nicht als removable/ejectable markiert, solange ein DCIM-Kameramedium vorhanden ist. Die lokale A-E-Erkennung erhält zusätzlich eine stabile Karten-Signatur, neue Fotos werden weiterhin per SHA-256 ohne Duplikate importiert. Der Updater prüft vorhandene Downloads und versucht fehlgeschlagene Downloads bis zu drei Mal. Hochkant-Fotos verwenden im Selfie und beim Kartenimport einen deutlich kompakteren unteren Banner mit kleinerer Schrift/Branding; Querformat bleibt unverändert. WLAN/AirPrint und Postcard-fullbleed bleiben erhalten."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.11-finder-cards.zip dist/FTS-Printer-macOS-v0.3.11-finder-cards.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.11 · Finder-visible SD/USB Cards" --notes "Build 101: Erkannte SD-/USB-Karten bleiben gleichzeitig im FTS-System und im Finder nutzbar. Jede Karte zeigt nun beschreibbar/schreibgeschützt an und kann direkt über „Im Finder öffnen“ geöffnet werden. Zusätzlich kann FTS die Finder-Einstellung für externe/removable Medien auf dem Desktop aktivieren. FTS hängt Karten nicht aus und übernimmt sie nicht exklusiv. Die lokale A-E-Erkennung, inkrementeller SHA-256-Import, stabilerer Updater sowie der kompakte Hochkant-Banner aus Build 100 bleiben erhalten."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.10-usb-update-portrait"
+          CURRENT="fts-printer-mac-v0.3.11-finder-cards"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

@@ -263,6 +263,7 @@ struct ProductionMediaContent: View {
             if ingest.activation != nil {
                 Button("Eventordner"){ingest.revealEventFolder()}
                 Button("WLAN-Eingang"){ingest.revealWLANFolder()}
+                Button("SD/USB auf Desktop anzeigen"){ingest.showExternalMediaOnDesktop()}
                 if state.currentUser?.role=="printer_admin" {
                     Button(clearingDay ? "Wird geleert …":"Tagesalbum leeren"){
                         showClearDay=true
@@ -297,6 +298,7 @@ struct ProductionMediaContent: View {
                     V80CardRegistrationRow(
                         card:card,
                         usedLabels:usedCardLabels,
+                        onReveal:{ ingest.reveal(card:card) },
                         onRegister:{ label in
                             guard let e=event else{return}
                             Task{await ingest.register(card:card,label:label,event:e)}
@@ -434,6 +436,7 @@ struct ProductionMediaContent: View {
 struct V80CardRegistrationRow: View {
     let card:V80DetectedCard
     let usedLabels:Set<String>
+    let onReveal:()->Void
     let onRegister:(String)->Void
     let onReplace:(String)->Void
     @State private var replaceLabel=""
@@ -442,11 +445,16 @@ struct V80CardRegistrationRow: View {
     var body: some View {
         HStack {
             Image(systemName:"sdcard")
-            VStack(alignment:.leading) {
+            VStack(alignment:.leading,spacing:2) {
                 Text(card.label.map{"Karte \($0)"} ?? "Unbekannte Karte").bold()
                 Text(card.volumeName).font(.caption).foregroundStyle(.secondary)
+                Text(card.writable ? "beschreibbar · Finder + FTS" : "schreibgeschützt · Lesen/Import möglich · Lock-Schieber prüfen")
+                    .font(.caption2)
+                    .foregroundStyle(card.writable ? .green : .orange)
             }
             Spacer()
+            Button("Im Finder öffnen"){onReveal()}
+                .font(.caption)
             if card.marker == nil {
                 ForEach(["A","B","C","D","E"],id:\.self) { label in
                     Button(usedLabels.contains(label) ? "\(label) ersetzen" : label) {

@@ -216,6 +216,41 @@ final class MediaIngestV80: ObservableObject {
         NSWorkspace.shared.open(URL(fileURLWithPath:a.wlanInputPath))
     }
 
+    func reveal(card:V80DetectedCard) {
+        let url=URL(fileURLWithPath:card.volumePath,isDirectory:true)
+        NSWorkspace.shared.open(url)
+    }
+
+    func showExternalMediaOnDesktop() {
+        Task.detached(priority:.utility) {
+            let settings=[
+                ("ShowExternalHardDrivesOnDesktop","true"),
+                ("ShowRemovableMediaOnDesktop","true")
+            ]
+            var ok=true
+            for (key,value) in settings {
+                let p=Process()
+                p.executableURL=URL(fileURLWithPath:"/usr/bin/defaults")
+                p.arguments=["write","com.apple.finder",key,"-bool",value]
+                do {
+                    try p.run();p.waitUntilExit()
+                    if p.terminationStatus != 0 { ok=false }
+                } catch { ok=false }
+            }
+            if ok {
+                let p=Process()
+                p.executableURL=URL(fileURLWithPath:"/usr/bin/killall")
+                p.arguments=["-HUP","Finder"]
+                try? p.run();p.waitUntilExit()
+            }
+            await MainActor.run {
+                self.status = ok
+                    ? "Finder zeigt externe/SD-Medien jetzt auf dem Desktop. Karte kann gleichzeitig in FTS und im Finder verwendet werden."
+                    : "Finder-Einstellung konnte nicht automatisch geändert werden. Karte kann weiterhin über „Im Finder öffnen“ geöffnet werden."
+            }
+        }
+    }
+
     func register(card: V80DetectedCard, label: String, event: EventRow, replaceExisting: Bool = false) async {
         guard let a=activation else{return}
         let clean=label.uppercased().trimmingCharacters(in:.whitespacesAndNewlines)
