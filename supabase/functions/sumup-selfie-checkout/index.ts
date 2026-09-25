@@ -23,7 +23,11 @@ function supabaseAdminKey(){
   if(raw){try{const keys=JSON.parse(raw);if(keys?.default)return String(keys.default)}catch{}}
   return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
 }
-function sumupKey(){return Deno.env.get("SUMUP_SELFIE_API_KEY")||""}
+function sumupKey(){
+  let v=(Deno.env.get("SUMUP_SELFIE_API_KEY")||"").trim();
+  if((v.startsWith('"')&&v.endsWith('"'))||(v.startsWith("'")&&v.endsWith("'")))v=v.slice(1,-1).trim();
+  return v;
+}
 
 async function sumupFetch(path:string,init:RequestInit={}){
   const key=sumupKey();
@@ -176,6 +180,21 @@ Deno.serve(async(req)=>{
     const admin=createClient(supabaseUrl,adminKey,{auth:{persistSession:false,autoRefreshToken:false}});
     const body:any=await bodyOf(req);
     const action=clean(body.action,40)||"config";
+
+    if(action==="health"){
+      const key=sumupKey(),configured=!!key;
+      if(!configured)return json({ok:false,configured:false,key_format:false,key_length:0,error:"SUMUP_SELFIE_API_KEY fehlt"},503);
+      const diagnostic={configured:true,key_format:key.startsWith("sup_sk_"),public_key_format:key.startsWith("sup_pk_"),key_length:key.length};
+      try{
+        const me=await sumupFetch("/v0.1/me",{method:"GET"});
+        const code=clean(me?.merchant_profile?.merchant_code||me?.merchant_code||me?.merchant?.merchant_code,40);
+        const name=clean(me?.merchant_profile?.business_name||me?.merchant_profile?.company_name||me?.merchant_profile?.doing_business_as?.business_name||me?.merchant?.business_name,120);
+        const country=clean(me?.merchant_profile?.country||me?.merchant_profile?.country_code||me?.merchant?.country,20);
+        return json({ok:true,...diagnostic,merchant_code:code,business_name:name,country});
+      }catch(e){
+        return json({ok:false,...diagnostic,sumup_status:(e as any)?.status||null,error:clean((e as any)?.message||e,240)},(e as any)?.status||500);
+      }
+    }
 
     if(action==="callback"){
       const orderId=clean(body.order_id,80);
