@@ -384,29 +384,21 @@ final class MediaIngestV80: ObservableObject {
     nonisolated private static func scanSync(eventToken:String,activation:V80MediaActivation) throws -> (items:[V80MediaItem],cards:[V80DetectedCard],newCount:Int,labels:Set<String>) {
         let fm=FileManager.default
         var manifest=try loadManifestSync(activation)
-        var hashes=Set(manifest.items.map(\.sha256))
+        // Event-wide duplicate protection: a photo imported on another event day must
+        // never be copied again when the same registered card is reinserted.
+        var hashes=importedHashesAcrossEvent(activation)
+        hashes.formUnion(manifest.items.map(\.sha256))
         var newCount=0
         let cards=detectCardsSync(eventToken:eventToken)
 
         for card in cards {
             guard let marker=card.marker,marker.eventToken==eventToken else{continue}
             let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
-            if manifest.baselines[marker.cardUUID] == nil {
-                var keys=Set<String>()
-                var fingerprints:[String:String]=[:]
-                for file in mediaFiles(on:volume) {
-                    if let key=sourceKey(file,root:volume) {
-                        keys.insert(key)
-                        fingerprints[key]=(try? sha256(file)) ?? ""
-                    }
-                }
-                manifest.baselines[marker.cardUUID]=V80CardBaseline(
-                    cardUUID:marker.cardUUID,label:marker.label,knownSourceKeys:keys,
-                    knownFingerprints:fingerprints,createdAt:Date()
-                )
-                continue
-            }
-            guard var baseline=manifest.baselines[marker.cardUUID] else { continue }
+            let recoveringBaseline = manifest.baselines[marker.cardUUID] == nil
+            var baseline = manifest.baselines[marker.cardUUID] ?? V80CardBaseline(
+                cardUUID:marker.cardUUID,label:marker.label,knownSourceKeys:[],
+                knownFingerprints:[:],createdAt:Date()
+            )
 
             for file in mediaFiles(on:volume) {
                 guard let key=sourceKey(file,root:volume) else{continue}
@@ -433,7 +425,17 @@ final class MediaIngestV80: ObservableObject {
                 baseline.knownSourceKeys.insert(key)
                 if baseline.knownFingerprints == nil { baseline.knownFingerprints=[:] }
                 baseline.knownFingerprints?[key]=hash
+
+                // If this day's baseline disappeared (for example after changing event day),
+                // never blanket-mark the whole card as "old". First skip files that were
+                // already imported anywhere in this event. For never-imported files, only
+                // files that clearly existed before card registration count as old stock.
                 if hashes.contains(hash){continue}
+                if recoveringBaseline,
+                   let mod=rv?.contentModificationDate,
+                   mod <= marker.registeredAt.addingTimeInterval(2.0) {
+                    continue
+                }
 
                 let folder=URL(fileURLWithPath:activation.folderPath)
                     .appendingPathComponent("Kamera Original",isDirectory:true)
@@ -571,6 +573,27 @@ final class MediaIngestV80: ObservableObject {
         let mod=Int((rv.contentModificationDate ?? .distantPast).timeIntervalSince1970)
         let capture=captureTimestamp(file) ?? ""
         return "\(rel)|\(size)|\(mod)|\(capture)"
+    }
+
+    nonisolated private static func importedHashesAcrossEvent(_ activation:V80MediaActivation) -> Set<String> {
+        let fm=FileManager.default
+        let dayFolder=URL(fileURLWithPath:activation.folderPath,isDirectory:true)
+        let eventRoot=dayFolder.deletingLastPathComponent()
+        let children=(try? fm.contentsOfDirectory(
+            at:eventRoot,
+            includingPropertiesForKeys:[.isDirectoryKey],
+            options:[.skipsHiddenFiles]
+        )) ?? []
+        var hashes=Set<String>()
+        for child in children {
+            let rv=try? child.resourceValues(forKeys:[.isDirectoryKey])
+            guard rv?.isDirectory==true else{continue}
+            let u=child.appendingPathComponent(".fts-media-manifest-v80.json")
+            guard let data=try? Data(contentsOf:u),
+                  let m=try? JSONDecoder().decode(V80MediaManifest.self,from:data) else{continue}
+            hashes.formUnion(m.items.map(\.sha256))
+        }
+        return hashes
     }
 
     nonisolated private static func loadManifestSync(_ activation:V80MediaActivation) throws -> V80MediaManifest {
