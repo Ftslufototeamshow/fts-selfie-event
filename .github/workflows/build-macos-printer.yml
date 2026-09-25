@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.2.8-stability.zip
-            dist/FTS-Printer-macOS-v0.2.8-stability.dmg
+            dist/FTS-Printer-macOS-v0.2.9-spooler.zip
+            dist/FTS-Printer-macOS-v0.2.9-spooler.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.2.8-stability"
+          TAG="fts-printer-mac-v0.2.9-spooler"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.2.8-stability.zip dist/FTS-Printer-macOS-v0.2.8-stability.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.2.9-spooler.zip dist/FTS-Printer-macOS-v0.2.9-spooler.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.2.8-stability.zip dist/FTS-Printer-macOS-v0.2.8-stability.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.2.8 · Stability" --notes "Build 88: Supabase-401/Netzwerkfehler werden automatisch mit Retry abgefangen; nichtkritische Fehler erscheinen als dezente Hinweise statt modaler Fenster; Druckererkennung/CUPS läuft außerhalb des UI-Threads und kann die App nicht mehr blockieren."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.2.9-spooler.zip dist/FTS-Printer-macOS-v0.2.9-spooler.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.2.9 · CUPS Spooler" --notes "Build 88: Supabase-401/Netzwerkfehler werden automatisch mit Retry abgefangen; nichtkritische Fehler erscheinen als dezente Hinweise statt modaler Fenster; Druckererkennung/CUPS läuft außerhalb des UI-Threads und kann die App nicht mehr blockieren."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.2.8-stability"
+          CURRENT="fts-printer-mac-v0.2.9-spooler"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
