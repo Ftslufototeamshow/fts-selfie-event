@@ -243,8 +243,9 @@ final class MediaIngestV80: ObservableObject {
                 p.arguments=["-HUP","Finder"]
                 try? p.run();p.waitUntilExit()
             }
+            let success=ok
             await MainActor.run {
-                self.status = ok
+                self.status = success
                     ? "Finder zeigt externe/SD-Medien jetzt auf dem Desktop. Karte kann gleichzeitig in FTS und im Finder verwendet werden."
                     : "Finder-Einstellung konnte nicht automatisch geändert werden. Karte kann weiterhin über „Im Finder öffnen“ geöffnet werden."
             }
