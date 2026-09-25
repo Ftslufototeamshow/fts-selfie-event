@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.7-card-import.zip
-            dist/FTS-Printer-macOS-v0.3.7-card-import.dmg
+            dist/FTS-Printer-macOS-v0.3.8-card-recovery.zip
+            dist/FTS-Printer-macOS-v0.3.8-card-recovery.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.7-card-import"
+          TAG="fts-printer-mac-v0.3.8-card-recovery"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.7-card-import.zip dist/FTS-Printer-macOS-v0.3.7-card-import.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.8-card-recovery.zip dist/FTS-Printer-macOS-v0.3.8-card-recovery.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.7-card-import.zip dist/FTS-Printer-macOS-v0.3.7-card-import.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.7 · SD Card Import Fix" --notes "Build 97: SD-/USB-Karten importieren wieder zuverlässig nur neue Fotos. Bereits in irgendeinem Event-Tag übernommene Dateien werden per SHA-256 erkannt und nicht doppelt kopiert. Fehlt die Tages-Baseline einer registrierten Karte, werden neue Dateien nicht mehr pauschal als Altbestand verschluckt. Orientation-Fix, WLAN/AirPrint, SD A-E und Postcard-fullbleed bleiben erhalten."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.8-card-recovery.zip dist/FTS-Printer-macOS-v0.3.8-card-recovery.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.8 · SD Card Recovery Fix" --notes "Build 98: SD-/USB-Karten unterscheiden jetzt dauerhaft zwischen nur bekannten Altdateien und tatsächlich bereits kopierten Fotos. Dadurch werden auch Fotos nachträglich übernommen, die Build 96 fälschlich als bekannt markiert hatte, während bereits wirklich importierte Bilder per SHA-256 nicht doppelt kopiert werden. Orientation-Fix, WLAN/AirPrint, SD A-E und Postcard-fullbleed bleiben erhalten."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.7-card-import"
+          CURRENT="fts-printer-mac-v0.3.8-card-recovery"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

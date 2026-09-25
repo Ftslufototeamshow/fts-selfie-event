@@ -60,6 +60,9 @@ struct V80MediaManifest: Codable {
     var baselines: [String: V80CardBaseline] = [:]
     var wlanKnownSourceKeys: Set<String> = []
     var wlanFingerprints: [String:String]?
+    // Separate durable ledger of files that were actually copied. This lets FTS
+    // distinguish "known old stock" from "new photo accidentally marked known".
+    var importedHashes: Set<String>?
 }
 
 @MainActor
@@ -388,6 +391,10 @@ final class MediaIngestV80: ObservableObject {
         // never be copied again when the same registered card is reinserted.
         var hashes=importedHashesAcrossEvent(activation)
         hashes.formUnion(manifest.items.map(\.sha256))
+        var localLedger=manifest.importedHashes ?? []
+        localLedger.formUnion(manifest.items.map(\.sha256))
+        manifest.importedHashes=localLedger
+        hashes.formUnion(localLedger)
         var newCount=0
         let cards=detectCardsSync(eventToken:eventToken)
 
@@ -410,28 +417,24 @@ final class MediaIngestV80: ObservableObject {
                 }
                 guard (rv?.fileSize ?? 0)>0 else{continue}
 
-                if baseline.knownSourceKeys.contains(key) {
-                    if let oldHash=baseline.knownFingerprints?[key] {
-                        let currentHash=try sha256(file)
-                        if currentHash==oldHash { continue }
-                        // Same path/size/time but different bytes: treat as a new camera file.
-                    } else {
-                        // Compatibility with baselines created before fingerprint tracking.
-                        continue
-                    }
-                }
-
+                let knownKey=baseline.knownSourceKeys.contains(key)
+                let oldHash=baseline.knownFingerprints?[key]
                 let hash=try sha256(file)
+                let bytesChanged=knownKey && oldHash != nil && oldHash != hash
+
                 baseline.knownSourceKeys.insert(key)
                 if baseline.knownFingerprints == nil { baseline.knownFingerprints=[:] }
                 baseline.knownFingerprints?[key]=hash
 
-                // If this day's baseline disappeared (for example after changing event day),
-                // never blanket-mark the whole card as "old". First skip files that were
-                // already imported anywhere in this event. For never-imported files, only
-                // files that clearly existed before card registration count as old stock.
+                // "Known" is not the same as "already copied": Build 96 could mark a
+                // whole card as known when a day baseline was missing. The durable
+                // imported-hash ledger is authoritative for duplicate prevention.
                 if hashes.contains(hash){continue}
-                if recoveringBaseline,
+
+                // A never-imported file that clearly predates card registration is old
+                // stock. A file newer than registration must be recovered/imported even
+                // when an older build already put it into knownSourceKeys.
+                if !bytesChanged,
                    let mod=rv?.contentModificationDate,
                    mod <= marker.registeredAt.addingTimeInterval(2.0) {
                     continue
@@ -449,7 +452,11 @@ final class MediaIngestV80: ObservableObject {
                     originalName:file.lastPathComponent,sourceType:"SD",sourceLabel:marker.label,
                     cardUUID:marker.cardUUID,cameraID:cameraIdentity(file),importedAt:Date()
                 )
-                manifest.items.append(item);hashes.insert(hash);newCount+=1
+                manifest.items.append(item)
+                var ledger=manifest.importedHashes ?? []
+                ledger.insert(hash)
+                manifest.importedHashes=ledger
+                hashes.insert(hash);newCount+=1
             }
             manifest.baselines[marker.cardUUID]=baseline
         }
@@ -489,7 +496,11 @@ final class MediaIngestV80: ObservableObject {
                 originalName:file.lastPathComponent,sourceType:"WIFI",sourceLabel:"W",
                 cardUUID:nil,cameraID:cameraIdentity(file),importedAt:Date()
             )
-            manifest.items.append(item);hashes.insert(hash);newCount+=1
+            manifest.items.append(item)
+            var ledger=manifest.importedHashes ?? []
+            ledger.insert(hash)
+            manifest.importedHashes=ledger
+            hashes.insert(hash);newCount+=1
         }
 
         try saveManifestSync(manifest,activation)
@@ -592,6 +603,7 @@ final class MediaIngestV80: ObservableObject {
             guard let data=try? Data(contentsOf:u),
                   let m=try? JSONDecoder().decode(V80MediaManifest.self,from:data) else{continue}
             hashes.formUnion(m.items.map(\.sha256))
+            hashes.formUnion(m.importedHashes ?? [])
         }
         return hashes
     }
