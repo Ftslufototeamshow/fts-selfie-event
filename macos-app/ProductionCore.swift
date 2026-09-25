@@ -315,10 +315,17 @@ enum V80MacSpooler {
 
     private static func bestPostcardPaper(printerName:String) -> NativePaperChoice? {
         let targetW=283.46,targetH=419.53 // 100 × 148 mm SELPHY postcard
-        return nativePaperChoices(printerName:printerName).min { a,b in
-            let ascore=min(abs(a.width-targetW)+abs(a.height-targetH),abs(a.width-targetH)+abs(a.height-targetW))
-            let bscore=min(abs(b.width-targetW)+abs(b.height-targetH),abs(b.width-targetH)+abs(b.height-targetW))
-            return ascore < bscore
+        let choices=nativePaperChoices(printerName:printerName)
+        return choices.min { a,b in
+            let adim=min(abs(a.width-targetW)+abs(a.height-targetH),abs(a.width-targetH)+abs(a.height-targetW))
+            let bdim=min(abs(b.width-targetW)+abs(b.height-targetH),abs(b.width-targetH)+abs(b.height-targetW))
+            // FTS prints borderless. Canon exposes separate Postcard and Postcard-fullbleed
+            // media profiles. Prefer the printer's explicit full-bleed profile whenever
+            // dimensions are otherwise equivalent; zero margins on plain Postcard can
+            // leave the AirPrint/IPP-USB queue processing without the SELPHY starting.
+            let afull=(a.id.lowercased().contains("fullbleed") || a.name.lowercased().contains("randlos")) ? 0.0 : 1000.0
+            let bfull=(b.id.lowercased().contains("fullbleed") || b.name.lowercased().contains("randlos")) ? 0.0 : 1000.0
+            return (adim+afull) < (bdim+bfull)
         }
     }
 
@@ -597,8 +604,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.2-paper-profile"
-    static let build = 93
+    static let version = "1.1.3-fullbleed"
+    static let build = 94
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -640,7 +647,7 @@ final class ProductionCore: ObservableObject {
 
             // One-time cleanup for the failed test queue from the pre-native print builds.
             // Do not touch successful/ready jobs.
-            let migrationKey="fts.printer.cleanup.failed.v93"
+            let migrationKey="fts.printer.cleanup.failed.v94"
             if !UserDefaults.standard.bool(forKey:migrationKey) {
                 localQueue.jobs.removeAll { $0.status == .uncertain || $0.status == .cancelled }
                 UserDefaults.standard.set(true,forKey:migrationKey)
