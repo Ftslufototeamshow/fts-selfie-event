@@ -235,8 +235,33 @@ enum V80MacSpooler {
     static let minimumPhysicalSeconds: TimeInterval = 42
     static let defaultSeconds: TimeInterval = 44
 
+    private struct NativePaperChoice {
+        let id:String
+        let name:String
+        let width:Double
+        let height:Double
+    }
+
+    private static func nativePrinter(named displayName:String) -> PMPrinter? {
+        var unmanaged:Unmanaged<CFArray>?
+        guard PMServerCreatePrinterList(nil,&unmanaged) == noErr,
+              let array=unmanaged?.takeRetainedValue() else { return nil }
+
+        let count=CFArrayGetCount(array)
+        for i in 0..<count {
+            guard let raw=CFArrayGetValueAtIndex(array,i) else { continue }
+            let printer=OpaquePointer(raw)
+            let name=(PMPrinterGetName(printer)?.takeUnretainedValue() as String?) ?? ""
+            if name == displayName {
+                _ = PMRetain(UnsafeRawPointer(printer))
+                return printer
+            }
+        }
+        return nil
+    }
+
     static func nativeQueueState(printerName:String) -> String? {
-        guard let printer=PMPrinterCreateFromPrinterID(printerName as CFString) else { return nil }
+        guard let printer=nativePrinter(named:printerName) else { return nil }
         defer { PMRelease(UnsafeRawPointer(printer)) }
         var state:PMPrinterState = PMPrinterState(kPMPrinterIdle)
         guard PMPrinterGetState(printer,&state) == noErr else { return nil }
@@ -248,11 +273,59 @@ enum V80MacSpooler {
     }
 
     static func nativeDeviceURI(printerName:String) -> String? {
-        guard let printer=PMPrinterCreateFromPrinterID(printerName as CFString) else { return nil }
+        guard let printer=nativePrinter(named:printerName) else { return nil }
         defer { PMRelease(UnsafeRawPointer(printer)) }
         var unmanaged:Unmanaged<CFURL>?
-        guard PMPrinterCopyDeviceURI(printer,&unmanaged) == noErr, let url=unmanaged?.takeRetainedValue() else { return nil }
+        guard PMPrinterCopyDeviceURI(printer,&unmanaged) == noErr,
+              let url=unmanaged?.takeRetainedValue() else { return nil }
         return (url as URL).absoluteString
+    }
+
+    private static func nativePaperChoices(printerName:String) -> [NativePaperChoice] {
+        guard let printer=nativePrinter(named:printerName) else { return [] }
+        defer { PMRelease(UnsafeRawPointer(printer)) }
+
+        var unmanaged:Unmanaged<CFArray>?
+        guard PMPrinterGetPaperList(printer,&unmanaged) == noErr,
+              let array=unmanaged?.takeUnretainedValue() else { return [] }
+
+        var out:[NativePaperChoice]=[]
+        let count=CFArrayGetCount(array)
+        for i in 0..<count {
+            guard let raw=CFArrayGetValueAtIndex(array,i) else { continue }
+            let paper=OpaquePointer(raw)
+            var width:Double=0,height:Double=0
+            guard PMPaperGetWidth(paper,&width)==noErr,
+                  PMPaperGetHeight(paper,&height)==noErr else { continue }
+
+            var idRef:Unmanaged<CFString>?
+            let idStatus=PMPaperGetID(paper,&idRef)
+            let id=idStatus==noErr ? ((idRef?.takeUnretainedValue() as String?) ?? "") : ""
+
+            var nameRef:Unmanaged<CFString>?
+            let nameStatus=PMPaperCreateLocalizedName(paper,printer,&nameRef)
+            let name=nameStatus==noErr ? ((nameRef?.takeRetainedValue() as String?) ?? id) : id
+
+            if !id.isEmpty {
+                out.append(NativePaperChoice(id:id,name:name,width:width,height:height))
+            }
+        }
+        return out
+    }
+
+    private static func bestPostcardPaper(printerName:String) -> NativePaperChoice? {
+        let targetW=283.46,targetH=419.53 // 100 × 148 mm SELPHY postcard
+        return nativePaperChoices(printerName:printerName).min { a,b in
+            let ascore=min(abs(a.width-targetW)+abs(a.height-targetH),abs(a.width-targetH)+abs(a.height-targetW))
+            let bscore=min(abs(b.width-targetW)+abs(b.height-targetH),abs(b.width-targetH)+abs(b.height-targetW))
+            return ascore < bscore
+        }
+    }
+
+    private static func paperDiagnostic(printerName:String) -> String {
+        nativePaperChoices(printerName:printerName).map {
+            "\($0.name) [\($0.id)] \(Int($0.width))x\(Int($0.height))pt"
+        }.joined(separator:" | ")
     }
 
     static func connectionSummary(printerName:String) -> String {
@@ -373,21 +446,36 @@ enum V80MacSpooler {
         }
 
         let landscape=image.size.width > image.size.height
-        let portrait=NSSize(width:283.46,height:419.53)
-        let paper=landscape ? NSSize(width:portrait.height,height:portrait.width) : portrait
+        let nominalPortrait=NSSize(width:283.46,height:419.53)
 
-        // Native-only path. The user's macOS exposes the SELPHY correctly in Print Center
-        // but rejects the legacy /usr/bin/lp executable. Do not call lp at all.
+        // Native-only path. Use a paper profile actually advertised by this printer.
+        // A custom 100×148 size can be accepted by Print Center yet remain held forever
+        // on AirPrint/SELPHY queues if the driver expects its built-in 4×6/Postcard profile.
         let info=(NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
         info.printer=printer
-        info.paperSize=paper
+
+        var portraitPaper=nominalPortrait
+        if let supported=bestPostcardPaper(printerName:printerName) {
+            let baseW=min(supported.width,supported.height)
+            let baseH=max(supported.width,supported.height)
+            portraitPaper=NSSize(width:baseW,height:baseH)
+            info.paperName=NSPrinter.PaperName(rawValue:supported.id)
+            info.paperSize=portraitPaper
+        } else {
+            info.paperSize=portraitPaper
+        }
+
+        info.orientation = landscape ? .landscape : .portrait
         info.topMargin=0;info.bottomMargin=0;info.leftMargin=0;info.rightMargin=0
         info.horizontalPagination = .clip
         info.verticalPagination = .clip
         info.isHorizontallyCentered=true
         info.isVerticallyCentered=true
 
-        let view=V80BorderlessPrintView(image:image,size:paper)
+        let drawingPaper=landscape
+            ? NSSize(width:portraitPaper.height,height:portraitPaper.width)
+            : portraitPaper
+        let view=V80BorderlessPrintView(image:image,size:drawingPaper)
         let op=NSPrintOperation(view:view,printInfo:info)
         op.jobTitle=title
         op.showsPrintPanel=false
@@ -431,6 +519,8 @@ enum V80MacSpooler {
             "device_uri":String(uri.prefix(1200)),
             "native_device_uri":String((nativeDeviceURI(printerName:printerName) ?? "").prefix(1200)),
             "native_queue_state":nativeQueueState(printerName:printerName) ?? "UNKNOWN",
+            "native_papers":String(paperDiagnostic(printerName:printerName).prefix(8000)),
+            "selected_postcard_paper":bestPostcardPaper(printerName:printerName).map { "\($0.name) [\($0.id)] \(Int($0.width))x\(Int($0.height))pt" } ?? "NONE",
             "connection_summary":connectionSummary(printerName:printerName),
             "usb_selphy_present":usbSELPHYPresent() ? "true" : "false",
             "lp_executable":firstExecutable(["/usr/bin/lp","/usr/sbin/lp","/bin/lp"]) ?? "MISSING",
@@ -507,8 +597,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.1-native-only"
-    static let build = 92
+    static let version = "1.1.2-paper-profile"
+    static let build = 93
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -550,7 +640,7 @@ final class ProductionCore: ObservableObject {
 
             // One-time cleanup for the failed test queue from the pre-native print builds.
             // Do not touch successful/ready jobs.
-            let migrationKey="fts.printer.cleanup.failed.v92"
+            let migrationKey="fts.printer.cleanup.failed.v93"
             if !UserDefaults.standard.bool(forKey:migrationKey) {
                 localQueue.jobs.removeAll { $0.status == .uncertain || $0.status == .cancelled }
                 UserDefaults.standard.set(true,forKey:migrationKey)
