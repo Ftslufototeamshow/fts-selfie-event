@@ -237,7 +237,7 @@ enum V80MacSpooler {
 
     static func nativeQueueState(printerName:String) -> String? {
         guard let printer=PMPrinterCreateFromPrinterID(printerName as CFString) else { return nil }
-        defer { PMRelease(printer) }
+        defer { PMRelease(UnsafeRawPointer(printer)) }
         var state:PMPrinterState = PMPrinterState(kPMPrinterIdle)
         guard PMPrinterGetState(printer,&state) == noErr else { return nil }
         switch Int(state) {
@@ -249,10 +249,10 @@ enum V80MacSpooler {
 
     static func nativeDeviceURI(printerName:String) -> String? {
         guard let printer=PMPrinterCreateFromPrinterID(printerName as CFString) else { return nil }
-        defer { PMRelease(printer) }
+        defer { PMRelease(UnsafeRawPointer(printer)) }
         var unmanaged:Unmanaged<CFURL>?
         guard PMPrinterCopyDeviceURI(printer,&unmanaged) == noErr, let url=unmanaged?.takeRetainedValue() else { return nil }
-        return url.absoluteString
+        return (url as URL).absoluteString
     }
 
     static func connectionSummary(printerName:String) -> String {
@@ -416,8 +416,8 @@ enum V80MacSpooler {
         info.printer=printer
         info.paperSize=paper
         info.topMargin=0;info.bottomMargin=0;info.leftMargin=0;info.rightMargin=0
-        info.horizontalPagination=.clip
-        info.verticalPagination=.clip
+        info.horizontalPagination = .clip
+        info.verticalPagination = .clip
         info.isHorizontallyCentered=true
         info.isVerticallyCentered=true
 
