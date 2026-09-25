@@ -426,7 +426,15 @@ enum V80MacSpooler {
             throw NSError(domain:"FTSPrinter",code:80,userInfo:[NSLocalizedDescriptionKey:"Drucker \(printerName) ist nicht mehr in macOS installiert."])
         }
 
-        let landscape=image.size.width > image.size.height
+        let pixelRep=image.representations
+            .filter{$0.pixelsWide>0 && $0.pixelsHigh>0}
+            .max{($0.pixelsWide*$0.pixelsHigh) < ($1.pixelsWide*$1.pixelsHigh)}
+        let landscape:Bool
+        if let rep=pixelRep {
+            landscape=rep.pixelsWide > rep.pixelsHigh
+        } else {
+            landscape=image.size.width > image.size.height
+        }
         let nominalPortrait=NSSize(width:283.46,height:419.53)
 
         // Native-only path. Use a paper profile actually advertised by this printer.
@@ -578,8 +586,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.4-wlan-cards"
-    static let build = 95
+    static let version = "1.1.5-orientation"
+    static let build = 96
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []

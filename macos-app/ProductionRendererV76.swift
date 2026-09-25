@@ -31,7 +31,7 @@ enum ProductionRendererV76 {
     private static let ciContext = CIContext(options: [.cacheIntermediates: true])
 
     static func renderedImage(sourceURL: URL, event: EventRow) async throws -> NSImage {
-        guard let source = NSImage(contentsOf: sourceURL) else {
+        guard let source = uprightImage(contentsOf: sourceURL) else {
             throw NSError(domain:"FTSPrinter",code:176,userInfo:[NSLocalizedDescriptionKey:"Lokales Foto konnte nicht geöffnet werden."])
         }
 
@@ -67,7 +67,17 @@ enum ProductionRendererV76 {
         return out
     }
 
-    // MARK: - v76 adaptive crop
+    private static func uprightImage(contentsOf url:URL)->NSImage? {
+        // Kamera-JPEGs speichern Hochformat oft als Querformat-Pixel plus EXIF-Drehung.
+        // Vor Gesichtserkennung, Crop und Druck wird die EXIF-Ausrichtung angewendet.
+        if let ci=CIImage(contentsOf:url,options:[.applyOrientationProperty:true]),
+           let cg=ciContext.createCGImage(ci,from:ci.extent) {
+            return NSImage(cgImage:cg,size:NSSize(width:CGFloat(cg.width),height:CGFloat(cg.height)))
+        }
+        return NSImage(contentsOf:url)
+    }
+
+    // MARK: - v77 adaptive crop
 
     private static func buildPlan(source:NSImage,config:[String:JSONValue],faces:[FaceBox])->Plan {
         let sw=max(source.size.width,1), sh=max(source.size.height,1), ratio=sw/sh

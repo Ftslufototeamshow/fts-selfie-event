@@ -482,12 +482,13 @@ struct V80MediaItemCell: View {
         VStack(alignment:.leading,spacing:7) {
             let previewPath=(item.designedPath?.isEmpty == false) ? item.designedPath! : item.importedPath
             if let image=NSImage(contentsOfFile:previewPath) {
+                let landscape=image.size.width >= image.size.height
                 Image(nsImage:image)
                     .resizable()
-                    .scaledToFill()
-                    .frame(height:145)
-                    .frame(maxWidth:.infinity)
-                    .clipped()
+                    .scaledToFit()
+                    .frame(width:landscape ? 220 : 105,height:145)
+                    .frame(maxWidth:.infinity,alignment:.center)
+                    .background(Color.black.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius:8))
             }
             Text(item.originalName).font(.caption.bold()).lineLimit(1)

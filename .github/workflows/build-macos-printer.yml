@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.5-wlan-cards.zip
-            dist/FTS-Printer-macOS-v0.3.5-wlan-cards.dmg
+            dist/FTS-Printer-macOS-v0.3.6-orientation.zip
+            dist/FTS-Printer-macOS-v0.3.6-orientation.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.5-wlan-cards"
+          TAG="fts-printer-mac-v0.3.6-orientation"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.5-wlan-cards.zip dist/FTS-Printer-macOS-v0.3.5-wlan-cards.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.6-orientation.zip dist/FTS-Printer-macOS-v0.3.6-orientation.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.5-wlan-cards.zip dist/FTS-Printer-macOS-v0.3.5-wlan-cards.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.5 · WLAN + SD A-E" --notes "Build 95: SD-Karten A/B/C/D/E sind wieder vollständig verfügbar. FTS blendet keine WLAN/AirPrint-SELPHY-Warteschlange mehr aus, wenn gleichzeitig USB angeschlossen ist; dadurch kann am Event direkt zwischen USB und WLAN gewechselt werden. Der randlose Canon-Postkartenmodus aus Build 94 bleibt aktiv."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.6-orientation.zip dist/FTS-Printer-macOS-v0.3.6-orientation.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.6 · Orientation Fix" --notes "Build 96: Hoch-/Querformat wird im Selfie- und Printer-Workflow konsistent behandelt. Eine ausdrücklich gewählte Selfie-Ausrichtung hat Vorrang vor der Automatik. Lokale Kamera-JPEGs werden anhand ihrer EXIF-Drehung vor Crop und Druck aufgerichtet; Hochformat-Vorschauen bleiben schmal statt breit abgeschnitten. WLAN/AirPrint, SD A-E und Postcard-fullbleed aus Build 95 bleiben erhalten."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.5-wlan-cards"
+          CURRENT="fts-printer-mac-v0.3.6-orientation"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
