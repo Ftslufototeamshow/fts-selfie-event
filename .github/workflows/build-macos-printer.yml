@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.4-fullbleed.zip
-            dist/FTS-Printer-macOS-v0.3.4-fullbleed.dmg
+            dist/FTS-Printer-macOS-v0.3.5-wlan-cards.zip
+            dist/FTS-Printer-macOS-v0.3.5-wlan-cards.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.4-fullbleed"
+          TAG="fts-printer-mac-v0.3.5-wlan-cards"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.4-fullbleed.zip dist/FTS-Printer-macOS-v0.3.4-fullbleed.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.5-wlan-cards.zip dist/FTS-Printer-macOS-v0.3.5-wlan-cards.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.4-fullbleed.zip dist/FTS-Printer-macOS-v0.3.4-fullbleed.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.4 · SELPHY Full-Bleed" --notes "Build 94: FTS wählt für den Canon SELPHY jetzt ausdrücklich das vom Drucker gemeldete randlose Postkartenprofil (Postcard-fullbleed) statt des normalen Postcard-Profils. Das beseitigt den Medienkonflikt zwischen 0-mm-Rändern und dem nicht-randlosen Profil; USB/AirPrint-Diagnose bleibt aktiv."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.5-wlan-cards.zip dist/FTS-Printer-macOS-v0.3.5-wlan-cards.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.5 · WLAN + SD A-E" --notes "Build 95: SD-Karten A/B/C/D/E sind wieder vollständig verfügbar. FTS blendet keine WLAN/AirPrint-SELPHY-Warteschlange mehr aus, wenn gleichzeitig USB angeschlossen ist; dadurch kann am Event direkt zwischen USB und WLAN gewechselt werden. Der randlose Canon-Postkartenmodus aus Build 94 bleibt aktiv."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.4-fullbleed"
+          CURRENT="fts-printer-mac-v0.3.5-wlan-cards"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
