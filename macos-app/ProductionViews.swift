@@ -609,6 +609,11 @@ struct V81PrinterConsumableRow: View {
                 Text(slot.state).font(.caption.bold()).foregroundStyle(statusColor)
                 if slot.eta>0{Text("\(slot.eta)s").font(.caption.monospacedDigit())}
             }
+            HStack(spacing:8) {
+                Image(systemName:slot.connection.contains("USB") ? "cable.connector" : "wifi")
+                    .foregroundStyle(slot.connection.contains("USB") ? .green : .secondary)
+                Text(slot.connection).font(.caption).foregroundStyle(.secondary)
+            }
             HStack(spacing:12) {
                 Text("Papier: \(consumable?.paper_remaining.map(String.init) ?? "unbekannt") / 18")
                     .font(.caption)
