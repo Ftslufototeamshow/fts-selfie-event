@@ -40,19 +40,33 @@ struct V80CardBaseline: Codable, Hashable {
     let createdAt: Date
 }
 
+enum V80MediaWorkflow: String, Codable, Hashable {
+    case active = "ACTIVE"
+    case queued = "QUEUED"
+    case produced = "PRODUZIERT"
+    case error = "FEHLER"
+    case delivered = "ABGEGEBEN"
+    case hidden = "HIDDEN"
+}
+
 struct V80MediaItem: Codable, Identifiable, Hashable {
     let id: String
     let sha256: String
     let sourcePath: String
     let importedPath: String
-    let designedPath: String?
-    let designSignature: String?
+    var designedPath: String?
+    var designSignature: String?
     let originalName: String
     let sourceType: String
     let sourceLabel: String
     let cardUUID: String?
     let cameraID: String?
     let importedAt: Date
+    var workflowStatus: V80MediaWorkflow? = nil
+    var workflowUpdatedAt: Date? = nil
+
+    var effectiveWorkflow: V80MediaWorkflow { workflowStatus ?? .active }
+    var visibleInPrinter: Bool { effectiveWorkflow == .active }
 }
 
 struct V80MediaManifest: Codable {
@@ -66,6 +80,8 @@ struct V80MediaManifest: Codable {
 struct V80LocalCardRegistry: Codable {
     var cards: [String:V80CardMarker] = [:]
     var signatures: [String:V80CardMarker]? = nil
+    var releasedTechnicalIDs: Set<String>? = nil
+    var releasedSignatures: Set<String>? = nil
 }
 
 @MainActor
@@ -176,6 +192,10 @@ final class MediaIngestV80: ObservableObject {
             let wlan=folder.appendingPathComponent("WLAN Kamera Eingang",isDirectory:true)
             try fm.createDirectory(at:original,withIntermediateDirectories:true)
             try fm.createDirectory(at:folder.appendingPathComponent("Druckbereit",isDirectory:true),withIntermediateDirectories:true)
+            let archive=folder.appendingPathComponent("Archiv",isDirectory:true)
+            try fm.createDirectory(at:archive.appendingPathComponent("Produziert",isDirectory:true),withIntermediateDirectories:true)
+            try fm.createDirectory(at:archive.appendingPathComponent("Fehler",isDirectory:true),withIntermediateDirectories:true)
+            try fm.createDirectory(at:archive.appendingPathComponent("Abgegeben",isDirectory:true),withIntermediateDirectories:true)
             try fm.createDirectory(at:wlan,withIntermediateDirectories:true)
 
             let a=V80MediaActivation(eventToken:event.event_token,eventDay:day,folderPath:folder.path,wlanInputPath:wlan.path,activatedAt:Date())
@@ -214,6 +234,13 @@ final class MediaIngestV80: ObservableObject {
     func revealWLANFolder() {
         guard let a=activation else{return}
         NSWorkspace.shared.open(URL(fileURLWithPath:a.wlanInputPath))
+    }
+
+    func revealArchiveFolder() {
+        guard let a=activation else{return}
+        let archive=URL(fileURLWithPath:a.folderPath,isDirectory:true).appendingPathComponent("Archiv",isDirectory:true)
+        try? FileManager.default.createDirectory(at:archive,withIntermediateDirectories:true)
+        NSWorkspace.shared.open(archive)
     }
 
     func reveal(card:V80DetectedCard) {
@@ -273,6 +300,34 @@ final class MediaIngestV80: ObservableObject {
         }
     }
 
+    func release(card: V80DetectedCard, event: EventRow) async {
+        guard let a=activation,let marker=card.marker else{return}
+        scanning=true
+        defer{scanning=false}
+        do {
+            let result=try await Task.detached(priority:.utility) {
+                try Self.releaseCardSync(card:card,marker:marker,eventToken:event.event_token,activation:a)
+            }.value
+            items=result.items.sorted{$0.importedAt>$1.importedAt}
+            detectedCards=result.cards
+            registeredCardLabels=result.labels
+            status="Karte \(marker.label) wurde freigegeben. Sie ist wieder eine normale SD-/USB-Karte; importierte Fotos bleiben im lokalen Archiv."
+        } catch {
+            status="Karte konnte nicht freigegeben werden: \(error.localizedDescription)"
+        }
+    }
+
+    func hideFromProgram(_ item:V80MediaItem) {
+        guard let a=activation,item.visibleInPrinter else{return}
+        do {
+            try Self.setWorkflowSync(folderPath:a.folderPath,mediaIDs:Set([item.id]),status:.hidden,moveDesignedFile:false)
+            items.removeAll{$0.id==item.id}
+            status="\(item.originalName) aus der Printer-Ansicht entfernt. Dateien und Original bleiben auf dem Mac erhalten."
+        } catch {
+            status="Foto konnte nicht aus der Ansicht entfernt werden: \(error.localizedDescription)"
+        }
+    }
+
     func scan(event: EventRow) async {
         guard let a=activation,!scanning else{return}
         scanning=true
@@ -312,6 +367,7 @@ final class MediaIngestV80: ObservableObject {
         var failed=0
 
         for i in out.indices {
+            guard out[i].visibleInPrinter else{continue}
             let existing=out[i].designedPath
             if out[i].designSignature==signature,
                let existing,
@@ -335,7 +391,8 @@ final class MediaIngestV80: ObservableObject {
                     id:out[i].id,sha256:out[i].sha256,sourcePath:out[i].sourcePath,importedPath:out[i].importedPath,
                     designedPath:dest.path,designSignature:signature,
                     originalName:out[i].originalName,sourceType:out[i].sourceType,sourceLabel:out[i].sourceLabel,
-                    cardUUID:out[i].cardUUID,cameraID:out[i].cameraID,importedAt:out[i].importedAt
+                    cardUUID:out[i].cardUUID,cameraID:out[i].cameraID,importedAt:out[i].importedAt,
+                    workflowStatus:out[i].workflowStatus,workflowUpdatedAt:out[i].workflowUpdatedAt
                 )
                 created += 1
             } catch {
@@ -396,8 +453,25 @@ final class MediaIngestV80: ObservableObject {
             throw NSError(domain:"FTSPrinter",code:101,userInfo:[NSLocalizedDescriptionKey:"Karte \(label) ist für dieses Event bereits registriert. Zum Ersetzen ausdrücklich „\(label) ersetzen“ wählen."])
         }
         if replaceExisting {
+            let oldMarkers=registry.cards.values.filter{$0.eventToken==eventToken && $0.label==label}
+            let oldUUIDs=Set(oldMarkers.map{$0.cardUUID})
             for id in existingIDs { manifest.baselines.removeValue(forKey:id) }
-            for id in existingRegistryIDs { registry.cards.removeValue(forKey:id) }
+            for id in existingRegistryIDs {
+                registry.releasedTechnicalIDs=(registry.releasedTechnicalIDs ?? []).union([id])
+                registry.cards.removeValue(forKey:id)
+            }
+            if var signatures=registry.signatures {
+                let oldSignatures=signatures.filter{$0.value.eventToken==eventToken && $0.value.label==label}.map{$0.key}
+                for signature in oldSignatures {
+                    registry.releasedSignatures=(registry.releasedSignatures ?? []).union([signature])
+                    signatures.removeValue(forKey:signature)
+                }
+                registry.signatures=signatures
+            }
+            if !oldUUIDs.isEmpty {
+                let baselineKeys=manifest.baselines.keys.filter{oldUUIDs.contains($0)}
+                for key in baselineKeys { manifest.baselines.removeValue(forKey:key) }
+            }
         }
 
         let cardUUID=UUID().uuidString
@@ -405,10 +479,12 @@ final class MediaIngestV80: ObservableObject {
         // Important: never write registration metadata to the camera card.
         // Cards stay read-only from FTS; registration is persisted on the Mac.
         registry.cards[card.technicalID]=marker
+        registry.releasedTechnicalIDs?.remove(card.technicalID)
         if let signature=cardSignature(volume) {
             var signatures=registry.signatures ?? [:]
             signatures[signature]=marker
             registry.signatures=signatures
+            registry.releasedSignatures?.remove(signature)
         }
         try saveCardRegistry(registry,activation)
 
@@ -563,6 +639,90 @@ final class MediaIngestV80: ObservableObject {
         return (manifest.items,cards,newCount,Set(manifest.baselines.values.map{$0.label}))
     }
 
+    nonisolated private static func releaseCardSync(card:V80DetectedCard,marker:V80CardMarker,eventToken:String,activation:V80MediaActivation) throws -> (items:[V80MediaItem],cards:[V80DetectedCard],labels:Set<String>) {
+        let fm=FileManager.default
+        let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
+        var registry=loadCardRegistry(activation)
+
+        let cardIDs=registry.cards.filter{$0.value.eventToken==eventToken && $0.value.cardUUID==marker.cardUUID}.map{$0.key}
+        for id in cardIDs {
+            registry.cards.removeValue(forKey:id)
+            registry.releasedTechnicalIDs=(registry.releasedTechnicalIDs ?? []).union([id])
+        }
+        if var signatures=registry.signatures {
+            let signatureIDs=signatures.filter{$0.value.eventToken==eventToken && $0.value.cardUUID==marker.cardUUID}.map{$0.key}
+            for signature in signatureIDs {
+                signatures.removeValue(forKey:signature)
+                registry.releasedSignatures=(registry.releasedSignatures ?? []).union([signature])
+            }
+            registry.signatures=signatures
+        }
+        registry.releasedTechnicalIDs=(registry.releasedTechnicalIDs ?? []).union([card.technicalID])
+        if let signature=cardSignature(volume) {
+            registry.releasedSignatures=(registry.releasedSignatures ?? []).union([signature])
+        }
+        try saveCardRegistry(registry,activation)
+
+        // Older FTS builds wrote this hidden compatibility marker onto some cards.
+        // Remove it only when the medium is writable; the card's photos are never modified.
+        let legacyMarker=volume.appendingPathComponent(".fts-printer-card-v80.json")
+        if card.writable,fm.fileExists(atPath:legacyMarker.path) {
+            try? fm.removeItem(at:legacyMarker)
+        }
+
+        // Baselines are per day; release the same physical card across the whole event.
+        let eventRoot=URL(fileURLWithPath:activation.folderPath,isDirectory:true).deletingLastPathComponent()
+        let children=(try? fm.contentsOfDirectory(at:eventRoot,includingPropertiesForKeys:[.isDirectoryKey],options:[.skipsHiddenFiles])) ?? []
+        for child in children {
+            guard (try? child.resourceValues(forKeys:[.isDirectoryKey]).isDirectory)==true else{continue}
+            let manifestURL=child.appendingPathComponent(".fts-media-manifest-v80.json")
+            guard let data=try? Data(contentsOf:manifestURL),
+                  var manifest=try? JSONDecoder().decode(V80MediaManifest.self,from:data) else{continue}
+            manifest.baselines.removeValue(forKey:marker.cardUUID)
+            try? JSONEncoder().encode(manifest).write(to:manifestURL,options:.atomic)
+        }
+
+        let current=try loadManifestSync(activation)
+        let cards=detectCardsSync(eventToken:eventToken,activation:activation)
+        return (current.items,cards,Set(current.baselines.values.map{$0.label}))
+    }
+
+    nonisolated static func setWorkflowSync(folderPath:String,mediaIDs:Set<String>,status:V80MediaWorkflow,moveDesignedFile:Bool) throws {
+        guard !mediaIDs.isEmpty else{return}
+        let fm=FileManager.default
+        let folder=URL(fileURLWithPath:folderPath,isDirectory:true)
+        let manifestURL=folder.appendingPathComponent(".fts-media-manifest-v80.json")
+        guard let data=try? Data(contentsOf:manifestURL),
+              var manifest=try? JSONDecoder().decode(V80MediaManifest.self,from:data) else{return}
+
+        var destination:URL?=nil
+        if moveDesignedFile {
+            let archive=folder.appendingPathComponent("Archiv",isDirectory:true)
+            switch status {
+            case .produced: destination=archive.appendingPathComponent("Produziert",isDirectory:true)
+            case .error: destination=archive.appendingPathComponent("Fehler",isDirectory:true)
+            case .delivered: destination=archive.appendingPathComponent("Abgegeben",isDirectory:true)
+            default: destination=nil
+            }
+            if let destination { try fm.createDirectory(at:destination,withIntermediateDirectories:true) }
+        }
+
+        for i in manifest.items.indices where mediaIDs.contains(manifest.items[i].id) {
+            if let destination,
+               let oldPath=manifest.items[i].designedPath,!oldPath.isEmpty {
+                let old=URL(fileURLWithPath:oldPath)
+                if fm.fileExists(atPath:old.path),old.deletingLastPathComponent().path != destination.path {
+                    let dest=uniqueDestination(folder:destination,name:old.lastPathComponent)
+                    try fm.moveItem(at:old,to:dest)
+                    manifest.items[i].designedPath=dest.path
+                }
+            }
+            manifest.items[i].workflowStatus=status
+            manifest.items[i].workflowUpdatedAt=Date()
+        }
+        try JSONEncoder().encode(manifest).write(to:manifestURL,options:.atomic)
+    }
+
     nonisolated private static func detectCardsSync(eventToken:String,activation:V80MediaActivation) -> [V80DetectedCard] {
         let fm=FileManager.default
         let registry=loadCardRegistry(activation)
@@ -579,19 +739,22 @@ final class MediaIngestV80: ObservableObject {
             let name=rv?.volumeName ?? v.lastPathComponent
             let tid=rv?.volumeIdentifier.map{String(describing:$0)} ?? v.path
             let markerURL=v.appendingPathComponent(".fts-printer-card-v80.json")
-            var marker=registry.cards[tid]
+            let signature=cardSignature(v)
+            let explicitlyReleased=(registry.releasedTechnicalIDs?.contains(tid) == true)
+                || (signature != nil && registry.releasedSignatures?.contains(signature!) == true)
+            var marker=explicitlyReleased ? nil : registry.cards[tid]
             if marker?.eventToken != eventToken { marker=nil }
-            if marker == nil,
-               let signature=cardSignature(v),
+            if marker == nil,!explicitlyReleased,
+               let signature,
                let matched=registry.signatures?[signature],
                matched.eventToken==eventToken {
                 marker=matched
             }
-            if marker == nil,
+            if marker == nil,!explicitlyReleased,
                let d=try? Data(contentsOf:markerURL),
                let legacy=try? JSONDecoder().decode(V80CardMarker.self,from:d),
                legacy.eventToken==eventToken {
-                // Legacy compatibility only: read old marker, never modify the card.
+                // Legacy compatibility only. A released card is never re-claimed by this file.
                 marker=legacy
             }
             out.append(V80DetectedCard(

@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.11-finder-cards.zip
-            dist/FTS-Printer-macOS-v0.3.11-finder-cards.dmg
+            dist/FTS-Printer-macOS-v0.3.12-media-workflow.zip
+            dist/FTS-Printer-macOS-v0.3.12-media-workflow.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.11-finder-cards"
+          TAG="fts-printer-mac-v0.3.12-media-workflow"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.11-finder-cards.zip dist/FTS-Printer-macOS-v0.3.11-finder-cards.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.12-media-workflow.zip dist/FTS-Printer-macOS-v0.3.12-media-workflow.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.11-finder-cards.zip dist/FTS-Printer-macOS-v0.3.11-finder-cards.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.11 · Finder-visible SD/USB Cards" --notes "Build 101: Erkannte SD-/USB-Karten bleiben gleichzeitig im FTS-System und im Finder nutzbar. Jede Karte zeigt nun beschreibbar/schreibgeschützt an und kann direkt über „Im Finder öffnen“ geöffnet werden. Zusätzlich kann FTS die Finder-Einstellung für externe/removable Medien auf dem Desktop aktivieren. FTS hängt Karten nicht aus und übernimmt sie nicht exklusiv. Die lokale A-E-Erkennung, inkrementeller SHA-256-Import, stabilerer Updater sowie der kompakte Hochkant-Banner aus Build 100 bleiben erhalten."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.12-media-workflow.zip dist/FTS-Printer-macOS-v0.3.12-media-workflow.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.12 · Card Release + Media Workflow" --notes "Build 102: Registrierte Karten A–E können wieder freigegeben werden, ohne Fotos zu löschen. Alte FTS-Kartenmarker werden auf beschreibbaren Medien entfernt; freigegebene Karten werden lokal nicht erneut automatisch beansprucht. Lokale Fotos folgen jetzt einem sauberen Workflow: Aktiv → In Druck → Produziert → Abgegeben; verworfene/fehlgeschlagene Aufträge gehen nach Fehler. Druckdateien verlassen nach erfolgreichem Druck den Ordner Druckbereit und werden unter Archiv/Produziert, Archiv/Fehler oder Archiv/Abgegeben einsortiert. Originalfotos bleiben erhalten. Einzelne Fotos können nur aus der App-Ansicht entfernt werden, ohne Dateien zu löschen."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.11-finder-cards"
+          CURRENT="fts-printer-mac-v0.3.12-media-workflow"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

@@ -183,7 +183,7 @@ struct ProductionMediaContent: View {
 
     var sourceChoices:[String] {
         var result=Set<String>()
-        for item in ingest.items { result.insert(item.sourceLabel) }
+        for item in ingest.items where item.visibleInPrinter { result.insert(item.sourceLabel) }
         for card in ingest.detectedCards {
             if let label=card.label { result.insert(label) }
         }
@@ -193,7 +193,7 @@ struct ProductionMediaContent: View {
 
     var visibleItems:[V80MediaItem] {
         var result:[V80MediaItem]=[]
-        for item in ingest.items where item.sourceLabel==sourceLabel {
+        for item in ingest.items where item.sourceLabel==sourceLabel && item.visibleInPrinter {
             result.append(item)
             if result.count>=120 { break }
         }
@@ -262,6 +262,7 @@ struct ProductionMediaContent: View {
             }
             if ingest.activation != nil {
                 Button("Eventordner"){ingest.revealEventFolder()}
+                Button("Archiv"){ingest.revealArchiveFolder()}
                 Button("WLAN-Eingang"){ingest.revealWLANFolder()}
                 Button("SD/USB auf Desktop anzeigen"){ingest.showExternalMediaOnDesktop()}
                 if state.currentUser?.role=="printer_admin" {
@@ -299,6 +300,10 @@ struct ProductionMediaContent: View {
                         card:card,
                         usedLabels:usedCardLabels,
                         onReveal:{ ingest.reveal(card:card) },
+                        onRelease:{
+                            guard let e=event else{return}
+                            Task{await ingest.release(card:card,event:e)}
+                        },
                         onRegister:{ label in
                             guard let e=event else{return}
                             Task{await ingest.register(card:card,label:label,event:e)}
@@ -348,7 +353,11 @@ struct ProductionMediaContent: View {
                         quantity:Binding(
                             get:{quantities[item.id] ?? 0},
                             set:{quantities[item.id]=$0}
-                        )
+                        ),
+                        onHide:{
+                            quantities.removeValue(forKey:item.id)
+                            ingest.hideFromProgram(item)
+                        }
                     )
                 }
             }
@@ -437,10 +446,12 @@ struct V80CardRegistrationRow: View {
     let card:V80DetectedCard
     let usedLabels:Set<String>
     let onReveal:()->Void
+    let onRelease:()->Void
     let onRegister:(String)->Void
     let onReplace:(String)->Void
     @State private var replaceLabel=""
     @State private var showReplace=false
+    @State private var showRelease=false
 
     var body: some View {
         HStack {
@@ -469,6 +480,8 @@ struct V80CardRegistrationRow: View {
                 }
             } else {
                 Text("erkannt").font(.caption.bold()).foregroundStyle(.green)
+                Button("Karte \(card.label ?? "") freigeben",role:.destructive){showRelease=true}
+                    .font(.caption)
             }
         }
         .alert("Karte \(replaceLabel) ersetzen?",isPresented:$showReplace) {
@@ -479,12 +492,20 @@ struct V80CardRegistrationRow: View {
         } message: {
             Text("Die bisherige Zuordnung von Karte \(replaceLabel) wird für dieses Event gesperrt. Die neu eingesteckte Karte übernimmt diese Kennung.")
         }
+        .alert("Karte \(card.label ?? "") freigeben?",isPresented:$showRelease) {
+            Button("Abbrechen",role:.cancel){}
+            Button("Freigeben",role:.destructive){onRelease()}
+        } message: {
+            Text("Nur die FTS-Zuordnung A–E wird entfernt. Fotos auf der Karte und bereits importierte Originale bleiben erhalten. Ein alter FTS-Marker wird, falls die Karte beschreibbar ist, entfernt.")
+        }
     }
 }
 
 struct V80MediaItemCell: View {
     let item:V80MediaItem
     @Binding var quantity:Int
+    let onHide:()->Void
+    @State private var showHide=false
 
     var body: some View {
         VStack(alignment:.leading,spacing:7) {
@@ -508,10 +529,18 @@ struct V80MediaItemCell: View {
             Stepper(value:$quantity,in:0...20) {
                 Text("Anzahl: \(quantity)").font(.caption.bold())
             }
+            Button("Aus Programm entfernen",role:.destructive){showHide=true}
+                .font(.caption)
         }
         .padding(9)
         .background(Color(nsColor:.controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius:12))
+        .alert("Foto aus der Printer-Ansicht entfernen?",isPresented:$showHide) {
+            Button("Abbrechen",role:.cancel){}
+            Button("Nur aus Programm entfernen",role:.destructive){onHide()}
+        } message: {
+            Text("Das Foto verschwindet aus der aktiven FTS-Auswahl. Original und vorhandene Dateien auf dem Mac werden nicht gelöscht.")
+        }
     }
 }
 

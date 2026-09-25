@@ -586,8 +586,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.10-finder-cards"
-    static let build = 101
+    static let version = "1.1.11-media-workflow"
+    static let build = 102
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -635,7 +635,49 @@ final class ProductionCore: ObservableObject {
                 UserDefaults.standard.set(true,forKey:migrationKey)
             }
             try? V80QueueStore.save(localQueue, folderPath: folderPath)
+            reconcileMediaWorkflow()
         }
+    }
+
+    private func mediaIDs(in job:V80LocalPrintJob)->Set<String> {
+        Set(job.units.map{$0.mediaID})
+    }
+
+    private func mediaIDsNeededByOtherActiveJobs(excluding jobID:UUID)->Set<String> {
+        var ids=Set<String>()
+        for job in localQueue.jobs where job.id != jobID && [.waiting,.printing,.uncertain].contains(job.status) {
+            ids.formUnion(mediaIDs(in:job))
+        }
+        return ids
+    }
+
+    private func reconcileMediaWorkflow() {
+        guard !loadedFolderPath.isEmpty else{return}
+        var active=Set<String>()
+        var produced=Set<String>()
+        var delivered=Set<String>()
+        var errors=Set<String>()
+        for job in localQueue.jobs {
+            switch job.status {
+            case .waiting,.printing,.uncertain:
+                active.formUnion(mediaIDs(in:job))
+            case .readyForPickup:
+                produced.formUnion(mediaIDs(in:job))
+            case .archived:
+                delivered.formUnion(mediaIDs(in:job))
+            case .cancelled:
+                errors.formUnion(mediaIDs(in:job))
+            }
+        }
+        produced.subtract(active)
+        delivered.subtract(active)
+        errors.subtract(active)
+        errors.subtract(produced)
+        errors.subtract(delivered)
+        try? MediaIngestV80.setWorkflowSync(folderPath:loadedFolderPath,mediaIDs:active,status:.queued,moveDesignedFile:false)
+        try? MediaIngestV80.setWorkflowSync(folderPath:loadedFolderPath,mediaIDs:errors,status:.error,moveDesignedFile:true)
+        try? MediaIngestV80.setWorkflowSync(folderPath:loadedFolderPath,mediaIDs:produced,status:.produced,moveDesignedFile:true)
+        try? MediaIngestV80.setWorkflowSync(folderPath:loadedFolderPath,mediaIDs:delivered,status:.delivered,moveDesignedFile:true)
     }
 
     private func saveLocalQueue() {
@@ -1163,6 +1205,13 @@ final class ProductionCore: ObservableObject {
             }
             localQueue.jobs[ji].status = .readyForPickup
             saveLocalQueue()
+            let stillNeeded=mediaIDsNeededByOtherActiveJobs(excluding:jobID)
+            let finishedIDs=mediaIDs(in:localQueue.jobs[ji]).subtracting(stillNeeded)
+            do {
+                try MediaIngestV80.setWorkflowSync(folderPath:loadedFolderPath,mediaIDs:finishedIDs,status:.produced,moveDesignedFile:true)
+            } catch {
+                lastError="Druck fertig, aber die lokale Datei konnte nicht nach Archiv/Produziert verschoben werden: \(error.localizedDescription)"
+            }
             await refresh(state:state)
         } catch {
             localQueue.jobs[ji].status = .uncertain
@@ -1236,6 +1285,11 @@ final class ProductionCore: ObservableObject {
                 sourceLabel:sourceLabel,createdAt:Date(),status:.waiting,units:units
             ))
             saveLocalQueue()
+            do {
+                try MediaIngestV80.setWorkflowSync(folderPath:loadedFolderPath,mediaIDs:Set(filtered.map{$0.key.id}),status:.queued,moveDesignedFile:false)
+            } catch {
+                lastError="Auftrag angelegt, aber die Fotos konnten nicht aus der aktiven Auswahl ausgeblendet werden: \(error.localizedDescription)"
+            }
             await state.refreshSelected()
             return code
         } catch {
@@ -1261,6 +1315,9 @@ final class ProductionCore: ObservableObject {
     func purgeFailedLocalJobs(state: AppState) async {
         guard let dev=state.deviceToken,let session=state.sessionToken,!state.selectedEventToken.isEmpty else{return}
         do {
+            let failedIDs=Set(localQueue.jobs
+                .filter{$0.status == .uncertain || $0.status == .cancelled || $0.status == .waiting}
+                .flatMap{$0.units.map{$0.mediaID}})
             let deleted:Int = try await api.rpc("fts_printer_purge_failed_local_jobs_v96",body:[
                 "p_device_token":dev,
                 "p_session_token":session,
@@ -1270,6 +1327,7 @@ final class ProductionCore: ObservableObject {
                 $0.status == .uncertain || $0.status == .cancelled || $0.status == .waiting
             }
             saveLocalQueue()
+            try? MediaIngestV80.setWorkflowSync(folderPath:loadedFolderPath,mediaIDs:failedIDs,status:.error,moveDesignedFile:true)
             // A failed local print can leave the slot red. Purging the failed jobs
             // is an explicit operator decision that none of them should run.
             for slot in printerSlots where slot.state == "ERROR" || slot.state == "OFFLINE" {
@@ -1294,6 +1352,8 @@ final class ProductionCore: ObservableObject {
                     localQueue.jobs[i].units[ui].status = .cancelled
                 }
                 saveLocalQueue()
+                let failedIDs=mediaIDs(in:localQueue.jobs[i])
+                try? MediaIngestV80.setWorkflowSync(folderPath:loadedFolderPath,mediaIDs:failedIDs,status:.error,moveDesignedFile:true)
             }
             await state.refreshSelected()
             await refresh(state:state)
@@ -1312,8 +1372,12 @@ final class ProductionCore: ObservableObject {
                 : ["p_device_token":dev,"p_session_token":session,"p_order_id":pickup.id]
             let ok:Bool=try await api.rpc(name,body:body)
             if ok, pickup.kind.uppercased()=="LOCAL", let ji=localQueue.jobs.firstIndex(where:{$0.id.uuidString==pickup.id}) {
+                let jobID=localQueue.jobs[ji].id
                 localQueue.jobs[ji].status = .archived
                 saveLocalQueue()
+                let stillNeeded=mediaIDsNeededByOtherActiveJobs(excluding:jobID)
+                let deliveredIDs=mediaIDs(in:localQueue.jobs[ji]).subtracting(stillNeeded)
+                try? MediaIngestV80.setWorkflowSync(folderPath:loadedFolderPath,mediaIDs:deliveredIDs,status:.delivered,moveDesignedFile:true)
             }
             await refresh(state:state)
         } catch { lastError=error.localizedDescription }
