@@ -44,6 +44,9 @@ struct ProductionQueueContent: View {
                     }
                 )).toggleStyle(.switch)
                 Button("Neu laden"){Task{await core.refresh(state:state)}}
+                Button("Fehlgeschlagene löschen",role:.destructive){
+                    Task{await core.purgeFailedLocalJobs(state:state)}
+                }
             }
 
             if core.printerSlots.filter(\.enabled).isEmpty {
@@ -59,6 +62,12 @@ struct ProductionQueueContent: View {
                                 if p.eta>0 { Text("ca. \(p.eta) Sek.").font(.caption2.monospacedDigit()) }
                                 if let material = core.materialMessage(for:p.name) {
                                     Text(material).font(.caption2.bold()).foregroundStyle(.red)
+                                }
+                                if let err=p.lastError,!err.isEmpty {
+                                    Text(err)
+                                        .font(.caption2)
+                                        .foregroundStyle(p.state=="ERROR" ? .red : .secondary)
+                                        .lineLimit(4)
                                 }
                                 if p.state=="ERROR" {
                                     Button("Fehler geprüft"){core.clearPrinterError(p.name)}.font(.caption2)
