@@ -1,8 +1,8 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
 const CACHE_PREFIX='fts-selfie-';
-const CACHE='fts-selfie-production-v77-orientation-20260925';
-const CORE=['./','./index.html','./dashboard.html','./studio.html','./print.html','./config.js','./social-share.js','./printer-staff-v72.js','./fts-photo-engine.js?v=77','./camera-live.js','./print-pickup-guest-v57.js','./print-pickup-station-v57.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
+const CACHE='fts-selfie-production-v78-compact-portrait-20260925';
+const CORE=['./','./index.html','./dashboard.html','./studio.html','./print.html','./config.js','./social-share.js','./printer-staff-v72.js','./fts-photo-engine.js?v=78','./camera-live.js','./print-pickup-guest-v57.js','./print-pickup-station-v57.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 async function purgeOldFtsCaches(){
   const keys=await caches.keys();

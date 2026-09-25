@@ -145,7 +145,7 @@
     return {
       enabled:true,auto_orientation:true,auto_crop:true,face_safe_area:true,
       face_padding_ratio:.34,face_gap_pct:2.5,min_text_scale:.68,
-      portrait:{banner_max_pct:18,banner_min_pct:12},
+      portrait:{banner_max_pct:12,banner_min_pct:8},
       landscape:{banner_max_pct:22,banner_min_pct:14},
       print:{ratio:'10x15',bleed_pct:1.5}
     };
@@ -194,8 +194,12 @@
     if(source>target){ch=sh;cw=sh*target;cx=(sw-cw)/2;cy=0}
     else{cw=sw;ch=sw/target;cx=0;cy=(sh-ch)/2}
     const mode=out.orientation==='landscape'?a.landscape:a.portrait;
-    const normal=clampNum(mode.banner_max_pct,out.orientation==='landscape'?14:12,out.orientation==='landscape'?26:22);
-    const minimum=clampNum(mode.banner_min_pct,10,normal);
+    const normal=out.orientation==='landscape'
+      ? clampNum(mode.banner_max_pct,14,26)
+      : clampNum(mode.banner_max_pct,9,13);
+    const minimum=out.orientation==='landscape'
+      ? clampNum(mode.banner_min_pct,10,normal)
+      : Math.min(clampNum(mode.banner_min_pct,6,normal),8);
     const gap=clampNum(a.face_gap_pct,1,8);
     const faceUnion=a.enabled!==false&&a.face_safe_area!==false?unionBoxes(faces,clampNum(a.face_padding_ratio,.12,.65),sw,sh):null;
     if(faceUnion&&a.auto_crop!==false){
@@ -249,10 +253,18 @@
     }
     const a=adaptiveConfig(conf),orientation=helpers.adaptiveState?.orientation||(w>h?'landscape':'portrait'),mode=orientation==='landscape'?a.landscape:a.portrait;
     const banner=ov.banner||{},requestedHeight=clampNum(banner.height_pct||30,12,48);
-    const normalCap=clampNum(mode.banner_max_pct,orientation==='landscape'?14:12,orientation==='landscape'?26:22),minimum=clampNum(mode.banner_min_pct,10,normalCap);
+    const normalCap=orientation==='landscape'
+      ? clampNum(mode.banner_max_pct,14,26)
+      : clampNum(mode.banner_max_pct,9,13);
+    const minimum=orientation==='landscape'
+      ? clampNum(mode.banner_min_pct,10,normalCap)
+      : Math.min(clampNum(mode.banner_min_pct,6,normalCap),8);
     const automatic=a.enabled!==false,adaptiveHeight=helpers.adaptiveState?.bannerPct;
-    const heightPct=automatic?clampNum(Number.isFinite(Number(adaptiveHeight))?adaptiveHeight:Math.min(requestedHeight,normalCap),minimum,normalCap):requestedHeight;
-    const textScale=automatic?clampNum(helpers.adaptiveState?.textScale??1,clampNum(a.min_text_scale,.52,.92),1):1;
+    const heightPct=automatic
+      ? clampNum(Number.isFinite(Number(adaptiveHeight))?adaptiveHeight:Math.min(requestedHeight,normalCap),minimum,normalCap)
+      : (orientation==='landscape'?requestedHeight:Math.min(requestedHeight,normalCap));
+    const adaptiveTextScale=automatic?clampNum(helpers.adaptiveState?.textScale??1,clampNum(a.min_text_scale,.52,.92),1):1;
+    const textScale=adaptiveTextScale*(orientation==='portrait'?.72:1);
     const bh=h*heightPct/100,by=h-bh;
     if(banner.enabled!==false){
       const type=banner.type||'gradient',op=Math.max(0,Math.min(1,Number(banner.opacity??.86))),color=banner.color||'#071315';
@@ -271,10 +283,10 @@
       let txt=textValue(line,ev,'overlay');if(line.include_date!==false&&helpers.photoEventDayText){const d=helpers.photoEventDayText();if(d)txt=txt?txt+' · '+d:d}
       const aa=line.align||align,xx=aa==='center'?w/2:aa==='right'?w-pad:pad;drawMulti(ctx,txt,xx,lineY,{...line,align:aa,size_pct:line.size_pct||2.1,weight:line.weight||600,color:line.color||'#e8efed',_scale:textScale},maxW);
     }
-    if((ev?.photo_branding||'bottom')!=='none'&&ov.branding!==false){ctx.save();ctx.textAlign='right';ctx.textBaseline='alphabetic';ctx.fillStyle='rgba(255,255,255,.68)';const base=Math.min(w,h);ctx.font='600 '+Math.max(11,base*.014*textScale)+'px system-ui';ctx.fillText('FTS.lu · Selfie Event',w-pad,h-Math.max(11,h*.012));ctx.restore()}
+    if((ev?.photo_branding||'bottom')!=='none'&&ov.branding!==false){ctx.save();ctx.textAlign='right';ctx.textBaseline='alphabetic';ctx.fillStyle='rgba(255,255,255,.68)';const base=Math.min(w,h),brandScale=orientation==='portrait'?.010:.014;ctx.font='600 '+Math.max(10,base*brandScale*textScale)+'px system-ui';ctx.fillText('FTS.lu · Selfie Event',w-pad,h-Math.max(11,h*.012));ctx.restore()}
     if(helpers.drawEventLogos)await helpers.drawEventLogos(ctx,w,h,'photo');
     if(helpers.drawEventDecorations)await Promise.resolve(helpers.drawEventDecorations(ctx,w,h,'photo'));
   }
 
-  window.FTS_PHOTO_ENGINE={version:77,catalog,filterInfo,applyFilter:pxFilter,filterCss,drawOverlay,fontStack,pumpkinFrame,adaptiveDefaults,adaptiveConfig,sourceOrientation,outputSpec,buildPlan,drawPhoto};
+  window.FTS_PHOTO_ENGINE={version:78,catalog,filterInfo,applyFilter:pxFilter,filterCss,drawOverlay,fontStack,pumpkinFrame,adaptiveDefaults,adaptiveConfig,sourceOrientation,outputSpec,buildPlan,drawPhoto};
 })();
