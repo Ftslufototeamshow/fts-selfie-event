@@ -149,7 +149,7 @@ final class MediaIngestV80: ObservableObject {
         if selectedDay.isEmpty { selectedDay=preferredDay(for:event) }
         try createDailyAlbums(event:event)
         load(event:event)
-        status="Tagesalbum \(selectedDay) aktiv. SD-Karten können A/B/C/D zugeordnet werden."
+        status="Tagesalbum \(selectedDay) aktiv. SD-Karten können A/B/C/D/E zugeordnet werden."
     }
 
     private func createDailyAlbums(event:EventRow) throws {
@@ -213,8 +213,8 @@ final class MediaIngestV80: ObservableObject {
     func register(card: V80DetectedCard, label: String, event: EventRow, replaceExisting: Bool = false) async {
         guard let a=activation else{return}
         let clean=label.uppercased().trimmingCharacters(in:.whitespacesAndNewlines)
-        guard ["A","B","C","D"].contains(clean) else {
-            status="Kartenname muss A, B, C oder D sein.";return
+        guard ["A","B","C","D","E"].contains(clean) else {
+            status="Kartenname muss A, B, C, D oder E sein.";return
         }
         scanning=true
         defer{scanning=false}
@@ -250,7 +250,7 @@ final class MediaIngestV80: ObservableObject {
             } else if r.newCount>0 || designed.created>0 {
                 status="\(r.newCount) neue Foto\(r.newCount==1 ? "" : "s") übernommen · \(designed.created) Druckdesign\(designed.created==1 ? "" : "s") erstellt."
             } else if r.cards.contains(where:{$0.marker==nil}) {
-                status="Unbekannte SD-Karte erkannt. Erst A/B/C/D zuordnen – noch kein Import."
+                status="Unbekannte SD-Karte erkannt. Erst A/B/C/D/E zuordnen – noch kein Import."
             } else {
                 status="Aktuell · keine neuen Fotos."
             }
