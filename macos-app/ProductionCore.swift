@@ -741,7 +741,7 @@ enum V80MacSpooler {
         var percent:Int?
         let firstPart=batteryLine.split(separator:";",maxSplits:1).first.map(String.init) ?? batteryLine
         for token in firstPart.split(whereSeparator:{$0==" " || $0=="\t"}) {
-            let cleaned=String(token).replacingOccurrences(of:"%","")
+            let cleaned=String(token).replacingOccurrences(of:"%",with:"")
             if let value=Int(cleaned),value>=0,value<=100 {
                 percent=value
             }
