@@ -300,7 +300,7 @@ final class MediaIngestV80: ObservableObject {
             items=result.items.sorted{$0.importedAt>$1.importedAt}
             detectedCards=result.cards
             registeredCardLabels=result.labels
-            status="Karte \(clean) registriert. \(result.baselineCount) vorhandene Fotos wurden als Altbestand markiert."
+            status="Karte \(clean) registriert. \(result.importedCount) neueste Foto\(result.importedCount==1 ? "" : "s") übernommen · älterer Bestand bleibt ausgeblendet."
         } catch {
             status="Karte konnte nicht registriert werden: \(error.localizedDescription)"
         }
@@ -483,7 +483,7 @@ final class MediaIngestV80: ObservableObject {
         registeredCardLabels=Set(m.baselines.values.map{$0.label})
     }
 
-    nonisolated private static func registerSync(card:V80DetectedCard,label:String,eventToken:String,activation:V80MediaActivation,replaceExisting:Bool) throws -> (items:[V80MediaItem],cards:[V80DetectedCard],baselineCount:Int,labels:Set<String>) {
+    nonisolated private static func registerSync(card:V80DetectedCard,label:String,eventToken:String,activation:V80MediaActivation,replaceExisting:Bool) throws -> (items:[V80MediaItem],cards:[V80DetectedCard],baselineCount:Int,importedCount:Int,labels:Set<String>) {
         let fm=FileManager.default
         let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
 
@@ -539,13 +539,47 @@ final class MediaIngestV80: ObservableObject {
                 fingerprints[k]=try sha256(f)
             }
         }
+
+        // A newly assigned camera card may already contain the photos that were just
+        // shot. Keep the whole current card as baseline, but immediately import only
+        // the three newest photos. Older stock stays hidden.
+        var eventHashes=importedHashesAcrossEvent(activation)
+        eventHashes.formUnion(manifest.items.map(\.sha256))
+        eventHashes.formUnion(manifest.importedHashes ?? [])
+        let newest=Array(files.sorted{mediaChronologyDate($0)>mediaChronologyDate($1)}.prefix(3)).reversed()
+        var importedCount=0
+        for file in newest {
+            let rv=try? file.resourceValues(forKeys:[.isRegularFileKey,.fileSizeKey])
+            guard rv?.isRegularFile==true,(rv?.fileSize ?? 0)>0 else{continue}
+            let hash=try sha256(file)
+            if eventHashes.contains(hash){continue}
+            let folder=URL(fileURLWithPath:activation.folderPath)
+                .appendingPathComponent("Kamera Original",isDirectory:true)
+                .appendingPathComponent("SD \(label)",isDirectory:true)
+            try fm.createDirectory(at:folder,withIntermediateDirectories:true)
+            let dest=uniqueDestination(folder:folder,name:file.lastPathComponent)
+            try fm.copyItem(at:file,to:dest)
+            let item=V80MediaItem(
+                id:hash,sha256:hash,sourcePath:file.path,importedPath:dest.path,
+                designedPath:nil,designSignature:nil,
+                originalName:file.lastPathComponent,sourceType:"SD",sourceLabel:label,
+                cardUUID:cardUUID,cameraID:cameraIdentity(file),importedAt:Date()
+            )
+            manifest.items.append(item)
+            var ledger=manifest.importedHashes ?? []
+            ledger.insert(hash)
+            manifest.importedHashes=ledger
+            eventHashes.insert(hash)
+            importedCount+=1
+        }
+
         manifest.baselines[cardUUID]=V80CardBaseline(
             cardUUID:cardUUID,label:label,knownSourceKeys:keys,
             knownFingerprints:fingerprints,createdAt:Date()
         )
         try saveManifestSync(manifest,activation)
         let cards=detectCardsSync(eventToken:eventToken,activation:activation)
-        return (manifest.items,cards,keys.count,Set(manifest.baselines.values.map{$0.label}))
+        return (manifest.items,cards,keys.count,importedCount,Set(manifest.baselines.values.map{$0.label}))
     }
 
     nonisolated private static func scanSync(eventToken:String,activation:V80MediaActivation) throws -> (items:[V80MediaItem],cards:[V80DetectedCard],newCount:Int,labels:Set<String>) {
@@ -576,12 +610,19 @@ final class MediaIngestV80: ObservableObject {
             }
             let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
             let recoveringBaseline = manifest.baselines[marker.cardUUID] == nil
+            let currentFiles=mediaFiles(on:volume)
+            let recoveryNewest=Set(
+                currentFiles
+                    .sorted{mediaChronologyDate($0)>mediaChronologyDate($1)}
+                    .prefix(3)
+                    .map{$0.path}
+            )
             var baseline = manifest.baselines[marker.cardUUID] ?? V80CardBaseline(
                 cardUUID:marker.cardUUID,label:marker.label,knownSourceKeys:[],
                 knownFingerprints:[:],createdAt:Date()
             )
 
-            for file in mediaFiles(on:volume) {
+            for file in currentFiles {
                 guard let key=sourceKey(file,root:volume) else{continue}
                 // Wait until the camera/OS has finished writing the file.
                 let rv=try? file.resourceValues(forKeys:[.contentModificationDateKey,.fileSizeKey])
@@ -605,12 +646,14 @@ final class MediaIngestV80: ObservableObject {
                 // imported-hash ledger is authoritative for duplicate prevention.
                 if hashes.contains(hash){continue}
 
-                // A never-imported file that clearly predates card registration is old
-                // stock. A file newer than registration must be recovered/imported even
-                // when an older build already put it into knownSourceKeys.
-                if !bytesChanged,
-                   let mod=rv?.contentModificationDate,
-                   mod <= marker.registeredAt.addingTimeInterval(2.0) {
+                // Normal operation: the baseline tells us what was already on the
+                // card. A genuinely new source key is imported regardless of the camera's
+                // clock/time-zone; this avoids losing fresh photos when EXIF/FAT time differs
+                // from the Mac. If an old installation has no baseline, rebuild it from the
+                // current card but recover only the three newest photos.
+                if recoveringBaseline {
+                    if !recoveryNewest.contains(file.path) { continue }
+                } else if knownKey && !bytesChanged {
                     continue
                 }
 
@@ -959,6 +1002,18 @@ final class MediaIngestV80: ObservableObject {
             i+=1
         }
         return candidate
+    }
+
+    nonisolated private static func mediaChronologyDate(_ url:URL)->Date {
+        if let stamp=captureTimestamp(url) {
+            let formatter=DateFormatter()
+            formatter.locale=Locale(identifier:"en_US_POSIX")
+            formatter.calendar=Calendar(identifier:.gregorian)
+            formatter.dateFormat="yyyy:MM:dd HH:mm:ss"
+            if let date=formatter.date(from:stamp) { return date }
+        }
+        let rv=try? url.resourceValues(forKeys:[.contentModificationDateKey,.creationDateKey])
+        return rv?.contentModificationDate ?? rv?.creationDate ?? .distantPast
     }
 
     nonisolated private static func captureTimestamp(_ url:URL)->String?{
