@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.28-banner-fullphoto-fix.zip
-            dist/FTS-Printer-macOS-v0.3.28-banner-fullphoto-fix.dmg
+            dist/FTS-Printer-macOS-v0.3.29-border-safearea-fix.zip
+            dist/FTS-Printer-macOS-v0.3.29-border-safearea-fix.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.28-banner-fullphoto-fix"
+          TAG="fts-printer-mac-v0.3.29-border-safearea-fix"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.28-banner-fullphoto-fix.zip dist/FTS-Printer-macOS-v0.3.28-banner-fullphoto-fix.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.29-border-safearea-fix.zip dist/FTS-Printer-macOS-v0.3.29-border-safearea-fix.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.28-banner-fullphoto-fix.zip dist/FTS-Printer-macOS-v0.3.28-banner-fullphoto-fix.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.28 · Banner + Full Photo Fix" --notes "Build 118: Kleine Renderer-Korrektur ohne Änderung am Canon-Druckpfad. Ein hochgeladenes fertiges FTS-Banner wird als vollständiges 148×15-mm-Design mit 100 % Deckkraft und ohne Cover-Beschnitt gerendert; erzeugte Zusatzschrift und FTS-Branding werden bei einem fertigen Banner nicht mehr darübergelegt. Banner aus ist echter Vollfoto-Modus: keine Bannerfarbe, kein Bannertext, kein FTS-Branding und keine Foto-Dekoration/Logos. Druckerkennung, Spiegelkorrektur, SD A–E, Vorschau/Crop, Randoptionen, OK-zum-Druck, Archiv und Mehrdrucker-Verteilung bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.29-border-safearea-fix.zip dist/FTS-Printer-macOS-v0.3.29-border-safearea-fix.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.29 · Border + Safe Area Fix" --notes "Build 119: Korrigiert ausschließlich den lokalen SD/WLAN-Renderweg vor dem unveränderten Canon-Druckpfad. Farbrand und weißer Rand erhalten eine 2-mm-Sicherheitsreserve, damit der gewählte Rahmen trotz des bestehenden 1,8-%-Randlos-Bleeds auf allen vier Seiten klar sichtbar bleibt. Lokale Druckaufträge werden beim bestätigten Druck aus dem Originalfoto mit dem aktuellen Veranstalter-Design neu gerendert statt eine ältere designedPath-Datei wiederzuverwenden. Die generierte Banner-Schrift bekommt eine deutlich strengere Safe Area und einen begrenzten Textblock; fertige hochgeladene Banner bleiben unverändert. Canon-Spooler, SELPHY-Spiegelkorrektur, Druckererkennung, SD A–E, Mehrdrucker-Verteilung, OK-zum-Druck und Archiv bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.28-banner-fullphoto-fix"
+          CURRENT="fts-printer-mac-v0.3.29-border-safearea-fix"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

@@ -367,14 +367,19 @@ enum ProductionRendererV76 {
         }
 
         let padPct=clamp(CGFloat(ov["padding_pct"]?.double ?? 4.5)/100,0.025,0.10)
-        let printSafeInset=max(18,min(w,h)*0.02)
-        let pad=max(w*padPct,printSafeInset),maxW=max(1,w-pad*2)
-        let safeBottom=printSafeInset
-        let safeTop=max(safeBottom+1,bh-printSafeInset)
+        // Real SELPHY output needs more breathing room than the screen preview.
+        // Keep generated organizer text well inside the 15 mm banner. Finished
+        // uploaded banner artwork is not altered by these text rectangles.
+        let printSafeInset=max(30,min(w,h)*0.03)
+        let pad=max(w*padPct,printSafeInset+18)
+        let maxW=max(1,w-pad*2)
+        let textBlockWidth=min(maxW,w*(plan.landscape ? 0.58 : 0.72))
+        let safeBottom=printSafeInset+6
+        let safeTop=max(safeBottom+1,bh-printSafeInset-6)
         let safeHeight=max(1,safeTop-safeBottom)
-        let titleRect=NSRect(x:pad,y:safeBottom+safeHeight*0.52,width:maxW,height:safeHeight*0.48)
-        let subtitleRect=NSRect(x:pad,y:safeBottom+safeHeight*0.23,width:maxW,height:safeHeight*0.29)
-        let lineRect=NSRect(x:pad,y:safeBottom,width:maxW,height:safeHeight*0.23)
+        let titleRect=NSRect(x:pad,y:safeBottom+safeHeight*0.50,width:textBlockWidth,height:safeHeight*0.50)
+        let subtitleRect=NSRect(x:pad,y:safeBottom+safeHeight*0.22,width:textBlockWidth,height:safeHeight*0.28)
+        let lineRect=NSRect(x:pad,y:safeBottom,width:textBlockWidth,height:safeHeight*0.22)
         let title=ov["title"]?.object ?? [:]
         let sub=ov["subtitle"]?.object ?? [:]
         let line=ov["line"]?.object ?? [:]

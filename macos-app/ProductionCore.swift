@@ -215,9 +215,13 @@ enum V80PrintLayoutComposer {
         if layout.frameMode == .borderless {
             borderPx=0
         } else {
-            // SELPHY Postcard short side is 100 mm. Keep the UI value physically
-            // meaningful regardless of portrait/landscape orientation.
-            borderPx=shortSide*CGFloat(max(0,min(layout.borderMM,12.0))/100.0)
+            // SELPHY Postcard short side is 100 mm. The final native print view
+            // intentionally overscans 1.8% for borderless reliability. Add a small
+            // internal safety reserve here so a requested white/color frame remains
+            // clearly visible on all four sides after that unchanged final bleed.
+            let requestedMM=CGFloat(max(0,min(layout.borderMM,12.0)))
+            let printerSafetyMM:CGFloat=2.0
+            borderPx=shortSide*((requestedMM+printerSafetyMM)/100.0)
         }
         let inner=NSRect(
             x:borderPx,y:borderPx,
@@ -968,8 +972,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.27-banner-fullphoto-fix"
-    static let build = 118
+    static let version = "1.1.28-border-safearea-fix"
+    static let build = 119
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -1435,7 +1439,10 @@ final class ProductionCore: ObservableObject {
             let unit=localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex]
             let printLayout=unit.printLayout ?? V80PrintLayout()
             let rendered:NSImage
-            if printLayout.hasCustomCrop,let sourcePath=unit.sourceImagePath,!sourcePath.isEmpty {
+            if let sourcePath=unit.sourceImagePath,!sourcePath.isEmpty {
+                // Local SD/WLAN jobs must reflect the current organizer design and
+                // current safe-area rules at the moment the operator confirms print.
+                // Re-render from the untouched original; never reuse an older designedPath.
                 rendered=try await ProductionRendererV76.renderedImage(
                     sourceURL:URL(fileURLWithPath:sourcePath),
                     event:event,
