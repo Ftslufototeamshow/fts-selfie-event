@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.17-sd-photo-visible.zip
-            dist/FTS-Printer-macOS-v0.3.17-sd-photo-visible.dmg
+            dist/FTS-Printer-macOS-v0.3.18-sd-hardware-fix.zip
+            dist/FTS-Printer-macOS-v0.3.18-sd-hardware-fix.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.17-sd-photo-visible"
+          TAG="fts-printer-mac-v0.3.18-sd-hardware-fix"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.17-sd-photo-visible.zip dist/FTS-Printer-macOS-v0.3.17-sd-photo-visible.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.18-sd-hardware-fix.zip dist/FTS-Printer-macOS-v0.3.18-sd-hardware-fix.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.17-sd-photo-visible.zip dist/FTS-Printer-macOS-v0.3.17-sd-photo-visible.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.17 · SD Photo Visible" --notes "Build 107: Ergänzt den SD-Import-Fix aus Build 106 um die fehlende Anzeige-Logik. Die Foto-Quellenauswahl enthält nur noch Quellen mit tatsächlich aktiven druckbaren Fotos; bloß eingesteckte Karten erzeugen keine leeren Fotoquellen mehr. Sobald ein neues Foto importiert wird, wechselt die Fotoansicht automatisch zur Quelle des neuesten aktiven Fotos. Karten-, Drucker-, Archiv-, Design- und übrige UI-Logik bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.18-sd-hardware-fix.zip dist/FTS-Printer-macOS-v0.3.18-sd-hardware-fix.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.18 · SD Hardware Fix" --notes "Build 108: Repariert die SD-Hardwareerkennung. Gemountete Installer-/DMG-Volumes werden nicht mehr als SD-Karten angezeigt; echte physische Wechselmedien, DCIM-Karten und Datenträger mit Kamera-Fotos werden erkannt. Bereits registrierte Karten A-E werden bei geänderter Volume-ID über gespeicherte Foto-Fingerprints/Baselines wiedererkannt. Bei mehrtägigen Events wird beim Start der heutige Eventtag vor einer gespeicherten Auswahl von gestern gewählt. Der SD-Import und die automatische Fotoanzeige aus Build 106/107 bleiben aktiv; Drucker-, Archiv- und Designlogik bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.17-sd-photo-visible"
+          CURRENT="fts-printer-mac-v0.3.18-sd-hardware-fix"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

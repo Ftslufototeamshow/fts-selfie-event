@@ -452,11 +452,10 @@ final class LocalImportManager: ObservableObject {
         let volumes = fm.mountedVolumeURLs(includingResourceValuesForKeys: Array(keys), options: [.skipHiddenVolumes]) ?? []
         for volume in volumes {
             let rv = try? volume.resourceValues(forKeys: keys)
-            let removable = rv?.volumeIsRemovable == true || rv?.volumeIsEjectable == true
             let internalVol = rv?.volumeIsInternal == true
             if internalVol { continue }
             let dcimFolder = volume.appendingPathComponent("DCIM", isDirectory: true)
-            let cameraMedia = removable || fm.fileExists(atPath: dcimFolder.path)
+            let cameraMedia = fm.fileExists(atPath: dcimFolder.path) || containsSupportedCameraMedia(volume)
             if !cameraMedia { continue }
             let volumeName = rv?.volumeName ?? volume.lastPathComponent
             let volumeID = rv?.volumeIdentifier.map { String(describing: $0) } ?? volumeName
@@ -494,6 +493,22 @@ final class LocalImportManager: ObservableObject {
         let data = try JSONEncoder().encode(manifest)
         try data.write(to: manifestURL, options: .atomic)
         return (manifest.records, newCount, sourceLabel)
+    }
+
+    nonisolated private static func containsSupportedCameraMedia(_ volume:URL)->Bool {
+        let fm=FileManager.default
+        guard let en=fm.enumerator(
+            at:volume,
+            includingPropertiesForKeys:[.isRegularFileKey],
+            options:[.skipsHiddenFiles,.skipsPackageDescendants]
+        ) else{return false}
+        for case let file as URL in en {
+            guard (try? file.resourceValues(forKeys:[.isRegularFileKey]).isRegularFile)==true else{continue}
+            if ["jpg","jpeg","heic","hif","png","cr3","cr2","dng","nef","arw","raf"].contains(file.pathExtension.lowercased()) {
+                return true
+            }
+        }
+        return false
     }
 
     nonisolated private static func sha256(_ url: URL) throws -> String {
@@ -662,7 +677,7 @@ final class AppState: ObservableObject {
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
-    static let appVersion = "0.3.17-sd-photo-visible"
+    static let appVersion = "0.3.18-sd-hardware-fix"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -749,7 +764,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.17-sd-photo-visible"
+                "p_user_agent":"FTS Printer macOS 0.3.18-sd-hardware-fix"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -780,7 +795,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.17-sd-photo-visible"
+                "p_user_agent":"FTS Printer macOS 0.3.18-sd-hardware-fix"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session

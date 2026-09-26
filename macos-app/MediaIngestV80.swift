@@ -126,10 +126,12 @@ final class MediaIngestV80: ObservableObject {
 
     private func preferredDay(for event: EventRow) -> String {
         let days=eventDays(event)
+        let today=todayString()
+        // Live operation must open today's album first. A saved selection from
+        // yesterday must never silently keep a multi-day event on the wrong day.
+        if days.contains(today){return today}
         let saved=UserDefaults.standard.string(forKey:daySelectionKey(event))
         if let saved,days.contains(saved){return saved}
-        let today=todayString()
-        if days.contains(today){return today}
         return days.first ?? event.event_date ?? today
     }
 
@@ -480,7 +482,7 @@ final class MediaIngestV80: ObservableObject {
             items=[];return
         }
         items=m.items.sorted{$0.importedAt>$1.importedAt}
-        registeredCardLabels=Set(m.baselines.values.map{$0.label})
+        registeredCardLabels=Self.registeredLabelsAcrossEvent(eventToken:a.eventToken,activation:a)
     }
 
     nonisolated private static func registerSync(card:V80DetectedCard,label:String,eventToken:String,activation:V80MediaActivation,replaceExisting:Bool) throws -> (items:[V80MediaItem],cards:[V80DetectedCard],baselineCount:Int,importedCount:Int,labels:Set<String>) {
@@ -579,7 +581,7 @@ final class MediaIngestV80: ObservableObject {
         )
         try saveManifestSync(manifest,activation)
         let cards=detectCardsSync(eventToken:eventToken,activation:activation)
-        return (manifest.items,cards,keys.count,importedCount,Set(manifest.baselines.values.map{$0.label}))
+        return (manifest.items,cards,keys.count,importedCount,registeredLabelsAcrossEvent(eventToken:eventToken,activation:activation,registry:registry))
     }
 
     nonisolated private static func scanSync(eventToken:String,activation:V80MediaActivation) throws -> (items:[V80MediaItem],cards:[V80DetectedCard],newCount:Int,labels:Set<String>) {
@@ -721,7 +723,7 @@ final class MediaIngestV80: ObservableObject {
         }
 
         try saveManifestSync(manifest,activation)
-        return (manifest.items,cards,newCount,Set(manifest.baselines.values.map{$0.label}))
+        return (manifest.items,cards,newCount,registeredLabelsAcrossEvent(eventToken:eventToken,activation:activation,registry:registry))
     }
 
     nonisolated private static func releaseCardSync(card:V80DetectedCard,marker:V80CardMarker,eventToken:String,activation:V80MediaActivation) throws -> (items:[V80MediaItem],cards:[V80DetectedCard],labels:Set<String>) {
@@ -769,7 +771,7 @@ final class MediaIngestV80: ObservableObject {
 
         let current=try loadManifestSync(activation)
         let cards=detectCardsSync(eventToken:eventToken,activation:activation)
-        return (current.items,cards,Set(current.baselines.values.map{$0.label}))
+        return (current.items,cards,registeredLabelsAcrossEvent(eventToken:eventToken,activation:activation,registry:registry))
     }
 
     nonisolated static func setWorkflowSync(folderPath:String,mediaIDs:Set<String>,status:V80MediaWorkflow,moveDesignedFile:Bool) throws {
@@ -811,43 +813,212 @@ final class MediaIngestV80: ObservableObject {
     nonisolated private static func detectCardsSync(eventToken:String,activation:V80MediaActivation) -> [V80DetectedCard] {
         let fm=FileManager.default
         let registry=loadCardRegistry(activation)
-        let keys:Set<URLResourceKey>=[.volumeIsRemovableKey,.volumeIsEjectableKey,.volumeIsInternalKey,.volumeNameKey,.volumeIdentifierKey,.isWritableKey]
+        let keys:Set<URLResourceKey>=[
+            .volumeIsRemovableKey,.volumeIsEjectableKey,.volumeIsInternalKey,
+            .volumeNameKey,.volumeIdentifierKey,.volumeUUIDStringKey,.isWritableKey
+        ]
         let volumes=fm.mountedVolumeURLs(includingResourceValuesForKeys:Array(keys),options:[.skipHiddenVolumes]) ?? []
         var out:[V80DetectedCard]=[]
+
         for v in volumes {
             let rv=try? v.resourceValues(forKeys:keys)
-            let removable=rv?.volumeIsRemovable==true || rv?.volumeIsEjectable==true
             if rv?.volumeIsInternal==true{continue}
+
             let dcim=v.appendingPathComponent("DCIM",isDirectory:true)
-            let cameraMedia=removable || fm.fileExists(atPath:dcim.path)
+            let hasDCIM=fm.fileExists(atPath:dcim.path)
+            let files=hasDCIM ? mediaFiles(on:v) : preferredMediaFiles(root:v)
+            let fallbackRemovable=rv?.volumeIsRemovable==true || rv?.volumeIsEjectable==true
+            let physicalRemovable=isPhysicalRemovableVolume(v,fallbackRemovable:fallbackRemovable)
+
+            // Important: a mounted FTS installer DMG is ejectable too, but it is not
+            // a camera card. Accept real physical removable media, DCIM cards, or a
+            // volume that actually contains supported camera photos.
+            let cameraMedia=hasDCIM || !files.isEmpty || physicalRemovable
             if !cameraMedia{continue}
+
             let name=rv?.volumeName ?? v.lastPathComponent
-            let tid=rv?.volumeIdentifier.map{String(describing:$0)} ?? v.path
+            let tid=(rv?.volumeUUIDString?.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty == false)
+                ? rv!.volumeUUIDString!
+                : (rv?.volumeIdentifier.map{String(describing:$0)} ?? v.path)
             let markerURL=v.appendingPathComponent(".fts-printer-card-v80.json")
             let signature=cardSignature(v)
             let explicitlyReleased=(registry.releasedTechnicalIDs?.contains(tid) == true)
                 || (signature != nil && registry.releasedSignatures?.contains(signature!) == true)
+
             var marker=explicitlyReleased ? nil : registry.cards[tid]
             if marker?.eventToken != eventToken { marker=nil }
+
             if marker == nil,!explicitlyReleased,
                let signature,
                let matched=registry.signatures?[signature],
                matched.eventToken==eventToken {
                 marker=matched
             }
+
+            // Reader/adapter changes can alter the macOS volume identifier. Recover
+            // the original A-E assignment from hashes/keys already stored in the
+            // event baselines. Nothing is written to the SD card.
+            if marker == nil,!explicitlyReleased {
+                marker=recoverMarkerByContent(volume:v,eventToken:eventToken,activation:activation,registry:registry)
+            }
+
             if marker == nil,!explicitlyReleased,
                let d=try? Data(contentsOf:markerURL),
                let legacy=try? JSONDecoder().decode(V80CardMarker.self,from:d),
                legacy.eventToken==eventToken {
-                // Legacy compatibility only. A released card is never re-claimed by this file.
                 marker=legacy
             }
+
             out.append(V80DetectedCard(
                 id:tid,volumePath:v.path,volumeName:name,technicalID:tid,marker:marker,
                 writable:rv?.isWritable ?? fm.isWritableFile(atPath:v.path)
             ))
         }
         return out.sorted{$0.volumeName.localizedCaseInsensitiveCompare($1.volumeName) == .orderedAscending}
+    }
+
+    nonisolated private static func isPhysicalRemovableVolume(_ volume:URL,fallbackRemovable:Bool)->Bool {
+        let p=Process()
+        p.executableURL=URL(fileURLWithPath:"/usr/sbin/diskutil")
+        p.arguments=["info","-plist",volume.path]
+        let pipe=Pipe()
+        p.standardOutput=pipe
+        p.standardError=Pipe()
+        do {
+            try p.run()
+            p.waitUntilExit()
+            guard p.terminationStatus==0 else{return fallbackRemovable}
+            let data=pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let info=try PropertyListSerialization.propertyList(from:data,options:[],format:nil) as? [String:Any] else {
+                return fallbackRemovable
+            }
+            let virtual=(info["VirtualOrPhysical"] as? String)?.lowercased() ?? ""
+            let protocolName=(info["BusProtocol"] as? String)?.lowercased() ?? ""
+            let deviceLocation=(info["DeviceLocation"] as? String)?.lowercased() ?? ""
+            if virtual.contains("virtual") || protocolName.contains("disk image") || deviceLocation.contains("virtual") {
+                return false
+            }
+            if (info["RemovableMedia"] as? Bool)==true || (info["Ejectable"] as? Bool)==true {
+                return true
+            }
+            return fallbackRemovable
+        } catch {
+            return fallbackRemovable
+        }
+    }
+
+    nonisolated private static func eventBaselines(_ activation:V80MediaActivation)->[String:V80CardBaseline] {
+        let fm=FileManager.default
+        let eventRoot=URL(fileURLWithPath:activation.folderPath,isDirectory:true).deletingLastPathComponent()
+        let children=(try? fm.contentsOfDirectory(
+            at:eventRoot,
+            includingPropertiesForKeys:[.isDirectoryKey],
+            options:[.skipsHiddenFiles]
+        )) ?? []
+        var result:[String:V80CardBaseline]=[:]
+        for child in children {
+            guard (try? child.resourceValues(forKeys:[.isDirectoryKey]).isDirectory)==true else{continue}
+            let manifestURL=child.appendingPathComponent(".fts-media-manifest-v80.json")
+            guard let data=try? Data(contentsOf:manifestURL),
+                  let manifest=try? JSONDecoder().decode(V80MediaManifest.self,from:data) else{continue}
+            for (uuid,baseline) in manifest.baselines {
+                if var existing=result[uuid] {
+                    existing.knownSourceKeys.formUnion(baseline.knownSourceKeys)
+                    var fp=existing.knownFingerprints ?? [:]
+                    for (key,value) in baseline.knownFingerprints ?? [:] { fp[key]=value }
+                    existing.knownFingerprints=fp
+                    result[uuid]=existing
+                } else {
+                    result[uuid]=baseline
+                }
+            }
+        }
+        return result
+    }
+
+    nonisolated private static func registeredLabelsAcrossEvent(
+        eventToken:String,
+        activation:V80MediaActivation,
+        registry suppliedRegistry:V80LocalCardRegistry?=nil
+    )->Set<String> {
+        let registry=suppliedRegistry ?? loadCardRegistry(activation)
+        var labels=Set(
+            registry.cards.values
+                .filter{$0.eventToken==eventToken}
+                .map{$0.label}
+        )
+        labels.formUnion(
+            (registry.signatures ?? [:]).values
+                .filter{$0.eventToken==eventToken}
+                .map{$0.label}
+        )
+        labels.formUnion(eventBaselines(activation).values.map{$0.label})
+        return labels
+    }
+
+    nonisolated private static func recoverMarkerByContent(
+        volume:URL,
+        eventToken:String,
+        activation:V80MediaActivation,
+        registry:V80LocalCardRegistry
+    )->V80CardMarker? {
+        let baselines=eventBaselines(activation)
+        guard !baselines.isEmpty else{return nil}
+
+        var markers:[String:V80CardMarker]=[:]
+        for marker in registry.cards.values where marker.eventToken==eventToken {
+            markers[marker.cardUUID]=marker
+        }
+        for marker in (registry.signatures ?? [:]).values where marker.eventToken==eventToken {
+            markers[marker.cardUUID]=marker
+        }
+        for baseline in baselines.values where markers[baseline.cardUUID] == nil {
+            markers[baseline.cardUUID]=V80CardMarker(
+                version:81,eventToken:eventToken,cardUUID:baseline.cardUUID,
+                label:baseline.label,registeredAt:baseline.createdAt
+            )
+        }
+        guard !markers.isEmpty else{return nil}
+
+        let current=mediaFiles(on:volume)
+            .sorted{mediaChronologyDate($0)<mediaChronologyDate($1)}
+        guard !current.isEmpty else{return nil}
+
+        var keyScores:[String:Int]=[:]
+        for file in current.prefix(20) {
+            guard let key=sourceKey(file,root:volume) else{continue}
+            for (uuid,baseline) in baselines where baseline.knownSourceKeys.contains(key) {
+                keyScores[uuid,default:0]+=1
+            }
+        }
+        if let best=uniqueBestScore(keyScores),best.value>0 {
+            return markers[best.key]
+        }
+
+        // Source metadata can change when a reader/OS rewrites FAT timestamps.
+        // Fall back to actual file hashes for a small sample of old photos.
+        var hashScores:[String:Int]=[:]
+        var baselineHashes:[String:Set<String>]=[:]
+        for (uuid,baseline) in baselines {
+            baselineHashes[uuid]=Set((baseline.knownFingerprints ?? [:]).values)
+        }
+        for file in current.prefix(12) {
+            guard let hash=try? sha256(file) else{continue}
+            for (uuid,known) in baselineHashes where known.contains(hash) {
+                hashScores[uuid,default:0]+=1
+            }
+        }
+        if let best=uniqueBestScore(hashScores),best.value>0 {
+            return markers[best.key]
+        }
+        return nil
+    }
+
+    nonisolated private static func uniqueBestScore(_ scores:[String:Int])->(key:String,value:Int)? {
+        guard let maxValue=scores.values.max(),maxValue>0 else{return nil}
+        let winners=scores.filter{$0.value==maxValue}
+        guard winners.count==1,let winner=winners.first else{return nil}
+        return (winner.key,winner.value)
     }
 
     nonisolated private static func cardSignature(_ volume:URL) -> String? {
