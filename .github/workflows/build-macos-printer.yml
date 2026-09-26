@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.18-sd-hardware-fix.zip
-            dist/FTS-Printer-macOS-v0.3.18-sd-hardware-fix.dmg
+            dist/FTS-Printer-macOS-v0.3.19-manual-sd-recovery.zip
+            dist/FTS-Printer-macOS-v0.3.19-manual-sd-recovery.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.18-sd-hardware-fix"
+          TAG="fts-printer-mac-v0.3.19-manual-sd-recovery"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.18-sd-hardware-fix.zip dist/FTS-Printer-macOS-v0.3.18-sd-hardware-fix.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.19-manual-sd-recovery.zip dist/FTS-Printer-macOS-v0.3.19-manual-sd-recovery.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.18-sd-hardware-fix.zip dist/FTS-Printer-macOS-v0.3.18-sd-hardware-fix.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.18 · SD Hardware Fix" --notes "Build 108: Repariert die SD-Hardwareerkennung. Gemountete Installer-/DMG-Volumes werden nicht mehr als SD-Karten angezeigt; echte physische Wechselmedien, DCIM-Karten und Datenträger mit Kamera-Fotos werden erkannt. Bereits registrierte Karten A-E werden bei geänderter Volume-ID über gespeicherte Foto-Fingerprints/Baselines wiedererkannt. Bei mehrtägigen Events wird beim Start der heutige Eventtag vor einer gespeicherten Auswahl von gestern gewählt. Der SD-Import und die automatische Fotoanzeige aus Build 106/107 bleiben aktiv; Drucker-, Archiv- und Designlogik bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.19-manual-sd-recovery.zip dist/FTS-Printer-macOS-v0.3.19-manual-sd-recovery.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.19 · Manual SD Recovery" --notes "Build 109: Ergänzt einen manuellen Rettungsweg für SD-Karten. Über „Alte Fotos auf SD suchen“ können alle unterstützten Fotos einer aktuell eingesteckten, zugeordneten Karte als Vorschau geöffnet und einzeln wieder in die aktive Fotoauswahl geholt werden. Bereits früher importierte/abgegebene Fotos werden dabei bewusst reaktiviert und erhalten ein neues Druckdesign; noch nie importierte alte Fotos werden gezielt kopiert. Der automatische SD-Import, Drucker, Archiv und übrige Oberfläche bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.18-sd-hardware-fix"
+          CURRENT="fts-printer-mac-v0.3.19-manual-sd-recovery"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

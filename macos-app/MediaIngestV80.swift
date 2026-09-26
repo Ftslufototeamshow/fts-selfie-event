@@ -32,6 +32,14 @@ struct V80DetectedCard: Identifiable, Hashable {
     var registered: Bool { marker != nil }
 }
 
+struct V80CardPhotoCandidate: Identifiable, Hashable {
+    let id: String
+    let path: String
+    let originalName: String
+    let capturedAt: Date?
+    let fileSize: Int
+}
+
 struct V80CardBaseline: Codable, Hashable {
     let cardUUID: String
     let label: String
@@ -336,6 +344,36 @@ final class MediaIngestV80: ObservableObject {
         }
     }
 
+    func cardPhotos(_ card:V80DetectedCard) async -> [V80CardPhotoCandidate] {
+        await Task.detached(priority:.utility) {
+            Self.cardPhotosSync(card)
+        }.value
+    }
+
+    func restoreCardPhoto(_ candidate:V80CardPhotoCandidate,from card:V80DetectedCard,event:EventRow) async -> Bool {
+        guard let a=activation else{return false}
+        guard let marker=card.marker,marker.eventToken==event.event_token else {
+            status="Diese SD-Karte zuerst A/B/C/D/E zuordnen. Danach können alte Fotos einzeln zurückgeholt werden."
+            return false
+        }
+        scanning=true
+        status="Foto \(candidate.originalName) wird von Karte \(marker.label) zurückgeholt …"
+        defer{scanning=false}
+        do {
+            let restored=try await Task.detached(priority:.utility) {
+                try Self.restoreCardPhotoSync(candidate,card:card,marker:marker,activation:a)
+            }.value
+            let designed=await ensureDesignedCopies(event:event,activation:a,items:restored)
+            items=designed.items.sorted{$0.importedAt>$1.importedAt}
+            lastImportedCount=1
+            status="\(candidate.originalName) von Karte \(marker.label) ist wieder aktiv und kann normal gedruckt werden."
+            return true
+        } catch {
+            status="Altes Foto konnte nicht zurückgeholt werden: \(error.localizedDescription)"
+            return false
+        }
+    }
+
     func scan(event: EventRow) async {
         guard let a=activation,!scanning else{return}
         scanning=true
@@ -483,6 +521,116 @@ final class MediaIngestV80: ObservableObject {
         }
         items=m.items.sorted{$0.importedAt>$1.importedAt}
         registeredCardLabels=Self.registeredLabelsAcrossEvent(eventToken:a.eventToken,activation:a)
+    }
+
+    nonisolated private static func cardPhotosSync(_ card:V80DetectedCard) -> [V80CardPhotoCandidate] {
+        let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
+        return mediaFiles(on:volume)
+            .map { file in
+                let rv=try? file.resourceValues(forKeys:[.fileSizeKey,.contentModificationDateKey,.creationDateKey])
+                let date=mediaChronologyDate(file)
+                return V80CardPhotoCandidate(
+                    id:file.path,
+                    path:file.path,
+                    originalName:file.lastPathComponent,
+                    capturedAt:date == .distantPast ? (rv?.contentModificationDate ?? rv?.creationDate) : date,
+                    fileSize:rv?.fileSize ?? 0
+                )
+            }
+            .sorted {
+                let a=$0.capturedAt ?? .distantPast
+                let b=$1.capturedAt ?? .distantPast
+                if a==b { return $0.originalName.localizedCaseInsensitiveCompare($1.originalName) == .orderedDescending }
+                return a>b
+            }
+    }
+
+    nonisolated private static func restoreCardPhotoSync(
+        _ candidate:V80CardPhotoCandidate,
+        card:V80DetectedCard,
+        marker:V80CardMarker,
+        activation:V80MediaActivation
+    ) throws -> [V80MediaItem] {
+        let fm=FileManager.default
+        let source=URL(fileURLWithPath:candidate.path)
+        guard fm.fileExists(atPath:source.path),supported(source) else {
+            throw NSError(domain:"FTSPrinter",code:211,userInfo:[NSLocalizedDescriptionKey:"Foto ist auf der SD-Karte nicht mehr verfügbar."])
+        }
+
+        let hash=try sha256(source)
+        var manifest=try loadManifestSync(activation)
+        let originalFolder=URL(fileURLWithPath:activation.folderPath,isDirectory:true)
+            .appendingPathComponent("Kamera Original",isDirectory:true)
+            .appendingPathComponent("SD \(marker.label)",isDirectory:true)
+        try fm.createDirectory(at:originalFolder,withIntermediateDirectories:true)
+
+        let importedPath:String
+        if let existing=manifest.items.first(where:{$0.sha256==hash}),
+           fm.fileExists(atPath:existing.importedPath) {
+            importedPath=existing.importedPath
+        } else {
+            let dest=uniqueDestination(folder:originalFolder,name:source.lastPathComponent)
+            try fm.copyItem(at:source,to:dest)
+            importedPath=dest.path
+        }
+
+        let restored=V80MediaItem(
+            id:hash,
+            sha256:hash,
+            sourcePath:source.path,
+            importedPath:importedPath,
+            designedPath:nil,
+            designSignature:nil,
+            originalName:source.lastPathComponent,
+            sourceType:"SD",
+            sourceLabel:marker.label,
+            cardUUID:marker.cardUUID,
+            cameraID:cameraIdentity(source),
+            importedAt:Date(),
+            workflowStatus:.active,
+            workflowUpdatedAt:Date()
+        )
+
+        if let index=manifest.items.firstIndex(where:{$0.sha256==hash}) {
+            manifest.items[index]=restored
+        } else {
+            manifest.items.append(restored)
+        }
+
+        var ledger=manifest.importedHashes ?? []
+        ledger.insert(hash)
+        manifest.importedHashes=ledger
+
+        let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
+        var baseline=manifest.baselines[marker.cardUUID] ?? V80CardBaseline(
+            cardUUID:marker.cardUUID,
+            label:marker.label,
+            knownSourceKeys:[],
+            knownFingerprints:[:],
+            createdAt:marker.registeredAt
+        )
+        if let key=sourceKey(source,root:volume) {
+            baseline.knownSourceKeys.insert(key)
+            if baseline.knownFingerprints == nil { baseline.knownFingerprints=[:] }
+            baseline.knownFingerprints?[key]=hash
+        }
+        manifest.baselines[marker.cardUUID]=baseline
+        try saveManifestSync(manifest,activation)
+
+        // Refresh the local Mac registry too. Manual recovery must also strengthen
+        // the mapping for a card whose reader/volume identifier changed.
+        var registry=loadCardRegistry(activation)
+        registry.cards[card.technicalID]=marker
+        registry.releasedTechnicalIDs?.remove(card.technicalID)
+        if let signature=cardSignature(volume) {
+            var signatures=registry.signatures ?? [:]
+            signatures[signature]=marker
+            registry.signatures=signatures
+            registry.releasedSignatures?.remove(signature)
+        }
+        try? saveCardRegistry(registry,activation)
+
+        return manifest.items
     }
 
     nonisolated private static func registerSync(card:V80DetectedCard,label:String,eventToken:String,activation:V80MediaActivation,replaceExisting:Bool) throws -> (items:[V80MediaItem],cards:[V80DetectedCard],baselineCount:Int,importedCount:Int,labels:Set<String>) {

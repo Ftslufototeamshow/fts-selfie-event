@@ -351,6 +351,7 @@ struct ProductionMediaContent: View {
     @State private var submitting=false
     @State private var showClearDay=false
     @State private var clearingDay=false
+    @State private var showManualCardPhotos=false
 
     var event:EventRow? { state.selectedEvent }
 
@@ -420,6 +421,16 @@ struct ProductionMediaContent: View {
         } message: {
             Text("Das lokale Tagesalbum \(ingest.selectedDay) wird geleert. Die Albumstruktur bleibt bestehen und die nächste Kundennummer beginnt wieder bei 001. SD-Karten und WLAN-Quellen selbst werden nicht gelöscht.")
         }
+        .sheet(isPresented:$showManualCardPhotos) {
+            if let e=event {
+                V80ManualCardPhotoBrowser(
+                    ingest:ingest,
+                    event:e,
+                    cards:ingest.detectedCards
+                )
+                .frame(minWidth:820,minHeight:620)
+            }
+        }
     }
 
     private var headerView: some View {
@@ -449,6 +460,10 @@ struct ProductionMediaContent: View {
                 Button("Archiv"){ingest.revealArchiveFolder()}
                 Button("WLAN-Eingang"){ingest.revealWLANFolder()}
                 Button("SD/USB auf Desktop anzeigen"){ingest.showExternalMediaOnDesktop()}
+                Button("Alte Fotos auf SD suchen"){
+                    showManualCardPhotos=true
+                }
+                .disabled(ingest.detectedCards.isEmpty || ingest.scanning)
                 if state.currentUser?.role=="printer_admin" {
                     Button(clearingDay ? "Wird geleert …":"Tagesalbum leeren"){
                         showClearDay=true
@@ -649,6 +664,155 @@ struct ProductionMediaContent: View {
         while !Task.isCancelled {
             if ingest.activation != nil { await ingest.scan(event:e) }
             try? await Task.sleep(for:.seconds(3))
+        }
+    }
+}
+
+struct V80ManualCardPhotoBrowser: View {
+    @ObservedObject var ingest:MediaIngestV80
+    let event:EventRow
+    let cards:[V80DetectedCard]
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedCardID=""
+    @State private var photos:[V80CardPhotoCandidate]=[]
+    @State private var loading=false
+    @State private var importingID:String?
+    @State private var message=""
+
+    var selectedCard:V80DetectedCard? {
+        cards.first(where:{$0.id==selectedCardID}) ?? cards.first
+    }
+
+    var body:some View {
+        VStack(alignment:.leading,spacing:12) {
+            HStack {
+                VStack(alignment:.leading,spacing:3) {
+                    Text("Alte Fotos auf SD-Karte suchen").font(.title2.bold())
+                    Text("Ein Foto auswählen und wieder in die normale Druckauswahl holen.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Schließen"){dismiss()}
+            }
+
+            if cards.isEmpty {
+                VStack(spacing:10) {
+                    Image(systemName:"sdcard").font(.system(size:34)).foregroundStyle(.secondary)
+                    Text("Keine SD-Karte erkannt").font(.headline)
+                    Text("SD-Karte einstecken und erneut öffnen.").font(.caption).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth:.infinity,maxHeight:.infinity)
+            } else {
+                HStack {
+                    Picker("SD-Karte",selection:$selectedCardID) {
+                        ForEach(cards) { card in
+                            Text(card.label.map{"Karte \($0) · \(card.volumeName)"} ?? "Nicht zugeordnet · \(card.volumeName)")
+                                .tag(card.id)
+                        }
+                    }
+                    .frame(width:360)
+                    Button(loading ? "Suche …":"Fotos neu suchen"){loadPhotos()}
+                        .disabled(loading)
+                    Spacer()
+                    if !message.isEmpty {
+                        Text(message).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+
+                if let card=selectedCard,card.marker == nil {
+                    Label("Diese Karte zuerst A/B/C/D/E zuordnen. Danach kann ein altes Foto zurückgeholt werden.",systemImage:"exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                        .padding(8)
+                        .frame(maxWidth:.infinity,alignment:.leading)
+                        .background(Color.orange.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius:8))
+                }
+
+                if loading {
+                    VStack(spacing:10) {
+                        ProgressView()
+                        Text("Fotos auf der SD-Karte werden gelesen …").font(.caption).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth:.infinity,maxHeight:.infinity)
+                } else if photos.isEmpty {
+                    VStack(spacing:10) {
+                        Image(systemName:"photo.on.rectangle.angled").font(.system(size:34)).foregroundStyle(.secondary)
+                        Text("Keine Fotos gefunden").font(.headline)
+                        Text("Auf der ausgewählten Karte wurden keine unterstützten Kamera-Fotos gefunden.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth:.infinity,maxHeight:.infinity)
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns:[GridItem(.adaptive(minimum:150),spacing:10)],spacing:10) {
+                            ForEach(photos) { photo in
+                                VStack(alignment:.leading,spacing:6) {
+                                    if let image=NSImage(contentsOfFile:photo.path) {
+                                        Image(nsImage:image)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(height:115)
+                                            .frame(maxWidth:.infinity)
+                                            .clipped()
+                                            .clipShape(RoundedRectangle(cornerRadius:8))
+                                    } else {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius:8).fill(Color.secondary.opacity(0.10))
+                                            Image(systemName:"photo").font(.title2).foregroundStyle(.secondary)
+                                        }
+                                        .frame(height:115)
+                                    }
+                                    Text(photo.originalName).font(.caption.bold()).lineLimit(1)
+                                    if let date=photo.capturedAt {
+                                        Text(date,format:.dateTime.day().month().year().hour().minute())
+                                            .font(.system(size:9)).foregroundStyle(.secondary)
+                                    }
+                                    Button(importingID==photo.id ? "Wird geholt …":"Zur Fotoauswahl holen") {
+                                        restore(photo)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.small)
+                                    .disabled(importingID != nil || selectedCard?.marker == nil)
+                                }
+                                .padding(7)
+                                .background(Color(nsColor:.controlBackgroundColor))
+                                .clipShape(RoundedRectangle(cornerRadius:10))
+                            }
+                        }
+                        .padding(4)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .onAppear {
+            if selectedCardID.isEmpty { selectedCardID=cards.first?.id ?? "" }
+            loadPhotos()
+        }
+        .onChange(of:selectedCardID) { _ in loadPhotos() }
+    }
+
+    private func loadPhotos() {
+        guard let card=selectedCard,!loading else{return}
+        loading=true
+        message=""
+        Task {
+            let result=await ingest.cardPhotos(card)
+            photos=result
+            loading=false
+            message="\(result.count) Foto\(result.count==1 ? "" : "s") gefunden"
+        }
+    }
+
+    private func restore(_ photo:V80CardPhotoCandidate) {
+        guard let card=selectedCard,importingID==nil else{return}
+        importingID=photo.id
+        Task {
+            let ok=await ingest.restoreCardPhoto(photo,from:card,event:event)
+            importingID=nil
+            if ok { dismiss() }
         }
     }
 }
