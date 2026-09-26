@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.20-ippusb-print-fix.zip
-            dist/FTS-Printer-macOS-v0.3.20-ippusb-print-fix.dmg
+            dist/FTS-Printer-macOS-v0.3.21-macos-printer-status.zip
+            dist/FTS-Printer-macOS-v0.3.21-macos-printer-status.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.20-ippusb-print-fix"
+          TAG="fts-printer-mac-v0.3.21-macos-printer-status"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.20-ippusb-print-fix.zip dist/FTS-Printer-macOS-v0.3.20-ippusb-print-fix.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.21-macos-printer-status.zip dist/FTS-Printer-macOS-v0.3.21-macos-printer-status.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.20-ippusb-print-fix.zip dist/FTS-Printer-macOS-v0.3.20-ippusb-print-fix.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.20 · IPP-USB Print Fix" --notes "Build 110: Repariert die Canon-SELPHY-Erkennung für macOS IPP-over-USB. ippusb:// bzw. lokale IPP-USB-Verbindungen werden über den tatsächlich erreichbaren lokalen Dienst geprüft und nicht mehr nur über den Gerätenamen in ioreg. Wenn genau ein live erreichbarer SELPHY vorhanden ist, wird er automatisch als Ausgabedrucker aktiviert, auch wenn macOS die Warteschlange als „Canon SELPHY CP1500 2“ neu angelegt hat. Die Druckauftragsseite zeigt die SELPHY-Grafik, Verbindung/Fehler direkt sichtbar und bei lokalen SD-Aufträgen zusätzlich das zugehörige Druckfoto als Vorschau. SD-Import, Archiv und Design bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.21-macos-printer-status.zip dist/FTS-Printer-macOS-v0.3.21-macos-printer-status.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.21 · macOS Printer Status" --notes "Build 111: Die Druckererkennung folgt jetzt dem gleichen macOS-Druckerstatus wie die Druckzentrale. Drucker mit Status idle/ready/printing/processing werden in FTS angezeigt; offline/unavailable werden ausgeblendet. Dadurch bleibt ein tatsächlich bereiter Canon SELPHY sichtbar, auch wenn kein Foto oder Auftrag vorhanden ist, während alte Offline-Warteschlangen verschwinden. IPP-USB-, SD-, Archiv- und Designlogik bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.20-ippusb-print-fix"
+          CURRENT="fts-printer-mac-v0.3.21-macos-printer-status"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

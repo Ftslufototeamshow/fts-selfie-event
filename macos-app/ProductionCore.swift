@@ -341,7 +341,8 @@ enum V80MacSpooler {
     }
 
     static func connectionSummary(printerName:String) -> String {
-        connectionProbe(printerName:printerName).summary
+        let statuses=systemPrinterStatuses()
+        return connectionProbe(printerName:printerName,macStatuses:statuses).summary
     }
 
     static func internetConnectionSummary() -> String {
@@ -360,7 +361,14 @@ enum V80MacSpooler {
         return "FTS-Server: nicht erreichbar" + (wifi.isEmpty ? "" : "\n"+wifi)
     }
 
-    private static func connectionProbe(printerName:String) -> ConnectionProbe {
+    private static func connectionProbe(printerName:String,macStatuses:[String:String]?=nil) -> ConnectionProbe {
+        let statuses=macStatuses ?? systemPrinterStatuses()
+        if let macStatus=statuses[printerName] {
+            if !printerStatusIsOnline(macStatus) {
+                return ConnectionProbe(connected:false,summary:"macOS: \(macStatus)")
+            }
+        }
+
         let rawURI=nativeDeviceURI(printerName:printerName) ?? ""
         let uri=rawURI.lowercased()
         let lowerName=printerName.lowercased()
@@ -372,12 +380,13 @@ enum V80MacSpooler {
             || (uri.contains("localhost") && isSelphy)
 
         if usbTransport || (rawURI.isEmpty && usbPresent) {
-            // macOS often exposes a physically attached SELPHY as ippusb:// or
-            // ipp://localhost. In that mode ioreg may not contain the SELPHY model
-            // name even though the local IPP-over-USB service is fully reachable.
-            // Probe that live service first; fall back to direct USB enumeration.
+            let macStatus=statuses[printerName]
+            let macOnline=macStatus.map(printerStatusIsOnline) ?? false
+            // macOS Print Center is authoritative for local USB/IPP-USB readiness.
+            // Hardware/latency probes add diagnostics but must not hide a queue that
+            // macOS itself reports as ready/idle/printing.
             let latency = rawURI.isEmpty ? nil : networkPrinterLatency(uri:rawURI)
-            guard latency != nil || usbPresent else {
+            guard macOnline || latency != nil || usbPresent else {
                 return ConnectionProbe(connected:false,summary:"USB · nicht angeschlossen")
             }
             let details=usbLinkSummary()
@@ -405,8 +414,9 @@ enum V80MacSpooler {
             )
         }
 
-        // Unknown queues are shown only while macOS says they are actively processing.
-        // A configured-but-disconnected queue must not appear as an available printer.
+        if let macStatus=statuses[printerName],printerStatusIsOnline(macStatus) {
+            return ConnectionProbe(connected:true,summary:"macOS-Drucker · \(macStatus)")
+        }
         if nativeQueueState(printerName:printerName)=="PROCESSING" {
             return ConnectionProbe(connected:true,summary:"macOS-Drucker · aktive Verbindung")
         }
@@ -566,8 +576,51 @@ enum V80MacSpooler {
             NSPrinter.printerNames.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
         }
         return await Task.detached(priority:.utility) {
-            configured.filter { connectionProbe(printerName:$0).connected }
+            let macStatus=systemPrinterStatuses()
+            return configured.filter { name in
+                if let status=macStatus[name] {
+                    return printerStatusIsOnline(status)
+                }
+                return connectionProbe(printerName:name,macStatuses:macStatus).connected
+            }
         }.value
+    }
+
+    private static func systemPrinterStatuses()->[String:String] {
+        guard let raw=runProcess(
+            "/usr/sbin/system_profiler",
+            ["-json","SPPrintersDataType"],
+            timeout:4.0
+        ),let data=raw.data(using:.utf8),
+          let root=try? JSONSerialization.jsonObject(with:data) as? [String:Any],
+          let printers=root["SPPrintersDataType"] as? [[String:Any]] else {
+            return [:]
+        }
+        var out:[String:String]=[:]
+        for printer in printers {
+            let name=(printer["_name"] as? String)
+                ?? (printer["printer_name"] as? String)
+                ?? ""
+            let status=(printer["status"] as? String)
+                ?? (printer["printer_status"] as? String)
+                ?? ""
+            if !name.isEmpty,!status.isEmpty {
+                out[name]=status.lowercased()
+            }
+        }
+        return out
+    }
+
+    private static func printerStatusIsOnline(_ status:String)->Bool {
+        let s=status.lowercased()
+        if s.contains("offline") || s.contains("unavailable") || s.contains("not connected") {
+            return false
+        }
+        return s.contains("idle")
+            || s.contains("ready")
+            || s.contains("printing")
+            || s.contains("processing")
+            || s.contains("busy")
     }
 
     private static func usbSELPHYPresent()->Bool {
@@ -783,8 +836,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.19-ippusb-print-fix"
-    static let build = 110
+    static let version = "1.1.20-macos-printer-status"
+    static let build = 111
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
