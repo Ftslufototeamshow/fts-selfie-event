@@ -134,7 +134,7 @@ Die physischen Kamera-SD-Karten werden am Anfang des Events einmal in der Printe
 - Karte 3 bekommt **Karte C**.
 - Karte 4 bekommt **Karte D**.
 - Die sichtbare Kennzeichnung A/B/C/D wird zusätzlich physisch auf der jeweiligen Karte angebracht.
-- Bei der Erstregistrierung soll die App prüfen, ob die Karte für das Event leer bzw. ohne zu importierende alte Fotos ist.
+- Bei der Erstregistrierung zeigt die App vorhandene Fotos als Altbestand an und legt dafür den Baseline-Snapshot an. Eine leere Karte ist empfohlen, aber technisch nicht vorgeschrieben; vorhandene Altbilder werden nicht in das neue Event importiert.
 - Die App speichert für die Karte eine technische Kennung und legt zusätzlich eine kleine FTS-Kartenkennung auf der Karte ab, damit dieselbe Karte beim späteren Einstecken wieder als A/B/C/D erkannt werden kann.
 - Solange die Karte nach der Registrierung **nicht in der Kamera formatiert** wird, bleibt diese Kennung erhalten, auch nachdem mit der Kamera neue Fotos aufgenommen wurden.
 - Wenn die Karte formatiert wurde oder die Kennung fehlt, darf die App nicht raten. Sie zeigt **„Unbekannte Karte – erneut als A/B/C/D zuordnen“**.
@@ -159,6 +159,15 @@ Die Nummer **001, 002, 003 …** ist ausdrücklich **keine JPEG-Dateinummer** un
 - Die App schlägt die Nummern automatisch der Reihe nach vor, damit der Mitarbeiter sie nicht jedes Mal neu erfinden muss.
 - Die Zählung kann pro Event neu bei **001** starten; die Kombination aus Event + Karte + Kundennummer bleibt intern eindeutig.
 - Diese Kundennummer dient auch zum Wiederfinden in Warteschlange, Druckstatus und Abholung.
+
+### Abholung bei Kamera / SD / WLAN
+
+- Kamera-, SD- und WLAN-Aufträge verwenden nach erfolgreichem Druck denselben Bereich **Kundenabholung** wie Selfie-Aufträge.
+- Die sichtbare Kennung bleibt die lokale Kundennummer, z. B. **A001**, **B001** oder **W001**; sie wird nicht mit der sechsstelligen Selfie-Kennung vermischt.
+- Erst wenn alle freigegebenen Exemplare eines lokalen Kundenauftrags erfolgreich gedruckt sind, wechselt der Auftrag auf **READY_FOR_PICKUP / ABHOLBEREIT**.
+- Der Mitarbeiter bestätigt die Ausgabe mit **„Foto abgeholt“**. Danach wird der lokale Auftrag mit Audit und Zeitstempel archiviert.
+- Das Archivieren des Auftrags löscht oder verschiebt die lokale Originalbilddatei nicht. Das Foto bleibt im lokalen Event-Album erhalten.
+- Für diese lokalen Aufträge wird kein zweiter Umsatz und kein PayPal-Beleg erzeugt, weil die Zahlung bereits über die externe Kasse / das Terminal / Cash erfolgt ist.
 
 ### Manueller Mengenentscheid durch den Mitarbeiter
 
@@ -280,6 +289,24 @@ Die Apps lesen nur veröffentlichte Releases. Ein noch nicht freigegebener Build
 - Fehler beim Download oder Update dürfen die aktuelle funktionsfähige App nicht beschädigen.
 - Bei fehlendem Internet läuft die vorhandene Version normal weiter, sofern sie nicht zentral als nicht mehr kompatibel markiert ist.
 - Nach jedem Update erfolgt ein automatischer Start-Selbsttest: lokale Datenbank lesbar, Supabase-Verbindung, angemeldetes Gerät, Printer-Konfiguration und Queue-Recovery.
+
+
+## Scroll-, Klick- und Bedienlogik
+
+Die endgültige FTS Printer App muss auf Mac/iMac und Samsung vollständig bedienbar bleiben, auch wenn Listen, Karten, Drucker, Fotos oder Archiv-Einträge länger als der sichtbare Bildschirm werden.
+
+- Alle inhaltlich langen Arbeitsbereiche sind vertikal scrollbar.
+- Horizontale Printer-/Statusreihen dürfen horizontal scrollbar sein, wenn nicht alle Karten gleichzeitig in das Fenster passen.
+- Scrollleisten bzw. Scroll-Indikatoren bleiben bei Arbeitslisten sichtbar bzw. eindeutig bedienbar.
+- Auf Samsung verwendet die Hauptansicht eine echte ScrollView mit sichtbarer Scrollleiste, Smooth-Scrolling und Keyboard-Resize, damit Eingabefelder nicht von der Bildschirmtastatur verdeckt werden.
+- Beim Wechsel zwischen Druckaufträge / Abholung / Printer springt Samsung wieder an den Anfang des neuen Arbeitsbereichs.
+- Buttons und Eingabefelder müssen vollständig anklickbar/antippbar sein und eine ausreichend große Trefferfläche besitzen.
+- Kritische Aktionen werden gegen Doppel-Klick/Doppel-Tap geschützt.
+- Insbesondere **GO · Zum Druck**, **Foto abgeholt**, **Aus Archiv entfernen** und Materialbuchungen dürfen durch schnelles mehrfaches Klicken niemals doppelte Aufträge oder doppelte Buchungen erzeugen.
+- Während eine kritische Aktion läuft, wird der zugehörige Button deaktiviert bzw. zeigt einen laufenden Status.
+- SD-Karten-Zuordnung A/B/C/D ist während eines laufenden Scans/Imports gesperrt.
+- Netzwerk-/Refresh-Vorgänge dürfen die Scroll- und Klickoberfläche nicht dauerhaft blockieren.
+- Die endgültige Designrunde darf diese funktionale Scroll-/Klicklogik nicht entfernen oder überdecken.
 
 ## Reihenfolge
 

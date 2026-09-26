@@ -140,6 +140,7 @@ struct StockSnapshot: Codable, Hashable {
     let selfie_printed: Int?
     let selfie_waiting: Int?
     let active_reservations: Int?
+    let camera_waiting: Int?
     let camera_prints: Int?
     let test_prints: Int?
     let misprints: Int?
@@ -221,28 +222,59 @@ final class FTSAPI {
     private let decoder = JSONDecoder()
 
     func rpc<T: Decodable>(_ name: String, body: [String: Any], as type: T.Type = T.self) async throws -> T {
-        var req = URLRequest(url: FTSConfig.supabaseURL.appendingPathComponent("rest/v1/rpc/\(name)"))
-        req.httpMethod = "POST"
-        req.setValue(FTSConfig.publishableKey, forHTTPHeaderField: "apikey")
-        req.setValue("Bearer \(FTSConfig.publishableKey)", forHTTPHeaderField: "Authorization")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            if let p = try? decoder.decode(APIErrorPayload.self, from: data) {
-                throw NSError(domain: "FTSPrinter", code: (response as? HTTPURLResponse)?.statusCode ?? -1,
-                              userInfo: [NSLocalizedDescriptionKey: p.message ?? p.hint ?? "Serverfehler"])
+        let payload=try JSONSerialization.data(withJSONObject: body)
+        var lastError:Error?
+
+        for attempt in 0..<3 {
+            var req = URLRequest(url: FTSConfig.supabaseURL.appendingPathComponent("rest/v1/rpc/\(name)"))
+            req.httpMethod = "POST"
+            req.timeoutInterval = 12
+            req.setValue(FTSConfig.publishableKey, forHTTPHeaderField: "apikey")
+            req.setValue("Bearer \(FTSConfig.publishableKey)", forHTTPHeaderField: "Authorization")
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = payload
+
+            do {
+                let (data, response) = try await URLSession.shared.data(for: req)
+                guard let http = response as? HTTPURLResponse else {
+                    throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine gültige Serverantwort."])
+                }
+                if (200..<300).contains(http.statusCode) {
+                    return try decoder.decode(T.self, from: data)
+                }
+
+                let apiMessage=(try? decoder.decode(APIErrorPayload.self,from:data))
+                let message=apiMessage?.message ?? apiMessage?.hint ?? String(data:data,encoding:.utf8) ?? "Serverfehler"
+                let error=NSError(domain:"FTSPrinter",code:http.statusCode,userInfo:[NSLocalizedDescriptionKey:message])
+
+                let retryable = http.statusCode == 401 || http.statusCode == 408 || http.statusCode == 429 || (500...504).contains(http.statusCode)
+                if retryable && attempt < 2 {
+                    lastError=error
+                    try? await Task.sleep(for:.milliseconds(attempt == 0 ? 700 : 1600))
+                    continue
+                }
+                throw error
+            } catch {
+                let ns=error as NSError
+                let retryableURL = ns.domain == NSURLErrorDomain
+                if retryableURL && attempt < 2 {
+                    lastError=error
+                    try? await Task.sleep(for:.milliseconds(attempt == 0 ? 700 : 1600))
+                    continue
+                }
+                throw error
             }
-            let text = String(data: data, encoding: .utf8) ?? "Serverfehler"
-            throw NSError(domain: "FTSPrinter", code: -1, userInfo: [NSLocalizedDescriptionKey: text])
         }
-        return try decoder.decode(T.self, from: data)
+
+        throw lastError ?? NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"FTS-Server vorübergehend nicht erreichbar."])
     }
 
     func imageData(storagePath: String) async throws -> Data {
         let encoded = storagePath.split(separator: "/").map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }.joined(separator: "/")
         let url = FTSConfig.supabaseURL.appendingPathComponent("storage/v1/object/public/\(FTSConfig.liveBucket)/\(encoded)")
-        let (data, response) = try await URLSession.shared.data(from: url)
+        var req=URLRequest(url:url)
+        req.timeoutInterval=15
+        let (data, response) = try await URLSession.shared.data(for:req)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             throw NSError(domain: "FTSPrinter", code: -1, userInfo: [NSLocalizedDescriptionKey: "Foto konnte nicht geladen werden."])
         }
@@ -420,9 +452,11 @@ final class LocalImportManager: ObservableObject {
         let volumes = fm.mountedVolumeURLs(includingResourceValuesForKeys: Array(keys), options: [.skipHiddenVolumes]) ?? []
         for volume in volumes {
             let rv = try? volume.resourceValues(forKeys: keys)
-            let removable = rv?.volumeIsRemovable == true || rv?.volumeIsEjectable == true
             let internalVol = rv?.volumeIsInternal == true
-            if !removable || internalVol { continue }
+            if internalVol { continue }
+            let dcimFolder = volume.appendingPathComponent("DCIM", isDirectory: true)
+            let cameraMedia = fm.fileExists(atPath: dcimFolder.path) || containsSupportedCameraMedia(volume)
+            if !cameraMedia { continue }
             let volumeName = rv?.volumeName ?? volume.lastPathComponent
             let volumeID = rv?.volumeIdentifier.map { String(describing: $0) } ?? volumeName
             sourceLabel = "\(volumeName) · \(volumeID)"
@@ -459,6 +493,22 @@ final class LocalImportManager: ObservableObject {
         let data = try JSONEncoder().encode(manifest)
         try data.write(to: manifestURL, options: .atomic)
         return (manifest.records, newCount, sourceLabel)
+    }
+
+    nonisolated private static func containsSupportedCameraMedia(_ volume:URL)->Bool {
+        let fm=FileManager.default
+        guard let en=fm.enumerator(
+            at:volume,
+            includingPropertiesForKeys:[.isRegularFileKey],
+            options:[.skipsHiddenFiles,.skipsPackageDescendants]
+        ) else{return false}
+        for case let file as URL in en {
+            guard (try? file.resourceValues(forKeys:[.isRegularFileKey]).isRegularFile)==true else{continue}
+            if ["jpg","jpeg","heic","hif","png","cr3","cr2","dng","nef","arw","raf"].contains(file.pathExtension.lowercased()) {
+                return true
+            }
+        }
+        return false
     }
 
     nonisolated private static func sha256(_ url: URL) throws -> String {
@@ -604,7 +654,7 @@ extension NSColor {
 
 @MainActor
 final class AppState: ObservableObject {
-    enum Phase { case boot, deviceSetup, staffLogin, main }
+    enum Phase: Equatable { case boot, deviceSetup, staffLogin, main }
     @Published var phase: Phase = .boot
     @Published var deviceAdmins: [DeviceAdminChoice] = []
     @Published var staffChoices: [StaffChoice] = []
@@ -617,12 +667,17 @@ final class AppState: ObservableObject {
     @Published var errorMessage: String?
     @Published var busy = false
     @Published var status = ""
+    @Published var preLoginUpdateStatus = ""
 
     let localImport = LocalImportManager()
+    let mediaIngest = MediaIngestV80()
+    let production = ProductionCore()
     private let api = FTSAPI.shared
     private var liveDeviceToken: String?
     private var liveSessionToken: String?
-    static let appVersion = "0.1.4"
+    private var preLoginUpdateInFlight = false
+    private var preLoginUpdateOpenedBuild: Int?
+    static let appVersion = "0.3.28-banner-fullphoto-fix"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -658,7 +713,10 @@ final class AppState: ObservableObject {
     func bootstrap() async {
         if liveDeviceToken == nil { liveDeviceToken = Keychain.get("deviceToken") }
         if liveSessionToken == nil { liveSessionToken = Keychain.get("staffSession") }
-        guard let dev = deviceToken, !dev.isEmpty else { await loadDeviceAdmins(); return }
+        guard let dev = deviceToken, !dev.isEmpty else {
+            await loadDeviceAdmins()
+            return
+        }
         if let session = sessionToken, !session.isEmpty {
             do {
                 let info: SessionInfo = try await api.rpc("fts_printer_validate_session_v72", body: ["p_device_token":dev,"p_session_token":session])
@@ -671,22 +729,30 @@ final class AppState: ObservableObject {
                     await loadChoices()
                     return
                 }
-            } catch {}
-            Keychain.remove("staffSession")
+                liveSessionToken=nil
+                Keychain.remove("staffSession")
+            } catch {
+                if await recoverAuthentication(from:error) { return }
+                // A temporary network failure must never destroy a valid device pairing.
+                errorMessage="Verbindung zum FTS-System unterbrochen. Anmeldung wird automatisch erneut versucht."
+                status=error.localizedDescription
+            }
         }
         await loadChoices()
     }
 
     func loadDeviceAdmins() async {
+        guard !busy else{return}
         busy=true; defer{busy=false}
         do {
             let rows:[DeviceAdminChoice] = try await api.rpc("fts_printer_device_admin_choices_v75",body:[:])
             deviceAdmins=rows
+            errorMessage=nil
             phase = .deviceSetup
         } catch {
-            deviceAdmins=[]
+            // Keep any previously loaded admins and retry from the setup screen.
             phase = .deviceSetup
-            errorMessage=error.localizedDescription
+            errorMessage="Administratorliste konnte nicht geladen werden: \(error.localizedDescription)"
         }
     }
 
@@ -698,7 +764,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.1.4"
+                "p_user_agent":"FTS Printer macOS 0.3.28-banner-fullphoto-fix"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -707,14 +773,17 @@ final class AppState: ObservableObject {
     }
 
     func loadChoices() async {
-        guard let dev=deviceToken else { await loadDeviceAdmins(); return }
+        guard let dev=deviceToken,!dev.isEmpty else { await loadDeviceAdmins(); return }
         do {
             let rows:[StaffChoice] = try await api.rpc("fts_printer_login_choices_v72",body:["p_device_token":dev])
-            staffChoices=rows;phase = .staffLogin
+            staffChoices=rows
+            errorMessage=nil
+            phase = .staffLogin
         } catch {
             if !(await recoverAuthentication(from:error)) {
-                errorMessage=error.localizedDescription
-                phase = .deviceSetup
+                // A network error is not a lost device activation.
+                errorMessage="Mitarbeiterliste konnte nicht geladen werden: \(error.localizedDescription)"
+                phase = .staffLogin
             }
         }
     }
@@ -726,7 +795,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.1.4"
+                "p_user_agent":"FTS Printer macOS 0.3.28-banner-fullphoto-fix"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session
@@ -741,17 +810,52 @@ final class AppState: ObservableObject {
     }
 
     func switchStaff() async {
+        if production.printerSlots.contains(where:{["PREPARING","TRANSFER","PRINTING"].contains($0.state)}) {
+            errorMessage="Mitarbeiterwechsel erst möglich, wenn alle Drucker sicher frei sind."
+            return
+        }
+        production.autoDispatch=false
+        // Never touch the device pairing during a normal staff change.
+        phase = .staffLogin
         if let dev=deviceToken,let session=sessionToken {
             let _:Bool? = try? await api.rpc("fts_printer_logout_v72",body:["p_device_token":dev,"p_session_token":session],as:Bool.self)
         }
         liveSessionToken=nil
-        Keychain.remove("staffSession");currentUser=nil;orders=[];stock=nil
+        Keychain.remove("staffSession")
+        currentUser=nil;orders=[];stock=nil
         await loadChoices()
     }
 
     func resetDevice() {
+        if production.printerSlots.contains(where:{["PREPARING","TRANSFER","PRINTING"].contains($0.state)}) {
+            errorMessage="Gerätefreigabe kann während eines laufenden Drucks nicht zurückgesetzt werden."
+            return
+        }
+        production.autoDispatch=false
         liveSessionToken=nil;liveDeviceToken=nil
-        Keychain.remove("staffSession");Keychain.remove("deviceToken");currentUser=nil;events=[];orders=[];phase = .deviceSetup
+        Keychain.remove("staffSession");Keychain.remove("deviceToken")
+        currentUser=nil;events=[];orders=[];staffChoices=[]
+        deviceAdmins=[]
+        phase = .deviceSetup
+        Task { await loadDeviceAdmins() }
+    }
+
+    func checkPreLoginUpdate() async {
+        guard phase != .main,!preLoginUpdateInFlight else{return}
+        await production.checkUpdate(platform:"macos")
+        guard production.updateAvailable,
+              let build=production.updateRelease?.build_number,
+              preLoginUpdateOpenedBuild != build else{return}
+        preLoginUpdateInFlight=true
+        preLoginUpdateStatus="Neue Version wird automatisch geladen …"
+        if let url=await production.downloadUpdate() {
+            preLoginUpdateOpenedBuild=build
+            preLoginUpdateStatus="Update geladen · Installer wird geöffnet."
+            NSWorkspace.shared.open(url)
+        } else {
+            preLoginUpdateStatus=production.lastError ?? "Update konnte nicht automatisch geladen werden."
+        }
+        preLoginUpdateInFlight=false
     }
 
     @discardableResult
@@ -762,7 +866,11 @@ final class AppState: ObservableObject {
             let rows:[EventRow]=try await api.rpc("fts_printer_events_v74",body:["p_device_token":dev,"p_session_token":session])
             events=rows
             if !rows.contains(where:{$0.event_token==selectedEventToken}) { selectedEventToken=rows.first?.event_token ?? "" }
-            if let e=selectedEvent { localImport.load(event:e) }
+            if let e=selectedEvent {
+                localImport.load(event:e)
+                mediaIngest.load(event:e)
+                production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
+            }
             if selectedEventToken.isEmpty {
                 orders=[]
                 stock=nil
@@ -780,8 +888,52 @@ final class AppState: ObservableObject {
 
     func selectEvent(_ token:String) async {
         selectedEventToken=token
-        if let e=selectedEvent { localImport.load(event:e) }
+        if let e=selectedEvent {
+                localImport.load(event:e)
+                mediaIngest.load(event:e)
+                production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
+            }
         await refreshSelected()
+    }
+
+    @discardableResult
+    func refreshSelectedEventDefinition() async -> Bool {
+        guard let dev=deviceToken,let session=sessionToken,!selectedEventToken.isEmpty else{return false}
+        do {
+            let rows:[EventRow]=try await api.rpc(
+                "fts_printer_events_v74",
+                body:["p_device_token":dev,"p_session_token":session]
+            )
+            guard let fresh=rows.first(where:{$0.event_token==selectedEventToken}) else{return false}
+            let changed = fresh != selectedEvent
+            if let index=events.firstIndex(where:{$0.event_token==selectedEventToken}) {
+                if events[index] != fresh { events[index]=fresh }
+            } else {
+                events.append(fresh)
+            }
+            return changed
+        } catch {
+            if isTransientNetworkError(error) { return false }
+            return false
+        }
+    }
+
+    private func isTransientNetworkError(_ error:Error) -> Bool {
+        let ns=error as NSError
+        if ns.domain == NSURLErrorDomain { return true }
+        if [401,408,429,500,502,503,504].contains(ns.code) { return true }
+        let m=error.localizedDescription.lowercased()
+        return m.contains("timed out")
+            || m.contains("timeout")
+            || m.contains("network")
+            || m.contains("internet")
+            || m.contains("connection")
+            || m.contains("offline")
+            || m.contains("host")
+            || m.contains("socket")
+            || m.contains("dns")
+            || m.contains("jwt")
+            || m.contains("temporarily")
     }
 
     func refreshSelected() async {
@@ -792,7 +944,12 @@ final class AppState: ObservableObject {
             let (oo,ss)=try await(o,s);orders=oo;stock=ss
             status="Aktuell · \(Date().formatted(date:.omitted,time:.shortened))"
         } catch {
-            if !(await recoverAuthentication(from:error)) { errorMessage=error.localizedDescription }
+            if await recoverAuthentication(from:error) { return }
+            if isTransientNetworkError(error) {
+                status="Verbindung kurz unterbrochen · automatische Wiederholung aktiv"
+                return
+            }
+            errorMessage=error.localizedDescription
         }
     }
 
@@ -896,36 +1053,102 @@ final class AppState: ObservableObject {
 
 // MARK: - Views
 
+enum FTSTheme {
+    static let background = Color(red:0.018, green:0.025, blue:0.028)
+    static let sidebar = Color(red:0.025, green:0.045, blue:0.052)
+    static let panel = Color(red:0.035, green:0.060, blue:0.066)
+    static let panelRaised = Color(red:0.045, green:0.078, blue:0.084)
+    static let cyan = Color(red:0.00, green:0.76, blue:0.84)
+    static let gold = Color(red:0.86, green:0.68, blue:0.34)
+    static let muted = Color.white.opacity(0.64)
+    static let border = Color.white.opacity(0.12)
+}
+
+struct FTSBrandImage: View {
+    let name:String
+    var contentMode:ContentMode = .fill
+    var body: some View {
+        Group {
+            if let url=Bundle.main.url(forResource:name,withExtension:"jpg"),
+               let image=NSImage(contentsOf:url) {
+                Image(nsImage:image).resizable().aspectRatio(contentMode:contentMode)
+            } else {
+                ZStack {
+                    FTSTheme.panelRaised
+                    Image(systemName:"printer.fill").font(.system(size:46,weight:.bold)).foregroundStyle(FTSTheme.gold)
+                }
+            }
+        }
+    }
+}
+
+extension View {
+    func ftsCard(_ radius:CGFloat = 14) -> some View {
+        self.padding(14)
+            .background(FTSTheme.panel)
+            .clipShape(RoundedRectangle(cornerRadius:radius,style:.continuous))
+            .overlay(RoundedRectangle(cornerRadius:radius,style:.continuous).stroke(FTSTheme.border,lineWidth:1))
+    }
+}
+
+enum FTSSection:Int {
+    case dashboard, events, orders, media, pickup, printers, finance, settings, help
+}
+
+
+
 struct DeviceSetupView: View {
     @EnvironmentObject var state:AppState
     @State private var selected=""
     @State private var code=""
     var admin:DeviceAdminChoice?{state.deviceAdmins.first{$0.user_id==selected}}
     var body:some View {
-        VStack(spacing:22){
-            Image(systemName:"printer.fill").font(.system(size:52)).foregroundStyle(.teal)
-            Text("FTS Printer v\(AppState.appVersion)").font(.largeTitle.bold())
-            Text("Diesen Mac einmalig mit einem Printer-Administrator freischalten. Administrator auswählen und dessen persönlichen Printer-Code eingeben.")
-                .multilineTextAlignment(.center).foregroundStyle(.secondary).frame(maxWidth:600)
-            if state.deviceAdmins.isEmpty {
-                Text("Kein aktiver Printer-Administrator gefunden. Im FTS Cockpit zuerst mindestens einen Printer-Administrator anlegen.")
-                    .foregroundStyle(.orange).multilineTextAlignment(.center).frame(maxWidth:560)
-                Button("Administratoren neu laden"){Task{await state.loadDeviceAdmins()}}
-            } else {
-                Picker("Printer-Administrator",selection:$selected){
-                    Text("Bitte auswählen …").tag("")
-                    ForEach(state.deviceAdmins){a in Text(a.display_name).tag(a.user_id)}
-                }.frame(maxWidth:420)
-                SecureField("Persönlicher Administrator-Code",text:$code).textFieldStyle(.roundedBorder).frame(maxWidth:380)
-                    .onSubmit{if let a=admin{Task{await state.activateDevice(admin:a,code:code)}}}
-                Button("Mac freischalten"){
-                    if let a=admin{Task{await state.activateDevice(admin:a,code:code)}}
-                }.buttonStyle(.borderedProminent).disabled(admin==nil||code.isEmpty||state.busy)
-                Button("Administratoren aktualisieren"){Task{await state.loadDeviceAdmins()}}.buttonStyle(.plain)
-            }
-        }.padding(50).frame(minWidth:720,minHeight:520)
+        ZStack {
+            FTSTheme.background.ignoresSafeArea()
+            HStack(spacing:34){
+                FTSBrandImage(name:"fts_printer_icon",contentMode:.fit)
+                    .frame(width:230,height:230)
+                    .clipShape(RoundedRectangle(cornerRadius:34,style:.continuous))
+                    .overlay(RoundedRectangle(cornerRadius:34).stroke(FTSTheme.gold.opacity(0.65),lineWidth:1))
+                VStack(alignment:.leading,spacing:18){
+                    Text("FTS PRINTER").font(.system(size:36,weight:.black,design:.rounded)).foregroundStyle(FTSTheme.gold)
+                    Text("Gerät freischalten").font(.title.bold()).foregroundStyle(.white)
+                    Text("Diesen Mac einmalig mit einem Printer-Administrator freischalten. Administrator auswählen und persönlichen Printer-Code eingeben.")
+                        .foregroundStyle(FTSTheme.muted).frame(maxWidth:520,alignment:.leading)
+                    if state.deviceAdmins.isEmpty {
+                        Text(state.errorMessage ?? "Printer-Administratoren werden geladen …")
+                            .foregroundStyle(.orange).frame(maxWidth:520,alignment:.leading)
+                        Button("Administratoren neu laden"){Task{await state.loadDeviceAdmins()}}
+                    } else {
+                        Picker("Printer-Administrator",selection:$selected){
+                            Text("Bitte auswählen …").tag("")
+                            ForEach(state.deviceAdmins){a in Text(a.display_name).tag(a.user_id)}
+                        }.frame(maxWidth:440)
+                        SecureField("Persönlicher Administrator-Code",text:$code)
+                            .textFieldStyle(.roundedBorder).frame(maxWidth:380)
+                            .onSubmit{if let a=admin{Task{await state.activateDevice(admin:a,code:code)}}}
+                        HStack{
+                            Button("Mac freischalten"){if let a=admin{Task{await state.activateDevice(admin:a,code:code)}}}
+                                .buttonStyle(.borderedProminent).disabled(admin==nil||code.isEmpty||state.busy)
+                            Button("Administratoren aktualisieren"){Task{await state.loadDeviceAdmins()}}
+                        }
+                    }
+                    if !state.preLoginUpdateStatus.isEmpty {
+                        Text(state.preLoginUpdateStatus).font(.caption).foregroundStyle(FTSTheme.cyan)
+                    }
+                    Text("FTS Printer v\(AppState.appVersion)").font(.caption).foregroundStyle(FTSTheme.muted)
+                }
+                .ftsCard(18)
+            }.padding(46)
+        }.frame(minWidth:860,minHeight:600)
         .onAppear{if selected.isEmpty{selected=state.deviceAdmins.first?.user_id ?? ""}}
         .onChange(of:state.deviceAdmins){_ in if !state.deviceAdmins.contains(where:{$0.user_id==selected}){selected=state.deviceAdmins.first?.user_id ?? ""}}
+        .task {
+            while !Task.isCancelled && state.phase == .deviceSetup && state.deviceAdmins.isEmpty {
+                await state.loadDeviceAdmins()
+                try? await Task.sleep(for:.seconds(8))
+            }
+        }
     }
 }
 
@@ -933,91 +1156,511 @@ struct StaffLoginView: View {
     @EnvironmentObject var state:AppState
     @State private var selected:String=""
     @State private var code=""
+    @State private var showResetDevice=false
     var choice:StaffChoice?{state.staffChoices.first{$0.user_id==selected}}
     var body:some View {
-        VStack(spacing:18){
-            Text("FTS Printer v\(AppState.appVersion)").font(.caption.bold()).foregroundStyle(.secondary)
-            Text("Wer arbeitet am Printer?").font(.largeTitle.bold())
-            Text("Mitarbeiter auswählen und persönlichen Code eingeben. Jeder Druck wird dieser Person zugeordnet.").foregroundStyle(.secondary)
-            Picker("Mitarbeiter",selection:$selected){
-                Text("Bitte auswählen …").tag("")
-                ForEach(state.staffChoices){u in Text("\(u.display_name) · \(u.roleLabel)").tag(u.user_id)}
-            }.frame(maxWidth:460)
-            SecureField("Persönlicher Code",text:$code).textFieldStyle(.roundedBorder).frame(maxWidth:320)
-            HStack{
-                Button("Anmelden"){if let u=choice{Task{await state.login(user:u,code:code)}}}.buttonStyle(.borderedProminent).disabled(choice==nil||code.isEmpty||state.busy)
-                Button("Liste aktualisieren"){Task{await state.loadChoices()}}
-            }
-            Button("Gerätefreigabe zurücksetzen",role:.destructive){state.resetDevice()}.buttonStyle(.plain).foregroundStyle(.secondary)
-        }.padding(50).frame(minWidth:760,minHeight:540).onAppear{if selected.isEmpty{selected=state.staffChoices.first?.user_id ?? ""}}
-    }
-}
-
-struct MainView: View {
-    @EnvironmentObject var state:AppState
-    @State private var tab=0
-    @State private var showStock=false
-    var body:some View {
-        VStack(spacing:0){
-            HStack(spacing:14){
-                VStack(alignment:.leading,spacing:3){
-                    Text("FTS Printer v\(AppState.appVersion)").font(.title.bold())
-                    Text("\(state.currentUser?.display_name ?? "") · \(state.currentUser?.roleLabel ?? "")").font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Picker("Event",selection:Binding(get:{state.selectedEventToken},set:{v in Task{await state.selectEvent(v)}})){
-                    ForEach(state.events){e in Text(e.event_title).tag(e.event_token)}
-                }.frame(width:360)
-                Button("Events neu laden"){Task{_ = await state.loadEvents()}}
-                Button("Aktualisieren"){Task{await state.refreshSelected()}}
-                Button("Mitarbeiter wechseln"){Task{await state.switchStaff()}}
-            }.padding(16).background(.thinMaterial)
-            Divider()
-            if let event=state.selectedEvent {
-                HStack(spacing:16){
-                    VStack(alignment:.leading){
-                        Text(event.event_title).font(.headline)
-                        Text([event.location,event.event_date].compactMap{$0}.joined(separator:" · ")).font(.caption).foregroundStyle(.secondary)
+        ZStack {
+            FTSTheme.background.ignoresSafeArea()
+            HStack(spacing:34){
+                FTSBrandImage(name:"fts_printer_icon",contentMode:.fit)
+                    .frame(width:220,height:220)
+                    .clipShape(RoundedRectangle(cornerRadius:32,style:.continuous))
+                    .overlay(RoundedRectangle(cornerRadius:32).stroke(FTSTheme.gold.opacity(0.65),lineWidth:1))
+                VStack(alignment:.leading,spacing:18){
+                    Text("FTS PRINTER").font(.system(size:34,weight:.black,design:.rounded)).foregroundStyle(FTSTheme.gold)
+                    Text("Wer arbeitet am Printer?").font(.title.bold()).foregroundStyle(.white)
+                    Text("Mitarbeiter auswählen und persönlichen Code eingeben. Jeder Druck wird dieser Person zugeordnet.")
+                        .foregroundStyle(FTSTheme.muted)
+                    if state.staffChoices.isEmpty {
+                        Text(state.errorMessage ?? "Mitarbeiterliste wird geladen …")
+                            .foregroundStyle(.orange)
                     }
-                    Spacer()
-                    StockPill(stock:state.stock)
-                    Button("Bestand"){showStock=true}
-                }.padding(.horizontal,16).padding(.vertical,10)
-                TabView(selection:$tab){
-                    OrdersView().environmentObject(state).tabItem{Label("Selfie-Aufträge",systemImage:"photo.on.rectangle")}.tag(0)
-                    CameraImportView(event:event).environmentObject(state).tabItem{Label("Kamera / Karte",systemImage:"sdcard")}.tag(1)
-                }.padding(.horizontal,12).padding(.bottom,12)
-            } else {
-                VStack(spacing:12){
-                    Image(systemName:"calendar.badge.exclamationmark").font(.system(size:42)).foregroundStyle(.secondary)
-                    Text("Kein Printer-Event").font(.title2.bold())
-                    Text("Im FTS Cockpit zuerst ein Event mit Print oder lokaler Kamera freigeben.").foregroundStyle(.secondary)
-                }.frame(maxWidth:.infinity,maxHeight:.infinity)
+                    Picker("Mitarbeiter",selection:$selected){
+                        Text("Bitte auswählen …").tag("")
+                        ForEach(state.staffChoices){u in Text("\(u.display_name) · \(u.roleLabel)").tag(u.user_id)}
+                    }.frame(maxWidth:480)
+                    SecureField("Persönlicher Code",text:$code).textFieldStyle(.roundedBorder).frame(maxWidth:340)
+                    HStack{
+                        Button("Anmelden"){if let u=choice{Task{await state.login(user:u,code:code)}}}
+                            .buttonStyle(.borderedProminent).disabled(choice==nil||code.isEmpty||state.busy)
+                        Button("Liste aktualisieren"){Task{await state.loadChoices()}}
+                    }
+                    Button("Mac-Kopplung zurücksetzen",role:.destructive){showResetDevice=true}
+                        .buttonStyle(.plain).foregroundStyle(FTSTheme.muted)
+                    if !state.preLoginUpdateStatus.isEmpty {
+                        Text(state.preLoginUpdateStatus).font(.caption).foregroundStyle(FTSTheme.cyan)
+                    }
+                    Text("FTS Printer v\(AppState.appVersion)").font(.caption).foregroundStyle(FTSTheme.muted)
+                }
+                .ftsCard(18)
+            }.padding(46)
+        }.frame(minWidth:860,minHeight:600)
+        .onAppear{if selected.isEmpty{selected=state.staffChoices.first?.user_id ?? ""}}
+        .onChange(of:state.staffChoices){_ in
+            if !state.staffChoices.contains(where:{$0.user_id==selected}) {
+                selected=state.staffChoices.first?.user_id ?? ""
             }
-            HStack{Text(state.status).font(.caption).foregroundStyle(.secondary);Spacer()}.padding(.horizontal,16).padding(.bottom,8)
-        }.frame(minWidth:980,minHeight:700)
-        .sheet(isPresented:$showStock){StockSheet(isPresented:$showStock).environmentObject(state)}
-        .sheet(item:$state.currentReceipt){r in ReceiptSheet(receipt:r).environmentObject(state)}
-        .alert("FTS Printer",isPresented:Binding(get:{state.errorMessage != nil},set:{if !$0{state.errorMessage=nil}})){
-            Button("OK"){state.errorMessage=nil}
-        } message:{Text(state.errorMessage ?? "")}
-        .task(id:state.selectedEventToken){
-            while !Task.isCancelled {
-                try? await Task.sleep(for:.seconds(5))
-                if !Task.isCancelled { await state.refreshSelected() }
+        }
+        .task {
+            while !Task.isCancelled && state.phase == .staffLogin && state.staffChoices.isEmpty {
+                await state.loadChoices()
+                try? await Task.sleep(for:.seconds(8))
             }
+        }
+        .alert("Mac-Kopplung wirklich zurücksetzen?",isPresented:$showResetDevice) {
+            Button("Abbrechen",role:.cancel){}
+            Button("Mac-Kopplung zurücksetzen",role:.destructive){state.resetDevice()}
+        } message: {
+            Text("Nicht für einen normalen Mitarbeiterwechsel verwenden. Dadurch wird nur die Gerätefreigabe dieses Macs gelöscht und anschließend neu geladen.")
         }
     }
 }
 
+
+
+struct MainView: View {
+    @EnvironmentObject var state:AppState
+    @State private var section:FTSSection = .dashboard
+    @State private var showStock=false
+    @State private var updatePrompt=false
+    @State private var updateInstalling=false
+    @State private var postponedUpdateBuild:Int?=nil
+
+    var printingActive:Bool {
+        state.production.printerSlots.contains{["PREPARING","TRANSFER","PRINTING"].contains($0.state)}
+    }
+
+    var canUseMedia:Bool {
+        guard let e=state.selectedEvent else{return false}
+        return e.operation_mode=="print_only" || e.local_camera_photos==true
+    }
+
+    var body:some View {
+        HStack(spacing:0){
+            sidebar
+            Rectangle().fill(FTSTheme.gold.opacity(0.22)).frame(width:1)
+            VStack(spacing:0){
+                header
+                if let event=state.selectedEvent {
+                    eventBar(event)
+                    content(event)
+                } else {
+                    VStack(spacing:14){
+                        Image(systemName:"calendar.badge.exclamationmark").font(.system(size:46)).foregroundStyle(FTSTheme.gold)
+                        Text("Kein Printer-Event").font(.title2.bold())
+                        Text("Im FTS Cockpit zuerst ein Event mit Print oder lokaler Kamera freigeben.").foregroundStyle(FTSTheme.muted)
+                        Button("Events neu laden"){Task{_ = await state.loadEvents()}}.buttonStyle(.borderedProminent)
+                    }.frame(maxWidth:.infinity,maxHeight:.infinity)
+                }
+                HStack{
+                    Circle().fill(state.status.lowercased().contains("offline") ? Color.orange : Color.green).frame(width:7,height:7)
+                    Text(state.status).font(.caption).foregroundStyle(FTSTheme.muted)
+                    Spacer()
+                    Text("v\(AppState.appVersion)").font(.caption2).foregroundStyle(FTSTheme.muted)
+                }.padding(.horizontal,16).padding(.vertical,7).background(Color.black.opacity(0.26))
+            }
+        }
+        .background(FTSTheme.background.ignoresSafeArea())
+        .foregroundStyle(.white)
+        .frame(minWidth:1080,minHeight:720)
+        .sheet(isPresented:$showStock){StockSheet(isPresented:$showStock).environmentObject(state)}
+        .sheet(item:$state.currentReceipt){r in ReceiptSheet(receipt:r).environmentObject(state)}
+        .overlay(alignment:.topTrailing) {
+            if let message=state.errorMessage,!message.isEmpty {
+                HStack(alignment:.top,spacing:10) {
+                    Image(systemName:"exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    Text(message).font(.caption).lineLimit(3).frame(maxWidth:360,alignment:.leading)
+                    Button {
+                        state.errorMessage=nil
+                    } label: {
+                        Image(systemName:"xmark.circle.fill")
+                    }.buttonStyle(.plain).foregroundStyle(FTSTheme.muted)
+                }
+                .padding(12)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius:12))
+                .overlay(RoundedRectangle(cornerRadius:12).stroke(Color.orange.opacity(0.35)))
+                .padding(.top,10).padding(.trailing,14)
+                .transition(.move(edge:.top).combined(with:.opacity))
+            }
+        }
+        .animation(.easeInOut(duration:0.18),value:state.errorMessage)
+        .onChange(of:state.errorMessage){newValue in
+            guard let current=newValue,!current.isEmpty else{return}
+            Task {
+                try? await Task.sleep(for:.seconds(10))
+                if state.errorMessage == current { state.errorMessage=nil }
+            }
+        }
+        .alert("Neue FTS Printer Version verfügbar",isPresented:$updatePrompt){
+            Button("Jetzt aktualisieren"){
+                guard !printingActive else{return}
+                updateInstalling=true
+                Task{
+                    if let url=await state.production.downloadUpdate(){NSWorkspace.shared.open(url)}
+                    updateInstalling=false
+                }
+            }
+            if state.production.updateRelease?.mandatory != true {
+                Button("Später",role:.cancel){postponedUpdateBuild=state.production.updateRelease?.build_number}
+            }
+        } message:{
+            if let release=state.production.updateRelease {
+                Text("Installiert: \(AppState.appVersion) · Neu: \(release.version)\n\n\(release.notes ?? "")")
+            } else { Text("Eine neue FTS Printer Version ist verfügbar.") }
+        }
+        .task(id:state.selectedEventToken){
+            section = .dashboard
+            await state.production.discoverPrinters()
+            if let e=state.selectedEvent {
+                state.mediaIngest.load(event:e)
+                state.production.loadLocalQueue(folderPath:state.mediaIngest.activation?.folderPath)
+            }
+            await state.production.checkUpdate(platform:"macos")
+            if state.production.updateAvailable,
+               state.production.updateRelease?.build_number != postponedUpdateBuild,
+               !printingActive { updatePrompt=true }
+            var updateElapsed:Double = 0
+            var printerDiscoveryElapsed:Double = 0
+            while !Task.isCancelled {
+                await state.refreshSelected()
+                await state.production.refresh(state:state)
+
+                let active = printingActive || state.production.hasDispatchableWork
+                let delay:Double = active ? 3 : 6
+                updateElapsed += delay
+                printerDiscoveryElapsed += delay
+
+                if printerDiscoveryElapsed >= 12 {
+                    printerDiscoveryElapsed = 0
+                    await state.production.discoverPrinters()
+                }
+                if updateElapsed >= 900 {
+                    updateElapsed = 0
+                    await state.production.checkUpdate(platform:"macos")
+                }
+                if state.production.updateAvailable,
+                   state.production.updateRelease?.build_number != postponedUpdateBuild,
+                   !printingActive,!updatePrompt,!updateInstalling { updatePrompt=true }
+                try? await Task.sleep(for:.seconds(delay))
+            }
+        }
+    }
+
+    var sidebar:some View {
+        VStack(alignment:.leading,spacing:8){
+            VStack(spacing:8){
+                FTSBrandImage(name:"fts_printer_icon",contentMode:.fit)
+                    .frame(width:112,height:112)
+                    .clipShape(RoundedRectangle(cornerRadius:22,style:.continuous))
+                    .overlay(RoundedRectangle(cornerRadius:22).stroke(FTSTheme.gold.opacity(0.65),lineWidth:1))
+                Text("FTS Printer").font(.headline).foregroundStyle(.white)
+            }.frame(maxWidth:.infinity).padding(.bottom,14)
+
+            nav("Dashboard","house.fill",.dashboard)
+            nav("Events","calendar",.events)
+            nav("Druckaufträge","printer.fill",.orders)
+            nav("SD-Karte / Import","sdcard.fill",.media,disabled:!canUseMedia)
+            Button(action:{showStock=true}) {
+                Label("Materialbestand",systemImage:"shippingbox.fill")
+                    .frame(maxWidth:.infinity,alignment:.leading).padding(.horizontal,12).padding(.vertical,10)
+            }.buttonStyle(.plain).foregroundStyle(.white.opacity(0.88))
+            nav("Kundenabholung","shippingbox",.pickup)
+            nav("Printer-Aktivität","waveform.path.ecg",.printers)
+            if state.currentUser?.role=="printer_admin" {
+                nav("Finanzen","eurosign.circle.fill",.finance)
+            } else {
+                HStack{Image(systemName:"lock.fill");Text("Finanzen");Spacer()}
+                    .font(.callout).foregroundStyle(FTSTheme.muted).padding(.horizontal,12).padding(.vertical,10)
+            }
+            Divider().overlay(FTSTheme.gold.opacity(0.25)).padding(.vertical,4)
+            nav("Einstellungen","gearshape.fill",.settings)
+            nav("Hilfe","questionmark.circle.fill",.help)
+            Spacer()
+        }
+        .padding(14)
+        .frame(width:220)
+        .background(LinearGradient(colors:[FTSTheme.sidebar,Color.black.opacity(0.92)],startPoint:.top,endPoint:.bottom))
+    }
+
+    func nav(_ title:String,_ icon:String,_ value:FTSSection,disabled:Bool=false)->some View {
+        Button{
+            if !disabled { section=value }
+        } label:{
+            Label(title,systemImage:icon)
+                .frame(maxWidth:.infinity,alignment:.leading)
+                .padding(.horizontal,12).padding(.vertical,10)
+                .background(section==value ? FTSTheme.cyan.opacity(0.82) : Color.clear)
+                .foregroundStyle(section==value ? Color.black : (disabled ? FTSTheme.muted.opacity(0.55) : Color.white.opacity(0.9)))
+                .clipShape(RoundedRectangle(cornerRadius:9,style:.continuous))
+        }.buttonStyle(.plain).disabled(disabled)
+    }
+
+    var header:some View {
+        ZStack(alignment:.bottom){
+            FTSBrandImage(name:"fts_printer_header",contentMode:.fill).frame(height:164).clipped()
+            LinearGradient(colors:[Color.clear,FTSTheme.background.opacity(0.98)],startPoint:.top,endPoint:.bottom).frame(height:92)
+            HStack{
+                VStack(alignment:.leading,spacing:2){
+                    Text("FTS PRINTER").font(.system(size:25,weight:.black,design:.rounded)).foregroundStyle(FTSTheme.gold)
+                    Text("Professionelle Event-Druckstation").font(.caption).foregroundStyle(.white.opacity(0.8))
+                }
+                Spacer()
+                HStack(spacing:14){
+                    TimelineView(.periodic(from:.now,by:1)) { context in
+                        HStack(spacing:6){
+                            Image(systemName:"clock.fill")
+                                .font(.caption)
+                                .foregroundStyle(FTSTheme.gold)
+                            Text(context.date,format:.dateTime.hour().minute().second())
+                                .font(.system(size:17,weight:.bold,design:.monospaced))
+                                .foregroundStyle(.white)
+                                .monospacedDigit()
+                        }
+                    }
+                    Rectangle()
+                        .fill(Color.white.opacity(0.18))
+                        .frame(width:1,height:30)
+                    VStack(alignment:.trailing,spacing:2){
+                        Text(state.currentUser?.display_name ?? "").font(.headline)
+                        Text(state.currentUser?.roleLabel ?? "").font(.caption).foregroundStyle(FTSTheme.muted)
+                    }
+                }
+            }.padding(.horizontal,18).padding(.bottom,10)
+        }
+    }
+
+    func eventBar(_ event:EventRow)->some View {
+        HStack(spacing:12){
+            VStack(alignment:.leading,spacing:3){
+                Text("Event auswählen").font(.caption.bold()).foregroundStyle(FTSTheme.gold)
+                Picker("",selection:Binding(get:{state.selectedEventToken},set:{v in Task{await state.selectEvent(v)}})){
+                    ForEach(state.events){e in Text(e.event_title).tag(e.event_token)}
+                }.labelsHidden().frame(minWidth:300)
+                Text([event.location,event.event_date].compactMap{$0}.joined(separator:" · "))
+                    .font(.caption2).foregroundStyle(FTSTheme.muted).lineLimit(1)
+            }
+            Spacer()
+            StockPill(stock:state.stock)
+            Button{Task{_ = await state.loadEvents()}} label:{Label("Events neu laden",systemImage:"arrow.clockwise")}
+                .buttonStyle(.borderedProminent)
+            Button{Task{await state.switchStaff()}} label:{Label("Mitarbeiter wechseln",systemImage:"person.2.fill")}
+                .buttonStyle(.borderedProminent)
+        }
+        .padding(12)
+        .background(FTSTheme.panelRaised)
+        .overlay(Rectangle().frame(height:1).foregroundStyle(FTSTheme.gold.opacity(0.22)),alignment:.bottom)
+    }
+
+    @ViewBuilder
+    func content(_ event:EventRow)->some View {
+        switch section {
+        case .dashboard:
+            FTSDashboardView(openOrders:{section = .orders},openMedia:{section = .media},openPrinters:{section = .printers},openPickup:{section = .pickup},openStock:{showStock=true})
+                .environmentObject(state)
+        case .events:
+            FTSEventOverviewView(event:event).environmentObject(state)
+        case .orders:
+            ProductionQueueView().environmentObject(state)
+        case .media:
+            if canUseMedia { ProductionMediaView().environmentObject(state) }
+            else { FTSHelpView(title:"SD-Karte / Import",text:"Für dieses Event ist kein lokaler Kamera-/Print-Only-Modus aktiviert.") }
+        case .pickup:
+            ProductionPickupView().environmentObject(state)
+        case .printers:
+            ProductionSystemView().environmentObject(state)
+        case .finance:
+            FTSFinanceView().environmentObject(state)
+        case .settings:
+            ProductionSystemView().environmentObject(state)
+        case .help:
+            FTSHelpView(title:"Hilfe",text:"FTS Printer verwaltet Druckaufträge, Materialbestand, SD-/WLAN-Import, Kundenabholung und mehrere Drucker. Kritische Buchungen und Wiederholungen bleiben gegen Doppelklick/Doppelauslösung geschützt.")
+        }
+    }
+}
+
+struct FTSDashboardView:View {
+    @EnvironmentObject var state:AppState
+    let openOrders:()->Void
+    let openMedia:()->Void
+    let openPrinters:()->Void
+    let openPickup:()->Void
+    let openStock:()->Void
+
+    var activeUnits:Int { state.production.workUnits.filter{["READY","CLAIMED","PRINTING","UNCERTAIN"].contains($0.unit_status)}.count }
+    var printedOrders:Int { state.orders.filter{($0.print_status ?? "").uppercased()=="PRINTED"}.count }
+
+    var body:some View {
+        ScrollView {
+            VStack(alignment:.leading,spacing:12){
+                LazyVGrid(columns:[GridItem(.flexible()),GridItem(.flexible())],spacing:12){
+                    Button(action:openStock){
+                        VStack(alignment:.leading,spacing:10){
+                            HStack{Label("Materialbestand",systemImage:"shippingbox.fill").font(.headline).foregroundStyle(FTSTheme.gold);Spacer();Image(systemName:"chevron.right")}
+                            HStack(spacing:18){
+                                metric("Papier / Prints",state.stock?.safe_available ?? 0,.green)
+                                metric("Selfie",state.stock?.selfie_printed ?? 0,FTSTheme.cyan)
+                                metric("Kamera",state.stock?.camera_prints ?? 0,.orange)
+                            }
+                            Text("RP-108 · Papier/Farbfilm werden je Drucker separat überwacht.").font(.caption).foregroundStyle(FTSTheme.muted)
+                        }.ftsCard()
+                    }.buttonStyle(.plain)
+
+                    Button(action:openOrders){
+                        VStack(alignment:.leading,spacing:10){
+                            HStack{Label("Druckaufträge",systemImage:"printer.fill").font(.headline).foregroundStyle(FTSTheme.gold);Spacer();Image(systemName:"chevron.right")}
+                            HStack(spacing:18){
+                                metric("Aktiv",activeUnits,FTSTheme.cyan)
+                                metric("Gedruckt",printedOrders,.green)
+                                metric("Aufträge",state.orders.count,.white)
+                            }
+                            Text("Mehrdrucker-Verteilung, Warteschlange und UNCERTAIN-Schutz bleiben aktiv.").font(.caption).foregroundStyle(FTSTheme.muted)
+                        }.ftsCard()
+                    }.buttonStyle(.plain)
+
+                    Button(action:openMedia){
+                        VStack(alignment:.leading,spacing:10){
+                            HStack{Label("SD-Karte / Import",systemImage:"sdcard.fill").font(.headline).foregroundStyle(FTSTheme.gold);Spacer();Image(systemName:"chevron.right")}
+                            Text(state.mediaIngest.status).font(.callout).foregroundStyle(.white)
+                            Text("SD-Karten A/B/C/D/E und WLAN-Kamera-Album").font(.caption).foregroundStyle(FTSTheme.muted)
+                        }.ftsCard()
+                    }.buttonStyle(.plain)
+
+                    Button(action:openPrinters){
+                        VStack(alignment:.leading,spacing:10){
+                            HStack{Label("Printer-Aktivität",systemImage:"waveform.path.ecg").font(.headline).foregroundStyle(FTSTheme.gold);Spacer();Image(systemName:"chevron.right")}
+                            Text("\(state.production.printerSlots.count) Printer verbunden").font(.title3.bold())
+                            if state.production.printerSlots.isEmpty {
+                                Text("Kein USB-/WLAN-Drucker erreichbar").font(.caption).foregroundStyle(FTSTheme.muted)
+                            } else {
+                                Text(state.production.printerSlots.prefix(2).map{"\($0.name): \($0.connection.replacingOccurrences(of:"\n",with:" · "))"}.joined(separator:" · "))
+                                    .font(.caption).foregroundStyle(FTSTheme.muted).lineLimit(3)
+                            }
+                        }.ftsCard()
+                    }.buttonStyle(.plain)
+                }
+
+                Button(action:openPickup){
+                    HStack{
+                        VStack(alignment:.leading){
+                            Label("Kundenabholung",systemImage:"shippingbox").font(.headline).foregroundStyle(FTSTheme.gold)
+                            Text("\(state.production.pickups.count) Auftrag\(state.production.pickups.count == 1 ? "" : "e") wartet/warten auf Abholung.").font(.caption).foregroundStyle(FTSTheme.muted)
+                        }
+                        Spacer();Image(systemName:"chevron.right")
+                    }.ftsCard()
+                }.buttonStyle(.plain)
+
+                VStack(alignment:.leading,spacing:8){
+                    Text("Letzte Druckaufträge").font(.headline).foregroundStyle(FTSTheme.gold)
+                    if state.orders.isEmpty { Text("Noch keine Druckaufträge.").foregroundStyle(FTSTheme.muted) }
+                    ForEach(Array(state.orders.prefix(6))){o in
+                        HStack{
+                            Text(o.pickup_code ?? "------").font(.body.monospaced().bold())
+                            Text("\(o.quantity_total ?? 0) ×").foregroundStyle(FTSTheme.muted)
+                            Text(o.event_title ?? state.selectedEvent?.event_title ?? "").lineLimit(1)
+                            Spacer()
+                            Text(o.print_status ?? "—").font(.caption.bold()).foregroundStyle((o.print_status ?? "").uppercased()=="PRINTED" ? .green : FTSTheme.gold)
+                        }
+                        Divider().overlay(FTSTheme.border)
+                    }
+                }.ftsCard()
+            }.padding(14)
+        }
+    }
+
+    func metric(_ label:String,_ value:Int,_ color:Color)->some View {
+        VStack(alignment:.leading,spacing:2){
+            Text("\(value)").font(.title2.bold()).foregroundStyle(color)
+            Text(label).font(.caption2).foregroundStyle(FTSTheme.muted)
+        }
+    }
+}
+
+struct FTSEventOverviewView:View {
+    @EnvironmentObject var state:AppState
+    let event:EventRow
+    var body:some View {
+        ScrollView {
+            VStack(alignment:.leading,spacing:14){
+                Text(event.event_title).font(.title.bold()).foregroundStyle(FTSTheme.gold)
+                Text([event.organizer_name,event.location,event.event_date].compactMap{$0}.joined(separator:" · ")).foregroundStyle(FTSTheme.muted)
+                HStack{
+                    VStack(alignment:.leading){Text("Print-Fenster").font(.caption).foregroundStyle(FTSTheme.muted);Text(event.print_window_active == true ? "Aktiv" : "Nicht aktiv").bold()}
+                    Spacer()
+                    VStack(alignment:.leading){Text("Betriebsart").font(.caption).foregroundStyle(FTSTheme.muted);Text(event.operation_mode ?? "Standard").bold()}
+                    Spacer()
+                    VStack(alignment:.leading){Text("Lokale Kamera").font(.caption).foregroundStyle(FTSTheme.muted);Text(event.local_camera_photos == true ? "Ja" : "Nein").bold()}
+                }.ftsCard()
+                Button("Eventdaten aktualisieren"){Task{await state.refreshSelected()}}.buttonStyle(.borderedProminent)
+            }.padding(16)
+        }
+    }
+}
+
+struct FTSFinanceView:View {
+    @EnvironmentObject var state:AppState
+    var isAdmin:Bool { state.currentUser?.role=="printer_admin" }
+    var liveRevenue:Int {
+        state.orders.filter{$0.is_test != true && ["COMPLETED","COVERED"].contains(($0.payment_status ?? "").uppercased())}
+            .reduce(0){$0 + ($1.total_cents ?? 0)}
+    }
+    var body:some View {
+        ScrollView {
+            VStack(alignment:.leading,spacing:14){
+                if isAdmin {
+                    Label("Finanzen · Administrator",systemImage:"lock.open.fill").font(.title2.bold()).foregroundStyle(FTSTheme.gold)
+                    HStack{
+                        VStack(alignment:.leading){Text(String(format:"%.2f €",Double(liveRevenue)/100.0)).font(.largeTitle.bold()).foregroundStyle(.green);Text("Aktuelle bezahlte Aufträge im geladenen Event").font(.caption).foregroundStyle(FTSTheme.muted)}
+                        Spacer()
+                        VStack(alignment:.trailing){Text("\(state.orders.filter{$0.is_test != true}.count)").font(.title.bold());Text("Nicht-Test-Aufträge").font(.caption).foregroundStyle(FTSTheme.muted)}
+                    }.ftsCard()
+                    Text("Belege bleiben über die jeweiligen Aufträge und die Kundenabholung abrufbar. Test-/Sandbox-Aufträge werden hier nicht als Umsatz gezählt.")
+                        .foregroundStyle(FTSTheme.muted).ftsCard()
+                } else {
+                    Label("Finanzen nur für Administratoren",systemImage:"lock.fill").font(.title2.bold()).foregroundStyle(FTSTheme.gold)
+                    Text("Dieser Bereich ist für Mitarbeiter gesperrt.").foregroundStyle(FTSTheme.muted).ftsCard()
+                }
+            }.padding(16)
+        }
+    }
+}
+
+struct FTSHelpView:View {
+    let title:String
+    let text:String
+    var body:some View {
+        ScrollView {
+            VStack(alignment:.leading,spacing:12){
+                Text(title).font(.title.bold()).foregroundStyle(FTSTheme.gold)
+                Text(text).foregroundStyle(.white.opacity(0.88))
+                Text("Status- und Bedienflächen sind scrollbar; alle wichtigen Aktionen bleiben über die vorhandenen Sicherheitsabfragen und Sperren geschützt.")
+                    .font(.caption).foregroundStyle(FTSTheme.muted)
+            }.ftsCard().padding(16)
+        }
+    }
+}
+
+
 struct StockPill:View{
     let stock:StockSnapshot?
+
+    var levelColor:Color {
+        guard stock?.managed==true else{return .gray}
+        let n=stock?.safe_available ?? 0
+        if n==0{return .purple}
+        if n<=10{return .red}
+        if n<=20{return .orange}
+        return .green
+    }
+
     var body:some View{
         HStack(spacing:6){
             Image(systemName:"shippingbox.fill")
             Text(stock?.managed==true ? "\(stock?.safe_available ?? 0) sicher" : "nicht eingerichtet").bold()
-        }.font(.callout).padding(.horizontal,12).padding(.vertical,7)
-        .background((stock?.safe_available ?? 1)<=0 ? Color.red.opacity(0.15):Color.green.opacity(0.14))
+        }
+        .font(.callout).padding(.horizontal,12).padding(.vertical,7)
+        .background(levelColor.opacity(0.16))
+        .foregroundStyle(levelColor)
         .clipShape(Capsule())
     }
 }
@@ -1051,8 +1694,22 @@ struct OrderCard:View{
         HStack(alignment:.top,spacing:14){
             if let u=firstURL{
                 AsyncImage(url:u){phase in
-                    if let im=phase.image{im.resizable().scaledToFit()}
-                    else{ZStack{Color.black.opacity(0.2);ProgressView()}}
+                    switch phase {
+                    case .empty:
+                        ZStack{Color.black.opacity(0.2);ProgressView()}
+                    case .success(let image):
+                        image.resizable().scaledToFit()
+                    case .failure:
+                        ZStack {
+                            Color.black.opacity(0.2)
+                            VStack(spacing:6) {
+                                Image(systemName:"photo.badge.exclamationmark").font(.title2).foregroundStyle(.orange)
+                                Text("Vorschau nicht geladen").font(.caption2).foregroundStyle(FTSTheme.muted)
+                            }
+                        }
+                    @unknown default:
+                        Color.black.opacity(0.2)
+                    }
                 }.frame(width:150,height:190).background(.black.opacity(0.08)).clipShape(RoundedRectangle(cornerRadius:10))
             }
             VStack(alignment:.leading,spacing:8){
@@ -1141,6 +1798,7 @@ struct StockSheet:View{
     @State private var kind="ADD_STOCK"
     @State private var note=""
     @State private var code=""
+    @State private var booking=false
     var body:some View{
         VStack(alignment:.leading,spacing:16){
             HStack{Text("Materialbestand").font(.title2.bold());Spacer();Button("Schließen"){isPresented=false}}
@@ -1170,10 +1828,21 @@ struct StockSheet:View{
                 TextField("Notiz optional",text:$note)
             }
             SecureField("Persönlichen Code erneut eingeben",text:$code)
-            Button("Buchung bestätigen"){
+            Button(booking ? "Buchung läuft …" : "Buchung bestätigen"){
+                guard !booking else{return}
                 guard let q=Int(qty),q != 0 else{state.errorMessage="Gültige Menge eingeben.";return}
-                Task{if await state.adjustStock(kind:kind,quantity:q,code:code,note:note){code="";note="";isPresented=false}}
-            }.buttonStyle(.borderedProminent).disabled(code.isEmpty)
+                booking=true
+                Task{
+                    defer{booking=false}
+                    if await state.adjustStock(kind:kind,quantity:q,code:code,note:note){
+                        code=""
+                        note=""
+                        isPresented=false
+                    }
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(code.isEmpty || booking)
         }.padding(24).frame(width:680)
     }
     func metric(_ label:String,_ value:Int)->some View{
@@ -1196,8 +1865,19 @@ struct ReceiptSheet:View{
 
 // MARK: - App
 
+final class FTSAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        if let url=Bundle.main.url(forResource:"fts_printer_icon",withExtension:"jpg"),
+           let image=NSImage(contentsOf:url) {
+            NSApp.applicationIconImage=image
+        }
+    }
+}
+
+
 @main
 struct FTSPrinterApp: App {
+    @NSApplicationDelegateAdaptor(FTSAppDelegate.self) private var appDelegate
     @StateObject private var state=AppState()
     var body:some Scene{
         WindowGroup{
@@ -1210,7 +1890,15 @@ struct FTSPrinterApp: App {
                 }
             }
             .environmentObject(state)
-            .task{if state.phase == .boot{await state.bootstrap()}}
+            .preferredColorScheme(.dark)
+            .tint(FTSTheme.cyan)
+            .task {
+                if state.phase == .boot { await state.bootstrap() }
+                while !Task.isCancelled {
+                    if state.phase != .main { await state.checkPreLoginUpdate() }
+                    try? await Task.sleep(for:.seconds(30))
+                }
+            }
         }
         .windowStyle(.titleBar)
         .commands{

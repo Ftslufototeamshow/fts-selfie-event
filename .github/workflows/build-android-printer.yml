@@ -2,8 +2,14 @@ name: Build FTS Printer Android
 
 on:
   workflow_dispatch:
-  push:
+  pull_request:
     branches: [main]
+    paths:
+      - 'macos-app/**'
+      - 'android-app/**'
+      - '.github/workflows/**'
+  push:
+    branches: [main, printer-core-v1]
     paths:
       - 'android-app/**'
       - '.github/workflows/build-android-printer.yml'
@@ -34,20 +40,38 @@ jobs:
           cd android-app
           /tmp/gradle-8.10.2/bin/gradle --no-daemon assembleDebug
           mkdir -p ../dist-android
-          cp app/build/outputs/apk/debug/app-debug.apk ../dist-android/FTS-Printer-Samsung-v0.1.3.apk
+          cp app/build/outputs/apk/debug/app-debug.apk ../dist-android/FTS-Printer-Samsung-v0.2.1-design.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: FTS-Printer-Samsung
-          path: dist-android/FTS-Printer-Samsung-v0.1.3.apk
+          path: dist-android/FTS-Printer-Samsung-v0.2.1-design.apk
           if-no-files-found: error
       - name: Publish downloadable test release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-android-v0.1.3-test"
+          TAG="fts-printer-android-v0.2.1-design"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist-android/FTS-Printer-Samsung-v0.1.3.apk --clobber
+            gh release upload "$TAG" dist-android/FTS-Printer-Samsung-v0.2.1-design.apk --clobber
           else
-            gh release create "$TAG" dist-android/FTS-Printer-Samsung-v0.1.3.apk               --target "$GITHUB_SHA"               --title "FTS Printer Samsung / Android v0.1.3 TEST"               --prerelease               --notes "Installierbare interne Test-APK. Mitarbeiter-Login, Printer-Events, Selfie-Druckaufträge, Kundenbelege, Materialbestand, Mitarbeiterwechsel und lokaler Foto-Druck über Android Print Service."
+            gh release create "$TAG" dist-android/FTS-Printer-Samsung-v0.2.1-design.apk               --target "$GITHUB_SHA"               --title "FTS Printer Samsung / Android v0.2.1 · Schritt 2 Design"               --prerelease               --notes "Installierbare FTS Printer Schritt-2 APK im Schwarz/Gold/Cyan Design. Funktionskern bleibt erhalten; physischer Druck ist vor Ort am Samsung/Canon-System zu prüfen."
           fi
+
+      - name: Remove obsolete Android releases
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CURRENT="fts-printer-android-v0.2.1-design"
+          gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
+            case "$TAG" in
+              fts-printer-android-v*)
+                if [ "$TAG" != "$CURRENT" ]; then
+                  echo "Removing obsolete Android release $TAG"
+                  gh release delete "$TAG" --cleanup-tag -y || true
+                fi
+                ;;
+            esac
+          done

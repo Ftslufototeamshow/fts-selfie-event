@@ -2,8 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <application
         android:allowBackup="false"
+        android:icon="@drawable/fts_printer_icon"
         android:label="FTS Printer"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="false">

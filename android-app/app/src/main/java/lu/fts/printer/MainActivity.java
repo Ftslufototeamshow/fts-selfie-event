@@ -36,23 +36,34 @@ public class MainActivity extends Activity {
     final ArrayList<Staff> staff = new ArrayList<>();
     final ArrayList<EventModel> events = new ArrayList<>();
     final ArrayList<OrderModel> orders = new ArrayList<>();
+    final ArrayList<JSONObject> workUnits = new ArrayList<>();
+    final ArrayList<JSONObject> pickupRows = new ArrayList<>();
+    final ArrayList<JSONObject> printerNodes = new ArrayList<>();
+    final ArrayList<JSONObject> consumableRows = new ArrayList<>();
+    final ArrayList<JSONObject> archiveRows = new ArrayList<>();
 
     SharedPreferences prefs;
     String deviceToken = "", sessionToken = "", currentUser = "", currentRole = "";
     String selectedEventToken = "";
     JSONObject stock = null;
     LinearLayout root, content;
+    ScrollView mainScroll;
+    final Set<String> actionLocks = Collections.synchronizedSet(new HashSet<>());
     Spinner eventSpinner;
     TextView statusText, stockText, userText;
     boolean onMain = false;
     boolean recoveringAuth = false;
+    long lastNetworkNoticeAt = 0L;
+    long lastUpdateCheckAt = 0L;
     String activeScreen = "orders";
+    String pickupFilter = "";
     TextView eventInfoText;
     Uri selectedLocalPhoto = null;
     String selectedLocalName = null;
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         prefs = getSharedPreferences("fts_printer", MODE_PRIVATE);
         deviceToken = prefs.getString("device_token","");
         sessionToken = prefs.getString("session_token","");
@@ -66,23 +77,40 @@ public class MainActivity extends Activity {
         io.shutdownNow();
     }
 
+
     void buildBase() {
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(18), dp(18), dp(12));
-        root.setBackgroundColor(Color.rgb(7,23,25));
+        root.setPadding(0,0,0,0);
+        root.setBackgroundColor(Color.rgb(3,7,9));
 
-        TextView title = txt("FTS Printer", 28, Color.WHITE, true);
-        root.addView(title);
-        statusText = txt("Startet …", 12, Color.rgb(150,170,167), false);
-        root.addView(statusText);
+        LinearLayout appbar=new LinearLayout(this);
+        appbar.setOrientation(LinearLayout.HORIZONTAL);
+        appbar.setGravity(Gravity.CENTER_VERTICAL);
+        appbar.setPadding(dp(12),dp(10),dp(12),dp(10));
+        appbar.setBackgroundColor(Color.rgb(4,14,18));
+        ImageView icon=brandImage("fts_printer_icon",dp(48),ImageView.ScaleType.CENTER_CROP);
+        appbar.addView(icon,new LinearLayout.LayoutParams(dp(48),dp(48)));
+        LinearLayout titles=new LinearLayout(this);titles.setOrientation(LinearLayout.VERTICAL);titles.setPadding(dp(10),0,0,0);
+        titles.addView(txt("FTS Printer",20,Color.WHITE,true));
+        statusText=txt("Startet …",11,Color.rgb(150,170,167),false);
+        titles.addView(statusText);
+        appbar.addView(titles,new LinearLayout.LayoutParams(0,-2,1));
+        TextView bell=txt("♢",24,Color.rgb(218,176,91),true);bell.setGravity(Gravity.CENTER);
+        appbar.addView(bell,new LinearLayout.LayoutParams(dp(42),dp(42)));
+        root.addView(appbar,new LinearLayout.LayoutParams(-1,-2));
 
-        ScrollView sv = new ScrollView(this);
+        mainScroll = new ScrollView(this);
+        mainScroll.setFillViewport(true);
+        mainScroll.setVerticalScrollBarEnabled(true);
+        mainScroll.setScrollbarFadingEnabled(false);
+        mainScroll.setSmoothScrollingEnabled(true);
+        mainScroll.setClipToPadding(false);
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(0,dp(18),0,dp(30));
-        sv.addView(content);
-        root.addView(sv, new LinearLayout.LayoutParams(-1,0,1));
+        content.setPadding(dp(12),dp(10),dp(12),dp(32));
+        mainScroll.addView(content,new ScrollView.LayoutParams(-1,-2));
+        root.addView(mainScroll, new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
     }
 
@@ -232,29 +260,53 @@ public class MainActivity extends Activity {
         });
     }
 
+
     void showMain() {
-        onMain=true; activeScreen="orders"; clear();
-        LinearLayout top=row();
-        LinearLayout left=new LinearLayout(this);left.setOrientation(LinearLayout.VERTICAL);
-        userText=txt("FTS Printer",22,Color.WHITE,true);
-        TextView sub=txt(currentUser+" · "+(currentRole.equals("printer_admin")?"Printer-Administrator":"Mitarbeiter"),12,Color.rgb(150,170,167),false);
-        left.addView(userText);left.addView(sub);
-        top.addView(left,new LinearLayout.LayoutParams(0,-2,1));
-        Button switcher=secondaryButton("Mitarbeiter wechseln");
-        top.addView(switcher);
-        content.addView(top);
+        onMain=true; activeScreen="dashboard"; clear();
+
+        ImageView hero=brandImage("fts_printer_header",dp(178),ImageView.ScaleType.CENTER_CROP);
+        hero.setBackgroundColor(Color.BLACK);
+        content.addView(hero,new LinearLayout.LayoutParams(-1,dp(178)));
+
+        LinearLayout identity=card();
+        identity.addView(txt("FTS PRINTER",22,Color.rgb(226,182,91),true));
+        userText=txt(currentUser,18,Color.WHITE,true);
+        identity.addView(userText);
+        identity.addView(txt(currentRole.equals("printer_admin")?"Administrator":"Mitarbeiter",12,Color.rgb(155,172,170),false));
+        content.addView(identity);
+
+        LinearLayout quick=row();
+        Button reloadEvents=button("↻  Events neu laden");
+        Button switcher=button("👥  Mitarbeiter wechseln");
+        quick.addView(reloadEvents,new LinearLayout.LayoutParams(0,dp(52),1));
+        quick.addView(switcher,new LinearLayout.LayoutParams(0,dp(52),1));
+        content.addView(quick);
         switcher.setOnClickListener(v->logoutAndSwitch());
 
-        addNote("Die App zeigt nur Printer-Funktionen. Firmenbuchhaltung und Umsätze anderer Events sind nicht freigegeben.");
-        Button reloadEvents=secondaryButton("Events neu laden");
-        content.addView(reloadEvents);
-
+        LinearLayout eventCard=card();
+        eventCard.addView(txt("Event auswählen",12,Color.rgb(226,182,91),true));
         eventSpinner=new Spinner(this);
         eventSpinner.setPopupBackgroundResource(android.R.color.white);
-        content.addView(eventSpinner);
-        eventInfoText=txt("Event wird geladen …",14,Color.WHITE,true);
-        eventInfoText.setPadding(0,dp(4),0,dp(8));
-        content.addView(eventInfoText);
+        eventCard.addView(eventSpinner,new LinearLayout.LayoutParams(-1,dp(52)));
+        eventInfoText=txt("Event wird geladen …",13,Color.rgb(210,218,216),true);
+        eventInfoText.setPadding(0,dp(6),0,0);
+        eventCard.addView(eventInfoText);
+        content.addView(eventCard);
+
+        LinearLayout stockRow=card();
+        LinearLayout stockTop=row();
+        stockText=txt("Materialbestand —",16,Color.WHITE,true);
+        stockTop.addView(stockText,new LinearLayout.LayoutParams(0,-2,1));
+        Button stockBtn=secondaryButton("Bestand öffnen");
+        stockTop.addView(stockBtn);
+        stockRow.addView(stockTop);
+        stockRow.addView(txt("Papier / Farbfilm / RP-108 · Bestand und Verbrauch werden live überwacht.",11,Color.rgb(145,165,162),false));
+        content.addView(stockRow);
+        stockBtn.setOnClickListener(v->showStockDialog());
+
+        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setTag("body");
+        content.addView(body);
+
         eventSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
             public void onNothingSelected(android.widget.AdapterView<?> p){}
             public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){
@@ -263,34 +315,16 @@ public class MainActivity extends Activity {
                     selectedEventToken=e.token;
                     eventInfoText.setText(e.title+(e.location.isEmpty()?"":" · "+e.location)+(e.date.isEmpty()?"":" · "+e.date));
                     refreshSelected();
+                    renderDashboard(body);
                 }
             }
         });
 
-        LinearLayout stockRow=row();
-        stockText=txt("Bestand —",16,Color.WHITE,true);
-        stockRow.addView(stockText,new LinearLayout.LayoutParams(0,-2,1));
-        Button stockBtn=button("Bestand");
-        stockRow.addView(stockBtn);
-        content.addView(stockRow);
-        stockBtn.setOnClickListener(v->showStockDialog());
-        reloadEvents.setOnClickListener(v->{View b=findTagged(content,"body");if(b instanceof LinearLayout)loadEvents((LinearLayout)b);});
-
-        LinearLayout tab=row();
-        Button ordersBtn=button("Selfie-Aufträge");
-        Button cameraBtn=secondaryButton("Kamera / Handyfoto");
-        tab.addView(ordersBtn,new LinearLayout.LayoutParams(0,-2,1));
-        tab.addView(cameraBtn,new LinearLayout.LayoutParams(0,-2,1));
-        content.addView(tab);
-
-        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setTag("body");
-        content.addView(body);
-        ordersBtn.setOnClickListener(v->{activeScreen="orders";renderOrders(body);});
-        cameraBtn.setOnClickListener(v->{activeScreen="camera";renderCamera(body);});
-
+        reloadEvents.setOnClickListener(v->loadEvents(body));
         loadEvents(body);
+        checkUpdate();
         handler.removeCallbacksAndMessages(null);
-        handler.postDelayed(new Runnable(){public void run(){if(onMain){refreshSelected();handler.postDelayed(this,5000);}}},5000);
+        handler.postDelayed(new Runnable(){public void run(){if(onMain){refreshSelected();if(System.currentTimeMillis()-lastUpdateCheckAt>=900000L)checkUpdate();handler.postDelayed(this,5000);}}},5000);
     }
 
     void loadEvents(LinearLayout body) {
@@ -338,7 +372,7 @@ public class MainActivity extends Activity {
             EventModel current=events.get(selectedIndex);
             eventInfoText.setText(current.title+(current.location.isEmpty()?"":" · "+current.location)+(current.date.isEmpty()?"":" · "+current.date));
             refreshSelected();
-            if("camera".equals(activeScreen))renderCamera(body);else renderOrders(body);
+            renderActive(body);
         });
     }
 
@@ -348,38 +382,202 @@ public class MainActivity extends Activity {
             if(result instanceof JSONObject){
                 stock=(JSONObject)result;
                 int available=stock.optInt("safe_available",0);
-                stockText.setText("Bestand: "+available+" sicher");
-                stockText.setTextColor(available<=0?Color.rgb(255,120,120):Color.WHITE);
+                int cameraWaiting=stock.optInt("camera_waiting",0);
+                stockText.setText("Bestand: "+available+" sicher"+(cameraWaiting>0?" · Kamera wartet "+cameraWaiting:""));
+                int stockColor;
+                if(available==0)stockColor=Color.rgb(190,120,255);
+                else if(available<=10)stockColor=Color.rgb(255,105,105);
+                else if(available<=20)stockColor=Color.rgb(255,180,70);
+                else stockColor=Color.rgb(90,220,140);
+                stockText.setTextColor(stockColor);
             }
         });
         rpc("fts_printer_orders_v73",obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken), result -> {
             if(!(result instanceof JSONArray))return;
             orders.clear(); JSONArray a=(JSONArray)result;
             for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)orders.add(new OrderModel(o));}
-            View b=findTagged(content,"body");
-            if(b instanceof LinearLayout){
-                if("camera".equals(activeScreen))renderCamera((LinearLayout)b);
-                else renderOrders((LinearLayout)b);
-            }
+            renderActiveBody();
             status("Aktuell · "+new SimpleDateFormat("HH:mm",Locale.GERMANY).format(new Date()));
         });
+        rpc("fts_printer_queue_v80",obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken), result -> {
+            if(result instanceof JSONArray){
+                workUnits.clear();JSONArray a=(JSONArray)result;
+                for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)workUnits.add(o);}
+                renderActiveBody();
+            }
+        });
+        rpc("fts_printer_pickups_v80",obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken), result -> {
+            if(result instanceof JSONArray){
+                pickupRows.clear();JSONArray a=(JSONArray)result;
+                for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)pickupRows.add(o);}
+                renderActiveBody();
+            }
+        });
+        rpc("fts_printer_nodes_v80",obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken), result -> {
+            if(result instanceof JSONArray){
+                printerNodes.clear();JSONArray a=(JSONArray)result;
+                for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)printerNodes.add(o);}
+                renderActiveBody();
+            }
+        });
+        rpc("fts_printer_consumables_v81",obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken), result -> {
+            if(result instanceof JSONArray){
+                consumableRows.clear();JSONArray a=(JSONArray)result;
+                for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)consumableRows.add(o);}
+                renderActiveBody();
+            }
+        });
+        rpc("fts_printer_archived_v80",obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken,"p_limit",100), result -> {
+            if(result instanceof JSONArray){
+                archiveRows.clear();JSONArray a=(JSONArray)result;
+                for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)archiveRows.add(o);}
+                renderActiveBody();
+            }
+        });
+    }
+
+    void renderActiveBody(){
+        View b=findTagged(content,"body");
+        if(b instanceof LinearLayout)renderActive((LinearLayout)b);
+    }
+
+
+    void renderDashboard(LinearLayout body){
+        activeScreen="dashboard";
+        body.removeAllViews();
+        scrollTop();
+
+        body.addView(txt("Dashboard",22,Color.WHITE,true));
+        body.addView(noteView("Schnellübersicht für Eventbetrieb, Druckaufträge, Material, Import und Printer-Status."));
+
+        LinearLayout material=card();
+        material.addView(txt("▣  Materialbestand",16,Color.rgb(226,182,91),true));
+        int available=stock==null?0:stock.optInt("safe_available",0);
+        material.addView(txt(available+" verfügbare Prints",26,available<=10?Color.rgb(255,120,110):Color.rgb(80,220,150),true));
+        material.addView(txt("RP-108 · Papier / Farbfilm · sicherer Bestand",12,Color.rgb(150,170,167),false));
+        material.setOnClickListener(v->showStockDialog());
+        body.addView(material);
+
+        int active=0,uncertain=0;
+        for(JSONObject u:workUnits){
+            String s=u.optString("unit_status","");
+            if("READY".equals(s)||"CLAIMED".equals(s)||"PRINTING".equals(s)||"UNCERTAIN".equals(s))active++;
+            if("UNCERTAIN".equals(s))uncertain++;
+        }
+        LinearLayout jobs=card();
+        jobs.addView(txt("▤  Druckaufträge",16,Color.rgb(226,182,91),true));
+        jobs.addView(txt(active+" aktiv · "+uncertain+" prüfen",22,Color.WHITE,true));
+        jobs.addView(txt("Mehrdrucker-Verteilung und Warteschlange",12,Color.rgb(150,170,167),false));
+        jobs.setOnClickListener(v->renderOrders(body));
+        body.addView(jobs);
+
+        LinearLayout media=card();
+        media.addView(txt("▣  SD-Karte / Import",16,Color.rgb(226,182,91),true));
+        media.addView(txt("Handy-/SD-Foto auswählen",18,Color.WHITE,true));
+        media.addView(txt("Mobiler Notfall-Import; der automatische Event-Import läuft über den Mac-Print-Host.",12,Color.rgb(150,170,167),false));
+        media.setOnClickListener(v->renderCamera(body));
+        body.addView(media);
+
+        LinearLayout printers=card();
+        printers.addView(txt("〽  Printer-Aktivität",16,Color.rgb(226,182,91),true));
+        printers.addView(txt(printerNodes.size()+" Printer verbunden",21,Color.WHITE,true));
+        String printerLine="";
+        for(int i=0;i<Math.min(2,printerNodes.size());i++){
+            JSONObject p=printerNodes.get(i);
+            if(i>0)printerLine+=" · ";
+            printerLine+=p.optString("display_name","Printer")+": "+p.optString("state","—");
+        }
+        if(!printerLine.isEmpty())printers.addView(txt(printerLine,12,Color.rgb(150,170,167),false));
+        printers.setOnClickListener(v->renderPrinters(body));
+        body.addView(printers);
+
+        LinearLayout pickup=card();
+        pickup.addView(txt("□  Kundenabholung",16,Color.rgb(226,182,91),true));
+        pickup.addView(txt(pickupRows.size()+" wartet/warten auf Abholung",19,Color.WHITE,true));
+        pickup.setOnClickListener(v->renderPickups(body,""));
+        body.addView(pickup);
+
+        LinearLayout finance=card();
+        if("printer_admin".equals(currentRole)){
+            int cents=0;
+            for(OrderModel o:orders)if(!o.test && ("COMPLETED".equalsIgnoreCase(o.paymentStatus)||"COVERED".equalsIgnoreCase(o.paymentStatus)))cents+=o.totalCents;
+            finance.addView(txt("🔓  Finanzen · Administrator",16,Color.rgb(226,182,91),true));
+            finance.addView(txt(String.format(Locale.GERMANY,"%.2f €",cents/100.0),24,Color.rgb(80,220,150),true));
+            finance.addView(txt("Aktuelle bezahlte Nicht-Test-Aufträge im geladenen Event",11,Color.rgb(150,170,167),false));
+        } else {
+            finance.addView(txt("🔒  Finanzen nur für Administratoren",15,Color.rgb(226,182,91),true));
+            finance.addView(txt("Für Mitarbeiter gesperrt.",12,Color.rgb(150,170,167),false));
+        }
+        body.addView(finance);
+    }
+
+    void addDashboardBack(LinearLayout body){
+        Button back=secondaryButton("‹  Dashboard");
+        body.addView(back);
+        back.setOnClickListener(v->renderDashboard(body));
+    }
+
+    void renderActive(LinearLayout body){
+        if("dashboard".equals(activeScreen))renderDashboard(body);
+        else if("camera".equals(activeScreen))renderCamera(body);
+        else if("pickup".equals(activeScreen))renderPickups(body,pickupFilter);
+        else if("printers".equals(activeScreen))renderPrinters(body);
+        else renderOrders(body);
+    }
+
+    boolean hasActiveWorkUnits(String orderId){
+        for(JSONObject u:workUnits){
+            if(!orderId.equals(u.optString("order_id")))continue;
+            String s=u.optString("unit_status","");
+            if("READY".equals(s)||"CLAIMED".equals(s)||"PRINTING".equals(s)||"UNCERTAIN".equals(s))return true;
+        }
+        return false;
     }
 
     void renderOrders(LinearLayout body) {
         activeScreen="orders";
         body.removeAllViews();
-        TextView h=txt("Aktuelle Druckaufträge",20,Color.WHITE,true);body.addView(h);
-        if(orders.isEmpty()){body.addView(noteView("Keine aktuellen Druckaufträge."));return;}
-        for(OrderModel o:orders) body.addView(orderCard(o));
+        scrollTop();
+        addDashboardBack(body);
+        TextView h=txt("Automatische Druckaufträge",20,Color.WHITE,true);body.addView(h);
+        body.addView(noteView("Der Mac-Print-Host verteilt jedes bezahlte Exemplar automatisch auf den nächsten freien Drucker. Das Samsung löst keinen zweiten Druck aus."));
+
+        int shown=0;
+        for(OrderModel o:orders){
+            boolean active=o.ready||hasActiveWorkUnits(o.id);
+            if(!active)continue;
+            shown++;
+            body.addView(orderCard(o));
+        }
+        if(shown==0)body.addView(noteView("Keine aktuellen Druckaufträge. Fertige Aufträge stehen unter Abholung."));
     }
 
     View orderCard(OrderModel o) {
         LinearLayout card=card();
-        TextView status=txt(o.ready?"DRUCKBEREIT":safe(o.printStatus,"—"),12,o.ready?Color.rgb(80,220,140):Color.rgb(180,190,188),true);
-        card.addView(status);
-        TextView pickup=txt("Abholcode "+safe(o.pickupCode,"------"),24,Color.WHITE,true);
-        card.addView(pickup);
+        int totalUnits=0, printedUnits=0, uncertainUnits=0;
+        ArrayList<JSONObject> uncertain=new ArrayList<>();
+        for(JSONObject u:workUnits){
+            if(!o.id.equals(u.optString("order_id")))continue;
+            totalUnits++;
+            String us=u.optString("unit_status");
+            if("PRINTED".equals(us))printedUnits++;
+            if("UNCERTAIN".equals(us)){uncertainUnits++;uncertain.add(u);}
+        }
+
+        String top;
+        int topColor=Color.rgb(180,190,188);
+        if("PRINTED".equalsIgnoreCase(o.printStatus)&&"READY_FOR_PICKUP".equalsIgnoreCase(o.pickupStatus)){
+            top="ABHOLBEREIT";topColor=Color.rgb(80,220,140);
+        } else if(uncertainUnits>0){
+            top="PRÜFEN";topColor=Color.rgb(255,180,60);
+        } else if(o.ready){
+            top="IN WARTESCHLANGE";topColor=Color.rgb(80,220,140);
+        } else top=safe(o.printStatus,"—");
+
+        card.addView(txt(top,12,topColor,true));
+        card.addView(txt("Abholcode "+safe(o.pickupCode,"------"),24,Color.WHITE,true));
         card.addView(txt((o.qty)+" × 10×15 · Zahlung "+safe(o.paymentStatus,"—"),14,Color.rgb(170,185,182),false));
+        if(totalUnits>0)card.addView(txt("Druckfortschritt: "+printedUnits+"/"+totalUnits,14,Color.rgb(190,205,202),true));
         if(o.test)card.addView(txt("TEST / SANDBOX",12,Color.rgb(255,190,70),true));
 
         if(o.firstPath!=null&&!o.firstPath.isEmpty()){
@@ -388,28 +586,205 @@ public class MainActivity extends Activity {
             loadImage(o.firstPath,img);
         }
 
-        LinearLayout buttons=row();
-        if(o.ready){
-            Button p=button("Druckdialog öffnen");
-            Button done=secondaryButton("Druck erfolgreich");
-            buttons.addView(p);buttons.addView(done);
-            p.setOnClickListener(v->printOrderImage(o));
-            done.setOnClickListener(v->confirmPrinted(o));
-        } else if("PRINTED".equalsIgnoreCase(o.printStatus)&&"READY_FOR_PICKUP".equalsIgnoreCase(o.pickupStatus)){
-            Button pick=button("Abgeholt bestätigen");buttons.addView(pick);pick.setOnClickListener(v->markPickedUp(o));
+        for(JSONObject u:uncertain){
+            LinearLayout warn=row();
+            warn.addView(txt("Status unklar · Exemplar "+u.optInt("copy_index",1),12,Color.rgb(255,190,70),true),new LinearLayout.LayoutParams(0,-2,1));
+            Button retry=secondaryButton("Nicht gedruckt · erneut");
+            warn.addView(retry);
+            retry.setOnClickListener(v->requeueUncertain(u));
+            card.addView(warn);
         }
+
+        LinearLayout buttons=row();
         if(o.receiptNumber!=null&&!o.receiptNumber.isEmpty()){
-            Button receipt=secondaryButton("Kundenbeleg");buttons.addView(receipt);receipt.setOnClickListener(v->showReceipt(o));
+            Button receipt=secondaryButton("Beleg für Kunden");buttons.addView(receipt);receipt.setOnClickListener(v->showReceipt(o));
+        }
+        if("PRINTED".equalsIgnoreCase(o.printStatus)&&"READY_FOR_PICKUP".equalsIgnoreCase(o.pickupStatus)){
+            Button openPickup=button("Zur Abholung");buttons.addView(openPickup);
+            openPickup.setOnClickListener(v->{activeScreen="pickup";pickupFilter=safe(o.pickupCode,"");renderPickups((LinearLayout)findTagged(content,"body"),pickupFilter);});
         }
         card.addView(buttons);
         return card;
     }
 
+    void requeueUncertain(JSONObject unit){
+        String unitId=unit.optString("unit_id","");
+        if(unitId.isEmpty())return;
+        new AlertDialog.Builder(this).setTitle("Druck wirklich nicht erfolgt?")
+                .setMessage("Nur erneut freigeben, wenn am Drucker geprüft wurde, dass dieses Exemplar NICHT herausgekommen ist. Sonst entsteht ein Doppelprint.")
+                .setNegativeButton("Abbrechen",null)
+                .setPositiveButton("Nicht gedruckt · erneut",(d,w)->{
+                    String lock="uncertain:"+unitId;
+                    if(!beginAction(lock,null))return;
+                    rpc("fts_printer_fail_unit_v80",obj(
+                            "p_device_token",deviceToken,"p_session_token",sessionToken,"p_unit_id",unitId,
+                            "p_error","Samsung: Mitarbeiter bestätigt nicht gedruckt","p_confirm_not_printed",true
+                    ),r->{endAction(lock,null);toast("Exemplar wieder freigegeben.");refreshSelected();});
+                })
+                .show();
+    }
+
+    void renderPickups(LinearLayout body,String filter){
+        activeScreen="pickup";
+        pickupFilter=filter==null?"":filter;
+        body.removeAllViews();
+        scrollTop();
+        addDashboardBack(body);
+        body.addView(txt("Kundenabholung",20,Color.WHITE,true));
+        body.addView(noteView(pickupRows.size()+" Auftrag"+(pickupRows.size()==1?"":"e")+" warten auf Abholung."));
+
+        LinearLayout searchRow=row();
+        EditText search=input("Abholcode / A001 / B002",false);search.setText(pickupFilter);
+        Button go=button("Suchen");
+        searchRow.addView(search,new LinearLayout.LayoutParams(0,dp(52),1));searchRow.addView(go);
+        body.addView(searchRow);
+        go.setOnClickListener(v->{pickupFilter=search.getText().toString().trim();renderPickups(body,pickupFilter);});
+
+        String q=pickupFilter.toUpperCase(Locale.ROOT);
+        int shown=0;
+        for(JSONObject p:pickupRows){
+            String code=p.optString("customer_code","");
+            if(!q.isEmpty()&&!code.toUpperCase(Locale.ROOT).contains(q))continue;
+            shown++;
+            LinearLayout card=card();
+            card.addView(txt(code,26,Color.WHITE,true));
+            String kind=p.optString("kind","SELFIE");
+            int qty=p.optInt("quantity",0);
+            card.addView(txt(kind+" · "+qty+" Ausdruck"+(qty==1?"":"e"),13,Color.rgb(170,185,182),false));
+            LinearLayout actions=row();
+            if("SELFIE".equalsIgnoreCase(kind)){
+                OrderModel found=null;
+                String id=p.optString("id","");
+                for(OrderModel o:orders)if(o.id.equals(id)){found=o;break;}
+                if(found!=null&&found.receiptNumber!=null&&!found.receiptNumber.isEmpty()){
+                    OrderModel receiptOrder=found;
+                    Button receipt=secondaryButton("Beleg für Kunden");actions.addView(receipt);receipt.setOnClickListener(v->showReceipt(receiptOrder));
+                }
+            }
+            Button done=button("Foto abgeholt");actions.addView(done);
+            done.setOnClickListener(v->markPickupRow(p,done));
+            card.addView(actions);
+            body.addView(card);
+        }
+        if(shown==0)body.addView(noteView("Keine passende Abholung gefunden."));
+        body.addView(txt("Archiv · "+archiveRows.size(),16,Color.WHITE,true));
+        int n=Math.min(20,archiveRows.size());
+        for(int i=0;i<n;i++){
+            JSONObject a=archiveRows.get(i);
+            LinearLayout ar=row();
+            ar.addView(txt(a.optString("customer_code","—")+" · "+a.optString("kind","")+" · "+a.optInt("quantity",0)+" ×",12,Color.rgb(150,170,167),false),new LinearLayout.LayoutParams(0,-2,1));
+            if("printer_admin".equals(currentRole)){
+                Button remove=secondaryButton("Entfernen");
+                ar.addView(remove);
+                remove.setOnClickListener(v->hideArchived(a,remove));
+            }
+            body.addView(ar);
+        }
+    }
+
+    void hideArchived(JSONObject a,Button source){
+        String kind=a.optString("kind","");
+        String id=a.optString("id","");
+        if(kind.isEmpty()||id.isEmpty())return;
+        String lock="archive:"+id;
+        new AlertDialog.Builder(this)
+                .setTitle("Aus Archiv entfernen?")
+                .setMessage("Der Eintrag verschwindet aus der operativen Archivliste. Kundenbeleg und Buchhaltungsdaten werden dadurch nicht gelöscht.")
+                .setNegativeButton("Abbrechen",null)
+                .setPositiveButton("Entfernen",(d,w)->{
+                    if(!beginAction(lock,source))return;
+                    rpc("fts_printer_hide_archived_v82",obj(
+                            "p_device_token",deviceToken,
+                            "p_session_token",sessionToken,
+                            "p_kind",kind,
+                            "p_item_id",id
+                    ),r->{
+                        endAction(lock,source);
+                        toast(Boolean.TRUE.equals(r)?"Aus Archiv entfernt.":"Eintrag konnte nicht entfernt werden.");
+                        refreshSelected();
+                    });
+                })
+                .show();
+    }
+
+    void markPickupRow(JSONObject p,Button source){
+        String kind=p.optString("kind","SELFIE");
+        String id=p.optString("id","");
+        String lock="pickup:"+id;
+        if(!beginAction(lock,source))return;
+        String rpcName="LOCAL".equalsIgnoreCase(kind)?"fts_printer_mark_local_picked_up_archive_v80":"fts_printer_mark_picked_up_archive_v80";
+        JSONObject args="LOCAL".equalsIgnoreCase(kind)
+                ?obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_local_job_id",id)
+                :obj("p_device_token",deviceToken,"p_session_token",sessionToken,"p_order_id",id);
+        rpc(rpcName,args,r->{
+            endAction(lock,source);
+            toast(Boolean.TRUE.equals(r)?"Abgeholt und archiviert.":"Auftrag ist nicht abholbereit.");
+            pickupFilter="";
+            refreshSelected();
+        });
+    }
+
+    void renderPrinters(LinearLayout body){
+        activeScreen="printers";
+        body.removeAllViews();
+        scrollTop();
+        addDashboardBack(body);
+        body.addView(txt("Printer-Aktivität",20,Color.WHITE,true));
+        body.addView(noteView("Die physischen Druckjobs werden vom Mac-Print-Host parallel auf die freigegebenen Drucker verteilt."));
+        if(printerNodes.isEmpty()){body.addView(noteView("Noch kein aktiver Mac-Printer gemeldet."));return;}
+        for(JSONObject n:printerNodes){
+            String key=n.optString("printer_key","");
+            LinearLayout card=card();
+            card.addView(txt(n.optString("display_name",key.isEmpty()?"Printer":key),18,Color.WHITE,true));
+            String st=n.optString("state","—");
+            int eta=n.optInt("eta_seconds",0);
+            card.addView(txt(st+(eta>0?" · ca. "+eta+" Sek.":""),14,"ERROR".equals(st)?Color.rgb(255,120,120):Color.rgb(130,220,170),true));
+            JSONObject cons=findConsumable(key);
+            String paper=cons==null||cons.isNull("paper_remaining")?"unbekannt":String.valueOf(cons.optInt("paper_remaining"));
+            String film=cons==null||cons.isNull("film_remaining")?"unbekannt":String.valueOf(cons.optInt("film_remaining"));
+            card.addView(txt("Papier: "+paper+" / 18 · Farbfilm: "+film+" / 54",13,Color.rgb(190,205,202),true));
+            if("0".equals(paper)||"0".equals(film)){
+                String warn=("0".equals(paper)&&"0".equals(film))?"Papier und Farbfilm leer":("0".equals(paper)?"Papier leer":"Farbfilm leer");
+                card.addView(txt(warn+" · automatische Druckverteilung wartet.",12,Color.rgb(255,120,120),true));
+            }
+            LinearLayout supplies=row();
+            Button paperBtn=secondaryButton("18 Blatt eingelegt");
+            Button filmBtn=secondaryButton("Farbfilm eingelegt");
+            supplies.addView(paperBtn);supplies.addView(filmBtn);card.addView(supplies);
+            paperBtn.setOnClickListener(v->loadConsumable(key,"PAPER_PACK",paperBtn));
+            filmBtn.setOnClickListener(v->loadConsumable(key,"FILM_CASSETTE",filmBtn));
+            String dev=n.optString("device_label","");
+            if(!dev.isEmpty())card.addView(txt(dev,12,Color.rgb(150,170,167),false));
+            String err=n.optString("last_error","");
+            if(!err.isEmpty())card.addView(txt(err,12,Color.rgb(255,170,80),true));
+            body.addView(card);
+        }
+    }
+
+    JSONObject findConsumable(String printerKey){
+        for(JSONObject c:consumableRows)if(printerKey.equals(c.optString("printer_key","")))return c;
+        return null;
+    }
+
+    void loadConsumable(String printerKey,String component,Button source){
+        String lock="consumable:"+printerKey+":"+component;
+        if(!beginAction(lock,source))return;
+        rpc("fts_printer_load_component_v81",obj(
+                "p_device_token",deviceToken,"p_session_token",sessionToken,
+                "p_event_token",selectedEventToken,"p_printer_key",printerKey,"p_component",component
+        ),r->{
+            endAction(lock,source);
+            toast("Materialstatus aktualisiert.");
+            refreshSelected();
+        });
+    }
+
     void renderCamera(LinearLayout body) {
         activeScreen="camera";
         body.removeAllViews();
-        body.addView(txt("Kamera / Handyfoto",20,Color.WHITE,true));
-        body.addView(noteView("Fotos bleiben auf diesem Samsung lokal. Es wird nichts in die öffentliche Selfie-Galerie hochgeladen."));
+        addDashboardBack(body);
+        body.addView(txt("SD-Karte / Import",20,Color.WHITE,true));
+        body.addView(noteView("Handy-Notfallprint. Der normale Eventbetrieb mit SD-Karte/WLAN und automatischer Mehrdrucker-Verteilung läuft über den Mac-Print-Host. Fotos bleiben lokal und gehen nicht in die öffentliche Selfie-Galerie."));
         Button choose=button("Foto von Handy / SD-Karte auswählen");
         body.addView(choose);
         TextView sel=txt(selectedLocalName==null?"Noch kein Foto ausgewählt.":"Ausgewählt: "+selectedLocalName,13,Color.rgb(170,185,182),false);
@@ -463,9 +838,9 @@ public class MainActivity extends Activity {
     }
 
     void markPickedUp(OrderModel o){
-        rpc("fts_printer_mark_picked_up_v73",obj(
+        rpc("fts_printer_mark_picked_up_archive_v80",obj(
                 "p_device_token",deviceToken,"p_session_token",sessionToken,"p_order_id",o.id
-        ),r->{toast(Boolean.TRUE.equals(r)?"Abholung gespeichert.":"Noch nicht abholbereit.");refreshSelected();});
+        ),r->{toast(Boolean.TRUE.equals(r)?"Abgeholt und archiviert.":"Noch nicht abholbereit.");refreshSelected();});
     }
 
     void showReceipt(OrderModel o){
@@ -495,11 +870,27 @@ public class MainActivity extends Activity {
         });
     }
 
+    void checkUpdate(){
+        lastUpdateCheckAt=System.currentTimeMillis();
+        rpc("fts_printer_latest_release_v80",obj("p_platform","android"),result->{
+            if(result instanceof JSONArray){
+                JSONArray a=(JSONArray)result;
+                if(a.length()>0){
+                    JSONObject rel=a.optJSONObject(0);
+                    if(rel!=null && rel.optInt("build_number",0)>BuildConfig.VERSION_CODE){
+                        AppUpdater.offer(this,rel);
+                    }
+                }
+            }
+        });
+    }
+
     void showStockDialog(){
         LinearLayout w=new LinearLayout(this);w.setOrientation(LinearLayout.VERTICAL);w.setPadding(dp(20),dp(6),dp(20),0);
         if(stock!=null){
             w.addView(txt("Sicher verfügbar: "+stock.optInt("safe_available",0),22,Color.DKGRAY,true));
-            w.addView(txt("Selfie gedruckt: "+stock.optInt("selfie_printed",0)+" · Kamera: "+stock.optInt("camera_prints",0),13,Color.GRAY,false));
+            w.addView(txt("Selfie gedruckt: "+stock.optInt("selfie_printed",0)+" · Kamera: "+stock.optInt("camera_prints",0)+" · Kamera wartet: "+stock.optInt("camera_waiting",0),13,Color.GRAY,false));
+            w.addView(txt("RP-108: 108 Prints = 6 × 18 Blatt + 2 × 54 Farbfilm",12,Color.GRAY,false));
             if(stock.optBoolean("open_stock_unknown",false))w.addView(txt("Geöffneter Bestand unbekannt – wird nicht für neue Zahlungen gerechnet.",12,Color.rgb(170,110,0),true));
         }
         Spinner kind=new Spinner(this);
@@ -515,14 +906,23 @@ public class MainActivity extends Activity {
                 .setNegativeButton("Schließen",null)
                 .setPositiveButton("Buchen",null).create();
         dlg.setOnShowListener(x->dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            Button book=dlg.getButton(AlertDialog.BUTTON_POSITIVE);
+            String lock="stock-booking";
+            if(actionLocks.contains(lock))return;
             int q;try{q=Integer.parseInt(qty.getText().toString().trim());}catch(Exception e){toast("Gültige Menge eingeben.");return;}
             String code=pin.getText().toString().trim();if(code.isEmpty()){toast("Persönlichen Code erneut eingeben.");return;}
             String k=values.get(kind.getSelectedItemPosition());
+            if(!beginAction(lock,book))return;
             rpc("fts_printer_adjust_stock_v73",obj(
                     "p_device_token",deviceToken,"p_session_token",sessionToken,"p_code",code,
                     "p_event_token",selectedEventToken,"p_event_day",today(),"p_kind",k,"p_quantity",q,
                     "p_note",note.getText().toString().trim()
-            ),r->{toast("Bestand aktualisiert.");dlg.dismiss();refreshSelected();});
+            ),r->{
+                endAction(lock,book);
+                toast("Bestand aktualisiert.");
+                dlg.dismiss();
+                refreshSelected();
+            });
         }));
         dlg.show();
     }
@@ -532,17 +932,21 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Kamera-Print buchen")
                 .setMessage("Nur bestätigen, wenn dieses Foto wirklich gedruckt wurde. Der Materialbestand wird um 1 reduziert.")
                 .setNegativeButton("Abbrechen",null)
-                .setPositiveButton("Ja, gedruckt",(d,w)->rpc("fts_printer_log_camera_print_v73",obj(
-                        "p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken,
-                        "p_event_day",today(),"p_quantity",1,"p_file_name",selectedLocalName
-                ),r->{toast("Kamera-Print gebucht.");refreshSelected();}))
+                .setPositiveButton("Ja, gedruckt",(d,w)->{
+                    String lock="camera-print:"+selectedLocalName;
+                    if(!beginAction(lock,null))return;
+                    rpc("fts_printer_log_camera_print_v73",obj(
+                            "p_device_token",deviceToken,"p_session_token",sessionToken,"p_event_token",selectedEventToken,
+                            "p_event_day",today(),"p_quantity",1,"p_file_name",selectedLocalName
+                    ),r->{endAction(lock,null);toast("Kamera-Print gebucht.");refreshSelected();});
+                })
                 .show();
     }
 
     void logoutAndSwitch(){
         onMain=false;handler.removeCallbacksAndMessages(null);
         rpc("fts_printer_logout_v72",obj("p_device_token",deviceToken,"p_session_token",sessionToken),r->{});
-        sessionToken="";prefs.edit().remove("session_token").apply();loadStaff();
+        sessionToken="";workUnits.clear();pickupRows.clear();printerNodes.clear();consumableRows.clear();archiveRows.clear();prefs.edit().remove("session_token").apply();loadStaff();
     }
 
     interface RpcCallback { void done(Object result); }
@@ -659,11 +1063,11 @@ public class MainActivity extends Activity {
     static class Staff {String id,name,role;Staff(String i,String n,String r){id=i;name=n;role=r;}}
     static class EventModel {String token,code,title,location,date;boolean printActive,localCamera;EventModel(String t,String c,String ti,String l,String d,boolean p,boolean lc){token=t;code=c;title=ti;location=l;date=d;printActive=p;localCamera=lc;}}
     static class OrderModel {
-        String id,paymentStatus,printStatus,pickupCode,pickupStatus,receiptNumber,firstPath;int qty;boolean ready,test;
+        String id,paymentStatus,printStatus,pickupCode,pickupStatus,receiptNumber,firstPath;int qty,totalCents;boolean ready,test;
         OrderModel(JSONObject o){
             id=o.optString("order_id");paymentStatus=o.optString("payment_status");printStatus=o.optString("print_status");
             pickupCode=o.optString("pickup_code");pickupStatus=o.optString("pickup_status");receiptNumber=o.optString("receipt_number");
-            qty=o.optInt("quantity_total",0);test=o.optBoolean("is_test",false);
+            qty=o.optInt("quantity_total",0);totalCents=o.optInt("total_cents",0);test=o.optBoolean("is_test",false);
             ready=(paymentStatus.equals("COMPLETED")||paymentStatus.equals("COVERED")||paymentStatus.equals("FREE"))&&printStatus.equals("READY");
             JSONArray items=o.optJSONArray("items");if(items!=null&&items.length()>0){JSONObject i=items.optJSONObject(0);if(i!=null)firstPath=i.optString("designed_path",null);}
         }
@@ -676,15 +1080,49 @@ public class MainActivity extends Activity {
     }
 
     void clear(){content.removeAllViews();}
+    void scrollTop(){
+        if(mainScroll!=null)mainScroll.post(()->mainScroll.smoothScrollTo(0,0));
+    }
+
+    boolean beginAction(String key,Button source){
+        synchronized(actionLocks){
+            if(actionLocks.contains(key))return false;
+            actionLocks.add(key);
+        }
+        if(source!=null){
+            source.setEnabled(false);
+            source.setAlpha(0.65f);
+        }
+        handler.postDelayed(()->endAction(key,source),20000);
+        return true;
+    }
+
+    void endAction(String key,Button source){
+        actionLocks.remove(key);
+        if(source!=null){
+            source.setEnabled(true);
+            source.setAlpha(1f);
+        }
+    }
+
     void addHeading(String s){content.addView(txt(s,24,Color.WHITE,true));}
     void addNote(String s){content.addView(noteView(s));}
     TextView noteView(String s){TextView t=txt(s,13,Color.rgb(150,170,167),false);t.setPadding(0,dp(8),0,dp(12));return t;}
     TextView txt(String s,int sp,int color,boolean bold){TextView t=new TextView(this);t.setText(s);t.setTextSize(sp);t.setTextColor(color);if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return t;}
-    EditText input(String hint,boolean secure){EditText e=new EditText(this);e.setHint(hint);e.setTextColor(Color.WHITE);e.setHintTextColor(Color.rgb(110,135,132));e.setSingleLine(true);e.setPadding(dp(12),dp(10),dp(12),dp(10));e.setBackground(round(Color.rgb(10,36,38),Color.rgb(50,72,73),12));if(secure)e.setTransformationMethod(PasswordTransformationMethod.getInstance());e.setLayoutParams(margins(-1,dp(52),0,dp(7)));return e;}
-    Button button(String s){Button b=new Button(this);b.setText(s);b.setTextColor(Color.rgb(5,25,26));b.setTextSize(14);b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);b.setBackground(round(Color.rgb(216,181,109),Color.TRANSPARENT,12));b.setPadding(dp(12),0,dp(12),0);b.setLayoutParams(margins(-2,dp(48),dp(6),dp(6)));return b;}
-    Button secondaryButton(String s){Button b=button(s);b.setTextColor(Color.WHITE);b.setBackground(round(Color.rgb(20,66,68),Color.rgb(50,90,90),12));return b;}
+    EditText input(String hint,boolean secure){EditText e=new EditText(this);e.setHint(hint);e.setTextColor(Color.WHITE);e.setHintTextColor(Color.rgb(110,135,132));e.setSingleLine(true);e.setPadding(dp(12),dp(10),dp(12),dp(10));e.setBackground(round(Color.rgb(8,24,29),Color.rgb(91,72,39),12));if(secure)e.setTransformationMethod(PasswordTransformationMethod.getInstance());e.setLayoutParams(margins(-1,dp(52),0,dp(7)));return e;}
+    Button button(String s){Button b=new Button(this);b.setText(s);b.setTextColor(Color.rgb(2,18,20));b.setTextSize(14);b.setAllCaps(false);b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);b.setBackground(round(Color.rgb(0,194,214),Color.rgb(40,235,245),12));b.setPadding(dp(12),0,dp(12),0);b.setMinHeight(dp(48));b.setLayoutParams(margins(-2,dp(48),dp(6),dp(6)));return b;}
+    Button secondaryButton(String s){Button b=button(s);b.setTextColor(Color.WHITE);b.setBackground(round(Color.rgb(14,31,36),Color.rgb(168,128,53),12));return b;}
     LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);l.setGravity(Gravity.CENTER_VERTICAL);l.setPadding(0,dp(6),0,dp(6));return l;}
-    LinearLayout card(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(14),dp(14),dp(14),dp(14));l.setBackground(round(Color.rgb(10,36,38),Color.rgb(45,62,63),16));l.setLayoutParams(margins(-1,-2,0,dp(10)));return l;}
+    LinearLayout card(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(14),dp(14),dp(14),dp(14));l.setBackground(round(Color.rgb(8,23,28),Color.rgb(88,70,36),16));l.setLayoutParams(margins(-1,-2,0,dp(10)));l.setClickable(true);l.setFocusable(true);return l;}
+    ImageView brandImage(String name,int height,ImageView.ScaleType scale){
+        ImageView v=new ImageView(this);
+        int id=getResources().getIdentifier(name,"drawable",getPackageName());
+        if(id!=0)v.setImageResource(id);
+        v.setScaleType(scale);
+        v.setAdjustViewBounds(false);
+        v.setBackgroundColor(Color.rgb(3,7,9));
+        return v;
+    }
     GradientDrawable round(int fill,int stroke,float radius){GradientDrawable g=new GradientDrawable();g.setColor(fill);g.setCornerRadius(dp((int)radius));if(stroke!=Color.TRANSPARENT)g.setStroke(dp(1),stroke);return g;}
     LinearLayout.LayoutParams margins(int w,int h,int l,int b){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(w,h);p.setMargins(l,dp(6),0,b);return p;}
     Space space(int d){Space s=new Space(this);s.setLayoutParams(new LinearLayout.LayoutParams(1,dp(d)));return s;}
@@ -729,6 +1167,26 @@ public class MainActivity extends Activity {
             toast("Gerätefreigabe muss erneuert werden.");
             recoveringAuth=false;
             loadDeviceAdmins();
+            return;
+        }
+        String lower=msg.toLowerCase(Locale.ROOT);
+        boolean transientNetwork=
+                lower.contains("timeout")||
+                lower.contains("timed out")||
+                lower.contains("failed to connect")||
+                lower.contains("unable to resolve host")||
+                lower.contains("network")||
+                lower.contains("connection reset")||
+                lower.contains("connection refused")||
+                lower.contains("socket")||
+                lower.contains("no address associated");
+        if(transientNetwork){
+            status("Offline / Verbindung unterbrochen · Wiederholung automatisch");
+            long now=System.currentTimeMillis();
+            if(now-lastNetworkNoticeAt>30000L){
+                lastNetworkNoticeAt=now;
+                Toast.makeText(this,"Verbindung unterbrochen. FTS Printer versucht automatisch erneut.",Toast.LENGTH_SHORT).show();
+            }
             return;
         }
         new AlertDialog.Builder(this).setTitle("FTS Printer").setMessage(msg).setPositiveButton("OK",null).show();

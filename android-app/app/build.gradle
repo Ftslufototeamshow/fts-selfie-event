@@ -10,8 +10,8 @@ android {
         applicationId "lu.fts.printer"
         minSdk 26
         targetSdk 35
-        versionCode 4
-        versionName "0.1.3"
+        versionCode 81
+        versionName "0.2.1-design"
     }
 
     buildTypes {
@@ -22,6 +22,10 @@ android {
         release {
             minifyEnabled false
         }
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     compileOptions {
