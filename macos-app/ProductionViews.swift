@@ -355,11 +355,9 @@ struct ProductionMediaContent: View {
     var event:EventRow? { state.selectedEvent }
 
     var sourceChoices:[String] {
-        var result=Set<String>()
-        for item in ingest.items where item.visibleInPrinter { result.insert(item.sourceLabel) }
-        for card in ingest.detectedCards {
-            if let label=card.label { result.insert(label) }
-        }
+        // A source belongs in the photo picker only when it really has at least one
+        // active/draggable photo. Connected cards are shown separately in Live-Geräte.
+        let result=Set(ingest.items.filter{$0.visibleInPrinter}.map{$0.sourceLabel})
         return result.sorted {
             if $0=="W" { return false }
             if $1=="W" { return true }
@@ -414,7 +412,7 @@ struct ProductionMediaContent: View {
         }
         .padding(8)
         .onAppear { prepareForEvent() }
-        .onChange(of:ingest.items) { _ in normalizeSource() }
+        .onChange(of:ingest.items) { _ in normalizeSource(preferNewest:true) }
         .task(id:event?.event_token) { await monitorEvent() }
         .alert("Tagesalbum leeren und Nummern zurücksetzen?",isPresented:$showClearDay) {
             Button("Abbrechen",role:.cancel){}
@@ -631,9 +629,16 @@ struct ProductionMediaContent: View {
         normalizeSource()
     }
 
-    private func normalizeSource() {
-        if !sourceChoices.contains(sourceLabel) {
-            sourceLabel=sourceChoices.first ?? ""
+    private func normalizeSource(preferNewest:Bool=false) {
+        let active=ingest.items
+            .filter{$0.visibleInPrinter}
+            .sorted{$0.importedAt>$1.importedAt}
+        guard let newest=active.first else {
+            sourceLabel=""
+            return
+        }
+        if preferNewest || !sourceChoices.contains(sourceLabel) || visibleItems.isEmpty {
+            sourceLabel=newest.sourceLabel
         }
     }
 
