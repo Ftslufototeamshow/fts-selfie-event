@@ -972,8 +972,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.28-border-safearea-fix"
-    static let build = 119
+    static let version = "1.1.29-print-path-restore"
+    static let build = 120
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -1439,10 +1439,11 @@ final class ProductionCore: ObservableObject {
             let unit=localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex]
             let printLayout=unit.printLayout ?? V80PrintLayout()
             let rendered:NSImage
-            if let sourcePath=unit.sourceImagePath,!sourcePath.isEmpty {
-                // Local SD/WLAN jobs must reflect the current organizer design and
-                // current safe-area rules at the moment the operator confirms print.
-                // Re-render from the untouched original; never reuse an older designedPath.
+            if printLayout.hasCustomCrop,let sourcePath=unit.sourceImagePath,!sourcePath.isEmpty {
+                // Only a manually changed crop requires a fresh render from the
+                // untouched original. Normal local SD/WLAN printing keeps using
+                // the already prepared design file so the proven print path reaches
+                // macOS immediately, exactly as before Build 119.
                 rendered=try await ProductionRendererV76.renderedImage(
                     sourceURL:URL(fileURLWithPath:sourcePath),
                     event:event,
