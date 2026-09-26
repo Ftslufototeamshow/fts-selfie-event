@@ -66,12 +66,16 @@ enum ProductionRendererV76 {
         }
 
         let overlay = config["overlay"]?.object ?? [:]
-        if overlay["enabled"]?.bool != false {
-            try await drawOverlay(event:event,config:config,plan:plan)
-        }
+        let banner = overlay["banner"]?.object ?? [:]
+        let fullPhoto =
+            overlay["enabled"]?.bool == false ||
+            banner["enabled"]?.bool == false
 
-        try await drawEventLogos(event:event,canvas:plan.canvas)
-        drawEventDecorations(event:event,canvas:plan.canvas)
+        if !fullPhoto {
+            try await drawOverlay(event:event,config:config,plan:plan)
+            try await drawEventLogos(event:event,canvas:plan.canvas)
+            drawEventDecorations(event:event,canvas:plan.canvas)
+        }
 
         return out
     }
@@ -113,10 +117,11 @@ enum ProductionRendererV76 {
             cw=sw; ch=sw/target; cx=0; cy=(sh-ch)/2
         }
 
-        // Fixed FTS banner height: 15 mm on the SELPHY Postcard short side (100 mm).
-        // On the existing 3:2 raster this is 15% in landscape and 10% in portrait.
-        // Studio configuration may change content/colors, but never this physical height.
-        let fixedBannerPct=CGFloat(15.0)*min(canvas.width,canvas.height)/canvas.height
+        // Fixed FTS banner height: 15 mm. Landscape spans the physical 148 mm
+        // paper width; portrait spans the 100 mm width.
+        let physicalWidthMM:CGFloat=landscape ? 148.0 : 100.0
+        let fixedBannerPx=canvas.width*15.0/physicalWidthMM
+        let fixedBannerPct=fixedBannerPx/canvas.height*100.0
         let normal=fixedBannerPct
         let minimum=fixedBannerPct
         let gap=clamp(CGFloat(adaptive["face_gap_pct"]?.double ?? 2.5),1,8)
@@ -323,7 +328,23 @@ enum ProductionRendererV76 {
         let bh=h*heightPct/100
         let visualTextScale=plan.textScale
 
-        if banner["enabled"]?.bool != false {
+        let finishedBannerImage:NSImage?
+        if let path=nonEmpty(banner["image_path"]?.string) {
+            finishedBannerImage=try? await remoteImage(path)
+        } else {
+            finishedBannerImage=nil
+        }
+
+        if let img=finishedBannerImage {
+            // Uploaded FTS banners are finished 148×15 mm artwork. Keep the
+            // complete design, its text and accent bar at 100% opacity.
+            img.draw(
+                in:NSRect(x:0,y:0,width:w,height:bh),
+                from:.zero,
+                operation:.sourceOver,
+                fraction:1
+            )
+        } else {
             let color=NSColor(hex:banner["color"]?.string ?? "#071315")
             let opacity=clamp(CGFloat(banner["opacity"]?.double ?? 0.86),0,1)
             let type=banner["type"]?.string ?? "gradient"
@@ -343,12 +364,6 @@ enum ProductionRendererV76 {
                     ctx.restoreGState()
                 }
             }
-
-            if let path=nonEmpty(banner["image_path"]?.string),
-               let img=try? await remoteImage(path) {
-                let alpha=clamp(CGFloat(banner["image_opacity"]?.double ?? 0.35),0,1)
-                drawAspectFill(img,in:NSRect(x:0,y:0,width:w,height:bh),fraction:alpha)
-            }
         }
 
         let padPct=clamp(CGFloat(ov["padding_pct"]?.double ?? 4.5)/100,0.025,0.10)
@@ -365,7 +380,7 @@ enum ProductionRendererV76 {
         let line=ov["line"]?.object ?? [:]
         let titleAlign=title["align"]?.string ?? "left"
 
-        if title["enabled"]?.bool != false {
+        if finishedBannerImage == nil && title["enabled"]?.bool != false {
             drawText(
                 textValue(title,event:event,fallback:"title"),
                 safeRect:titleRect,
@@ -379,7 +394,7 @@ enum ProductionRendererV76 {
             )
         }
 
-        if sub["enabled"]?.bool != false {
+        if finishedBannerImage == nil && sub["enabled"]?.bool != false {
             drawText(
                 textValue(sub,event:event,fallback:"subtitle"),
                 safeRect:subtitleRect,
@@ -393,7 +408,7 @@ enum ProductionRendererV76 {
             )
         }
 
-        if line["enabled"]?.bool != false {
+        if finishedBannerImage == nil && line["enabled"]?.bool != false {
             var value=textValue(line,event:event,fallback:"overlay")
             if line["include_date"]?.bool != false {
                 let d=eventDayText(event)
@@ -412,7 +427,7 @@ enum ProductionRendererV76 {
             )
         }
 
-        if event.photo_branding != "none" && ov["branding"]?.bool != false {
+        if finishedBannerImage == nil && event.photo_branding != "none" && ov["branding"]?.bool != false {
             let base=min(w,h)
             let brandScale=plan.landscape ? 0.014:0.010
             let font=NSFont.systemFont(ofSize:max(10,base*brandScale*visualTextScale),weight:.semibold)

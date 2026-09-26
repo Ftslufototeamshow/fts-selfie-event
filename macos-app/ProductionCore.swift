@@ -968,8 +968,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.26-photo-crop-safe-banner"
-    static let build = 117
+    static let version = "1.1.27-banner-fullphoto-fix"
+    static let build = 118
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
