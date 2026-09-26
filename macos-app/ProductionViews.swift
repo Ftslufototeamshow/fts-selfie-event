@@ -382,6 +382,7 @@ struct ProductionMediaContent: View {
     @State private var showClearDay=false
     @State private var clearingDay=false
     @State private var showManualCardPhotos=false
+    @State private var autoSubmitTask:Task<Void,Never>?=nil
 
     var event:EventRow? { state.selectedEvent }
 
@@ -443,6 +444,7 @@ struct ProductionMediaContent: View {
         }
         .padding(8)
         .onAppear { prepareForEvent() }
+        .onDisappear { autoSubmitTask?.cancel() }
         .onChange(of:ingest.items) { _ in normalizeSource(preferNewest:true) }
         .task(id:event?.event_token) { await monitorEvent() }
         .alert("Tagesalbum leeren und Nummern zurücksetzen?",isPresented:$showClearDay) {
@@ -601,7 +603,10 @@ struct ProductionMediaContent: View {
                         photoNumber:stablePhotoNumber(item),
                         quantity:Binding(
                             get:{quantities[item.id] ?? 0},
-                            set:{quantities[item.id]=$0}
+                            set:{newValue in
+                                quantities[item.id]=newValue
+                                scheduleAutomaticSubmit()
+                            }
                         ),
                         onHide:{
                             quantities.removeValue(forKey:item.id)
@@ -624,8 +629,25 @@ struct ProductionMediaContent: View {
         }
     }
 
+    private func scheduleAutomaticSubmit() {
+        autoSubmitTask?.cancel()
+        guard core.autoDispatch else{return}
+        guard total>0 else{return}
+        autoSubmitTask=Task { @MainActor in
+            // Short debounce: pressing + twice or more builds the final quantity first.
+            try? await Task.sleep(for:.milliseconds(1200))
+            guard !Task.isCancelled else{return}
+            while ingest.scanning && !Task.isCancelled {
+                try? await Task.sleep(for:.milliseconds(150))
+            }
+            guard !Task.isCancelled,total>0,!submitting else{return}
+            submitSelection()
+        }
+    }
+
     private func submitSelection() {
         guard total>0, !submitting else{return}
+        autoSubmitTask?.cancel()
         submitting=true
         var selection:[V80MediaItem:Int]=[:]
         for item in visibleItems {
@@ -693,7 +715,7 @@ struct ProductionMediaContent: View {
         core.loadLocalQueue(folderPath:ingest.activation?.folderPath)
         while !Task.isCancelled {
             if ingest.activation != nil { await ingest.scan(event:e) }
-            try? await Task.sleep(for:.seconds(3))
+            try? await Task.sleep(for:.seconds(1))
         }
     }
 }

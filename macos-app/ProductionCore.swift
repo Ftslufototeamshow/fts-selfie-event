@@ -836,8 +836,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.20-macos-printer-status"
-    static let build = 111
+    static let version = "1.1.21-fast-sd-auto-dispatch"
+    static let build = 112
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []

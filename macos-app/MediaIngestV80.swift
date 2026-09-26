@@ -683,10 +683,15 @@ final class MediaIngestV80: ObservableObject {
         let files=mediaFiles(on:volume)
         var keys=Set<String>()
         var fingerprints:[String:String]=[:]
-        for f in files {
-            if let k=sourceKey(f,root:volume){
-                keys.insert(k)
-                fingerprints[k]=try sha256(f)
+        for file in files {
+            if let key=fastSourceKey(file,root:volume) { keys.insert(key) }
+        }
+        // Keep only a small hash sample for future card recovery. Hashing every old
+        // photo made large professional cards painfully slow to learn.
+        for file in files.prefix(12) {
+            if let key=fastSourceKey(file,root:volume),
+               let hash=try? sha256(file) {
+                fingerprints[key]=hash
             }
         }
 
@@ -696,7 +701,7 @@ final class MediaIngestV80: ObservableObject {
         var eventHashes=importedHashesAcrossEvent(activation)
         eventHashes.formUnion(manifest.items.map(\.sha256))
         eventHashes.formUnion(manifest.importedHashes ?? [])
-        let newest=Array(files.sorted{mediaChronologyDate($0)>mediaChronologyDate($1)}.prefix(3)).reversed()
+        let newest=Array(files.sorted{quickMediaDate($0)>quickMediaDate($1)}.prefix(3)).reversed()
         var importedCount=0
         for file in newest {
             let rv=try? file.resourceValues(forKeys:[.isRegularFileKey,.fileSizeKey])
@@ -763,7 +768,7 @@ final class MediaIngestV80: ObservableObject {
             let currentFiles=mediaFiles(on:volume)
             let recoveryNewest=Set(
                 currentFiles
-                    .sorted{mediaChronologyDate($0)>mediaChronologyDate($1)}
+                    .sorted{quickMediaDate($0)>quickMediaDate($1)}
                     .prefix(3)
                     .map{$0.path}
             )
@@ -771,41 +776,38 @@ final class MediaIngestV80: ObservableObject {
                 cardUUID:marker.cardUUID,label:marker.label,knownSourceKeys:[],
                 knownFingerprints:[:],createdAt:Date()
             )
+            // Older builds stored an EXIF timestamp as a fourth key component.
+            // Normalize those once in memory so existing cards stay compatible.
+            var knownFastKeys=Set(baseline.knownSourceKeys.map{fastKeyFromStoredKey($0)})
 
             for file in currentFiles {
-                guard let key=sourceKey(file,root:volume) else{continue}
+                guard let key=fastSourceKey(file,root:volume) else{continue}
                 // Wait until the camera/OS has finished writing the file.
                 let rv=try? file.resourceValues(forKeys:[.contentModificationDateKey,.fileSizeKey])
                 if let mod=rv?.contentModificationDate {
                     let age=Date().timeIntervalSince(mod)
-                    if age >= 0 && age < 1.5 { continue }
+                    if age >= 0 && age < 0.8 { continue }
                 }
                 guard (rv?.fileSize ?? 0)>0 else{continue}
 
-                let knownKey=baseline.knownSourceKeys.contains(key)
-                let oldHash=baseline.knownFingerprints?[key]
-                let hash=try sha256(file)
-                let bytesChanged=knownKey && oldHash != nil && oldHash != hash
+                let knownKey=knownFastKeys.contains(key)
+                // This is the main speed-up: known files are not opened, EXIF-parsed
+                // or SHA-256 hashed again on every scan.
+                if !recoveringBaseline && knownKey { continue }
+                if recoveringBaseline && !recoveryNewest.contains(file.path) {
+                    baseline.knownSourceKeys.insert(key)
+                    knownFastKeys.insert(key)
+                    continue
+                }
 
+                let hash=try sha256(file)
                 baseline.knownSourceKeys.insert(key)
+                knownFastKeys.insert(key)
                 if baseline.knownFingerprints == nil { baseline.knownFingerprints=[:] }
                 baseline.knownFingerprints?[key]=hash
 
-                // "Known" is not the same as "already copied": Build 96 could mark a
-                // whole card as known when a day baseline was missing. The durable
-                // imported-hash ledger is authoritative for duplicate prevention.
+                // Durable event-wide hashes remain authoritative for duplicates.
                 if hashes.contains(hash){continue}
-
-                // Normal operation: the baseline tells us what was already on the
-                // card. A genuinely new source key is imported regardless of the camera's
-                // clock/time-zone; this avoids losing fresh photos when EXIF/FAT time differs
-                // from the Mac. If an old installation has no baseline, rebuild it from the
-                // current card but recover only the three newest photos.
-                if recoveringBaseline {
-                    if !recoveryNewest.contains(file.path) { continue }
-                } else if knownKey && !bytesChanged {
-                    continue
-                }
 
                 let folder=URL(fileURLWithPath:activation.folderPath)
                     .appendingPathComponent("Kamera Original",isDirectory:true)
@@ -974,13 +976,12 @@ final class MediaIngestV80: ObservableObject {
 
             let dcim=v.appendingPathComponent("DCIM",isDirectory:true)
             let hasDCIM=fm.fileExists(atPath:dcim.path)
-            let files=hasDCIM ? mediaFiles(on:v) : preferredMediaFiles(root:v)
+            // A DCIM card is already clearly a camera card; don't enumerate every
+            // photo just to prove that again on every one-second scan.
+            let files=hasDCIM ? [] : preferredMediaFiles(root:v)
             let fallbackRemovable=rv?.volumeIsRemovable==true || rv?.volumeIsEjectable==true
-            let physicalRemovable=isPhysicalRemovableVolume(v,fallbackRemovable:fallbackRemovable)
+            let physicalRemovable=hasDCIM ? true : isPhysicalRemovableVolume(v,fallbackRemovable:fallbackRemovable)
 
-            // Important: a mounted FTS installer DMG is ejectable too, but it is not
-            // a camera card. Accept real physical removable media, DCIM cards, or a
-            // volume that actually contains supported camera photos.
             let cameraMedia=hasDCIM || !files.isEmpty || physicalRemovable
             if !cameraMedia{continue}
 
@@ -989,12 +990,20 @@ final class MediaIngestV80: ObservableObject {
                 ? rv!.volumeUUIDString!
                 : (rv?.volumeIdentifier.map{String(describing:$0)} ?? v.path)
             let markerURL=v.appendingPathComponent(".fts-printer-card-v80.json")
-            let signature=cardSignature(v)
-            let explicitlyReleased=(registry.releasedTechnicalIDs?.contains(tid) == true)
-                || (signature != nil && registry.releasedSignatures?.contains(signature!) == true)
-
-            var marker=explicitlyReleased ? nil : registry.cards[tid]
+            let technicalReleased=registry.releasedTechnicalIDs?.contains(tid) == true
+            var marker=technicalReleased ? nil : registry.cards[tid]
             if marker?.eventToken != eventToken { marker=nil }
+
+            // Signature generation enumerates card media. Only pay that cost when
+            // the fast technical-ID lookup did not already identify the card.
+            var signature:String?=nil
+            var explicitlyReleased=technicalReleased
+            if marker == nil {
+                signature=cardSignature(v)
+                if let signature,registry.releasedSignatures?.contains(signature)==true {
+                    explicitlyReleased=true
+                }
+            }
 
             if marker == nil,!explicitlyReleased,
                let signature,
@@ -1236,6 +1245,25 @@ final class MediaIngestV80: ObservableObject {
         case "png": return 2
         default: return 10
         }
+    }
+
+    nonisolated private static func quickMediaDate(_ file:URL)->Date {
+        let rv=try? file.resourceValues(forKeys:[.contentModificationDateKey,.creationDateKey])
+        return rv?.contentModificationDate ?? rv?.creationDate ?? .distantPast
+    }
+
+    nonisolated private static func fastSourceKey(_ file:URL,root:URL)->String? {
+        guard let rv=try? file.resourceValues(forKeys:[.fileSizeKey,.contentModificationDateKey]) else{return nil}
+        let rel=file.path.hasPrefix(root.path) ? String(file.path.dropFirst(root.path.count)) : file.lastPathComponent
+        let size=rv.fileSize ?? 0
+        let mod=Int((rv.contentModificationDate ?? .distantPast).timeIntervalSince1970)
+        return "\(rel)|\(size)|\(mod)"
+    }
+
+    nonisolated private static func fastKeyFromStoredKey(_ key:String)->String {
+        let parts=key.split(separator:"|",omittingEmptySubsequences:false)
+        if parts.count>=3 { return parts.prefix(3).joined(separator:"|") }
+        return key
     }
 
     nonisolated private static func sourceKey(_ file:URL,root:URL)->String? {

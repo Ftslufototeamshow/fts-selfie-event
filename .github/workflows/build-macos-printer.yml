@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.21-macos-printer-status.zip
-            dist/FTS-Printer-macOS-v0.3.21-macos-printer-status.dmg
+            dist/FTS-Printer-macOS-v0.3.22-fast-sd-auto-dispatch.zip
+            dist/FTS-Printer-macOS-v0.3.22-fast-sd-auto-dispatch.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.21-macos-printer-status"
+          TAG="fts-printer-mac-v0.3.22-fast-sd-auto-dispatch"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.21-macos-printer-status.zip dist/FTS-Printer-macOS-v0.3.21-macos-printer-status.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.22-fast-sd-auto-dispatch.zip dist/FTS-Printer-macOS-v0.3.22-fast-sd-auto-dispatch.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.21-macos-printer-status.zip dist/FTS-Printer-macOS-v0.3.21-macos-printer-status.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.21 · macOS Printer Status" --notes "Build 111: Die Druckererkennung folgt jetzt dem gleichen macOS-Druckerstatus wie die Druckzentrale. Drucker mit Status idle/ready/printing/processing werden in FTS angezeigt; offline/unavailable werden ausgeblendet. Dadurch bleibt ein tatsächlich bereiter Canon SELPHY sichtbar, auch wenn kein Foto oder Auftrag vorhanden ist, während alte Offline-Warteschlangen verschwinden. IPP-USB-, SD-, Archiv- und Designlogik bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.22-fast-sd-auto-dispatch.zip dist/FTS-Printer-macOS-v0.3.22-fast-sd-auto-dispatch.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.22 · Fast SD + Auto Dispatch" --notes "Build 112: Beschleunigt ausschließlich den SD-Leseweg und die Bedienung vor dem bestehenden Druckpfad. Bekannte Kartendateien werden nicht mehr bei jedem Scan erneut per EXIF und SHA-256 geöffnet; beim Kartenlernen werden nur schnelle Dateischlüssel aufgebaut und nur eine kleine Stichprobe gehasht. Bekannte DCIM-Karten vermeiden zusätzliche Vollscans/Signaturarbeit, und der automatische SD-Scan läuft im 1-Sekunden-Takt. Bei aktiver Automatik wird eine gewählte Druckmenge nach 1,2 Sekunden ohne weiteren GO-Klick automatisch als lokaler Auftrag angelegt und anschließend von der bereits vorhandenen Mehrdrucker-Verteilung auf alle freien, aktivierten Drucker verteilt. Der native Canon-Druckpfad aus Build 111 bleibt unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.21-macos-printer-status"
+          CURRENT="fts-printer-mac-v0.3.22-fast-sd-auto-dispatch"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
