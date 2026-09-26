@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.24-selphy-mirror-fix.zip
-            dist/FTS-Printer-macOS-v0.3.24-selphy-mirror-fix.dmg
+            dist/FTS-Printer-macOS-v0.3.25-macos-printer-names.zip
+            dist/FTS-Printer-macOS-v0.3.25-macos-printer-names.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.24-selphy-mirror-fix"
+          TAG="fts-printer-mac-v0.3.25-macos-printer-names"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.24-selphy-mirror-fix.zip dist/FTS-Printer-macOS-v0.3.24-selphy-mirror-fix.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.25-macos-printer-names.zip dist/FTS-Printer-macOS-v0.3.25-macos-printer-names.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.24-selphy-mirror-fix.zip dist/FTS-Printer-macOS-v0.3.24-selphy-mirror-fix.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.24 · SELPHY Mirror Fix" --notes "Build 114: Korrigiert ausschließlich die horizontale Spiegelung beim nativen Canon-SELPHY-Druck. Die fertige, bereits gerenderte Druckfläche wird für SELPHY/CP1500 direkt vor der Übergabe an macOS horizontal gegengespiegelt, damit der physische Ausdruck genauso lesbar und ausgerichtet ist wie die FTS-Vorschau. Fotoimport, EXIF-Rotation, Design-Studio, Live-Design-Sync, SD-Geschwindigkeit, Auto-Dispatch, Mehrdrucker-Verteilung und Druckererkennung bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.25-macos-printer-names.zip dist/FTS-Printer-macOS-v0.3.25-macos-printer-names.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.25 · macOS Printer Names" --notes "Build 115: Ändert ausschließlich die sichtbare Druckerbezeichnung in FTS. Der Name wird jetzt exakt so angezeigt, wie macOS ihn führt, z. B. „Canon SELPHY CP1500 2026“, statt alle SELPHY/CP1500 künstlich auf „Canon SELPHY CP1500“ zu kürzen. Druckvorlage, nativer Canon-Druckpfad, Druckererkennung, Spiegelkorrektur, SD-Import, Design-Sync und Mehrdrucker-Verteilung bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.24-selphy-mirror-fix"
+          CURRENT="fts-printer-mac-v0.3.25-macos-printer-names"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

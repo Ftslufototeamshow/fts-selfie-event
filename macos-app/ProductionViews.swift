@@ -292,8 +292,9 @@ private struct FTSPrinterLiveTile: View {
         return 3
     }
     var displayName:String {
-        let l=slot.name.lowercased()
-        return (l.contains("selphy") || l.contains("cp1500")) ? "Canon SELPHY CP1500" : slot.name
+        // Show the exact printer name configured in macOS. This keeps identical
+        // SELPHY devices distinguishable, e.g. "Canon SELPHY CP1500 2026".
+        slot.name
     }
 
     var body:some View {
