@@ -92,9 +92,9 @@ input,select,textarea{width:100%;border:1px solid #ffffff18;background:#071b1d;c
         </div>
         <div class="row">
           <div class="field"><label>Deckkraft</label><input id="bannerOpacity" type="range" min="0" max="1" step=".05" value=".86"></div>
-          <div class="field"><label>Bild-Deckkraft</label><input id="bannerImageOpacity" type="range" min="0" max="1" step=".05" value=".35"></div>
+          <div class="field"><label>Fertiges Bannerbild · 100 %</label><input id="bannerImageOpacity" type="range" min="1" max="1" step="1" value="1" disabled></div>
         </div>
-        <label class="check"><input id="bannerEnabled" type="checkbox" checked> Balken / Verlauf verwenden</label>
+        <label class="check"><input id="bannerEnabled" type="checkbox" checked> Banner-Design verwenden · aus = Vollfoto ohne Text/Branding</label>
         <div class="field">
           <label>Eigenes Hintergrundbild für den Balken</label>
           <div class="fileLine"><input id="bannerFile" type="file" accept="image/png,image/jpeg,image/webp"><button id="removeBannerBtn" type="button" class="secondary">Bild entfernen</button></div>
@@ -152,7 +152,7 @@ input,select,textarea{width:100%;border:1px solid #ffffff18;background:#071b1d;c
 </main>
 <script src="./config.js"></script>
 <script src="./social-share.js"></script>
-<script src="./fts-photo-engine.js?v=78"></script>
+<script src="./fts-photo-engine.js?v=79"></script>
 <script src="./printer-staff-v72.js"></script>
 <script>
 const cfg=window.FTS_CONFIG, DEVICE_KEY='fts_device_token_v1', LEGACY_CODE_KEY='fts_cockpit_admin_code';
@@ -171,7 +171,7 @@ async function adminFiles(action,extra={}){const r=await fetch(cfg.supabaseUrl+'
 function defaultConfig(){
   return {version:76,
     adaptive:{enabled:true,auto_orientation:true,auto_crop:true,face_safe_area:true,face_padding_ratio:.34,face_gap_pct:2.5,min_text_scale:.68,portrait:{banner_max_pct:18,banner_min_pct:12},landscape:{banner_max_pct:22,banner_min_pct:14},print:{ratio:'10x15',bleed_pct:1.5}},
-    overlay:{enabled:true,padding_pct:4.5,banner:{enabled:true,type:'gradient',color:'#071315',opacity:.86,height_pct:30,image_path:'',image_opacity:.35},
+    overlay:{enabled:true,padding_pct:4.5,banner:{enabled:true,type:'gradient',color:'#071315',opacity:.86,height_pct:30,image_path:'',image_opacity:1},
     title:{enabled:true,source:'title',text:'',font:'clean',weight:900,size_pct:5.8,color:'#ffffff',align:'left',shadow:true,multicolor:false,colors:['#ffffff','#ffcf4a','#2ec4b6','#ff6b6b']},
     subtitle:{enabled:true,source:'subtitle',text:'',font:'clean',weight:800,size_pct:3.2,color:eventRow?.accent||'#d9b56d',align:'left',shadow:true},
     line:{enabled:true,source:'overlay',text:'',font:'clean',weight:600,size_pct:2.1,color:'#e8efed',align:'left',shadow:true,include_date:true},branding:true},
@@ -399,7 +399,7 @@ $('#bannerFile').onchange=e=>{pendingBanner=e.target.files?.[0]||null;removeBann
 $('#removeBannerBtn').onclick=()=>{pendingBanner=null;removeBanner=true;studio.overlay.banner.image_path='';$('#bannerFile').value='';$('#bannerPath').textContent='Bild wird beim Speichern entfernt';schedulePreview()};
 $('#previewFile').onchange=e=>{const file=e.target.files?.[0];if(!file)return;const url=URL.createObjectURL(file),img=new Image();img.onload=async()=>{previewImg=img;previewFaces=[];setStatus('Vorschaubild wird analysiert …');try{previewFaces=await window.FTS_SOCIAL?.detectFaces?.(img)||[]}catch(err){console.warn('Studio Gesichtserkennung',err)}finally{URL.revokeObjectURL(url)};await renderPreview();setStatus('Studio bereit · '+(eventRow?.title||''),'ok')};img.onerror=()=>URL.revokeObjectURL(url);img.src=url};
 $('#previewFilter').onchange=renderPreview;
-if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=76',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(()=>{});
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=79',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(()=>{});
 loadEvents().catch(e=>setStatus('Studio konnte nicht geladen werden: '+e.message,'err'));
 </script>
 </body>

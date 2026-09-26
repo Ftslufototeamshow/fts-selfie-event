@@ -246,13 +246,12 @@
   async function drawOverlay(ctx,canvas,ev,config,helpers={}){
     const conf=config&&Object.keys(config).length?config:cfgOf(ev),ov=conf.overlay||{},w=canvas.width,h=canvas.height;
     if(helpers.selectedFilter==='pumpkin')pumpkinFrame(ctx,w,h);
-    if(ov.enabled===false){
-      if(helpers.drawEventLogos)await helpers.drawEventLogos(ctx,w,h,'photo');
-      if(helpers.drawEventDecorations)await Promise.resolve(helpers.drawEventDecorations(ctx,w,h,'photo'));
-      return;
-    }
+    const banner=ov.banner||{};
+    // Banner off means true full-photo mode: no color strip, generated text,
+    // FTS branding, event logo or decoration is added to the image.
+    if(ov.enabled===false||banner.enabled===false)return;
     const a=adaptiveConfig(conf),orientation=helpers.adaptiveState?.orientation||(w>h?'landscape':'portrait'),mode=orientation==='landscape'?a.landscape:a.portrait;
-    const banner=ov.banner||{},requestedHeight=clampNum(banner.height_pct||30,12,48);
+    const requestedHeight=clampNum(banner.height_pct||30,12,48);
     const normalCap=orientation==='landscape'
       ? clampNum(mode.banner_max_pct,14,26)
       : clampNum(mode.banner_max_pct,9,13);
@@ -265,28 +264,35 @@
       : (orientation==='landscape'?requestedHeight:Math.min(requestedHeight,normalCap));
     const adaptiveTextScale=automatic?clampNum(helpers.adaptiveState?.textScale??1,clampNum(a.min_text_scale,.52,.92),1):1;
     const textScale=adaptiveTextScale*(orientation==='portrait'?.72:1);
-    const bh=h*heightPct/100,by=h-bh;
-    if(banner.enabled!==false){
+    // Match the printer renderer: 15 mm high across 148 mm in landscape,
+    // and across 100 mm in portrait.
+    const physicalWidthMM=orientation==='landscape'?148:100;
+    const bh=w*15/physicalWidthMM,by=h-bh;
+
+    let finishedBanner=null;
+    if(banner.image_path&&helpers.assetUrl&&helpers.loadRemoteImage){
+      finishedBanner=await helpers.loadRemoteImage(helpers.assetUrl(banner.image_path));
+    }
+    if(finishedBanner){
+      // Finished FTS banner artwork is authoritative: 100% opacity, no crop.
+      ctx.drawImage(finishedBanner,0,by,w,bh);
+    }else{
       const type=banner.type||'gradient',op=Math.max(0,Math.min(1,Number(banner.opacity??.86))),color=banner.color||'#071315';
       if(type==='solid'){ctx.fillStyle=alpha(color,op);ctx.fillRect(0,by,w,bh)}
       else{const g=ctx.createLinearGradient(0,by,0,h);g.addColorStop(0,alpha(color,0));g.addColorStop(.28,alpha(color,op*.7));g.addColorStop(1,alpha(color,op));ctx.fillStyle=g;ctx.fillRect(0,by,w,bh)}
-      if(banner.image_path&&helpers.assetUrl&&helpers.loadRemoteImage){
-        const img=await helpers.loadRemoteImage(helpers.assetUrl(banner.image_path));
-        if(img){ctx.save();ctx.globalAlpha=Math.max(0,Math.min(1,Number(banner.image_opacity??.35)));const s=Math.max(w/img.naturalWidth,bh/img.naturalHeight),dw=img.naturalWidth*s,dh=img.naturalHeight*s;ctx.drawImage(img,(w-dw)/2,by+(bh-dh)/2,dw,dh);ctx.restore()}
-      }
     }
     const pad=w*Math.max(.025,Math.min(.10,Number(ov.padding_pct||4.5)/100)),maxW=w-pad*2,title=ov.title||{},sub=ov.subtitle||{},line=ov.line||{};
     const align=title.align||'left',x=align==='center'?w/2:align==='right'?w-pad:pad,titleY=by+bh*.40,subY=by+bh*.67,lineY=by+bh*.87;
-    if(title.enabled!==false)drawMulti(ctx,textValue(title,ev,'title'),x,titleY,{...title,_scale:textScale},maxW);
-    if(sub.enabled!==false){const aa=sub.align||align,xx=aa==='center'?w/2:aa==='right'?w-pad:pad;drawMulti(ctx,textValue(sub,ev,'subtitle'),xx,subY,{...sub,align:aa,size_pct:sub.size_pct||3.2,weight:sub.weight||800,color:sub.color||ev.accent||'#d9b56d',_scale:textScale},maxW)}
-    if(line.enabled!==false){
+    if(!finishedBanner&&title.enabled!==false)drawMulti(ctx,textValue(title,ev,'title'),x,titleY,{...title,_scale:textScale},maxW);
+    if(!finishedBanner&&sub.enabled!==false){const aa=sub.align||align,xx=aa==='center'?w/2:aa==='right'?w-pad:pad;drawMulti(ctx,textValue(sub,ev,'subtitle'),xx,subY,{...sub,align:aa,size_pct:sub.size_pct||3.2,weight:sub.weight||800,color:sub.color||ev.accent||'#d9b56d',_scale:textScale},maxW)}
+    if(!finishedBanner&&line.enabled!==false){
       let txt=textValue(line,ev,'overlay');if(line.include_date!==false&&helpers.photoEventDayText){const d=helpers.photoEventDayText();if(d)txt=txt?txt+' · '+d:d}
       const aa=line.align||align,xx=aa==='center'?w/2:aa==='right'?w-pad:pad;drawMulti(ctx,txt,xx,lineY,{...line,align:aa,size_pct:line.size_pct||2.1,weight:line.weight||600,color:line.color||'#e8efed',_scale:textScale},maxW);
     }
-    if((ev?.photo_branding||'bottom')!=='none'&&ov.branding!==false){ctx.save();ctx.textAlign='right';ctx.textBaseline='alphabetic';ctx.fillStyle='rgba(255,255,255,.68)';const base=Math.min(w,h),brandScale=orientation==='portrait'?.010:.014;ctx.font='600 '+Math.max(10,base*brandScale*textScale)+'px system-ui';ctx.fillText('FTS.lu · Selfie Event',w-pad,h-Math.max(11,h*.012));ctx.restore()}
+    if(!finishedBanner&&(ev?.photo_branding||'bottom')!=='none'&&ov.branding!==false){ctx.save();ctx.textAlign='right';ctx.textBaseline='alphabetic';ctx.fillStyle='rgba(255,255,255,.68)';const base=Math.min(w,h),brandScale=orientation==='portrait'?.010:.014;ctx.font='600 '+Math.max(10,base*brandScale*textScale)+'px system-ui';ctx.fillText('FTS.lu · Selfie Event',w-pad,h-Math.max(11,h*.012));ctx.restore()}
     if(helpers.drawEventLogos)await helpers.drawEventLogos(ctx,w,h,'photo');
     if(helpers.drawEventDecorations)await Promise.resolve(helpers.drawEventDecorations(ctx,w,h,'photo'));
   }
 
-  window.FTS_PHOTO_ENGINE={version:78,catalog,filterInfo,applyFilter:pxFilter,filterCss,drawOverlay,fontStack,pumpkinFrame,adaptiveDefaults,adaptiveConfig,sourceOrientation,outputSpec,buildPlan,drawPhoto};
+  window.FTS_PHOTO_ENGINE={version:79,catalog,filterInfo,applyFilter:pxFilter,filterCss,drawOverlay,fontStack,pumpkinFrame,adaptiveDefaults,adaptiveConfig,sourceOrientation,outputSpec,buildPlan,drawPhoto};
 })();
