@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.32-material-resume.zip
-            dist/FTS-Printer-macOS-v0.3.32-material-resume.dmg
+            dist/FTS-Printer-macOS-v0.3.33-rp108-power-guard.zip
+            dist/FTS-Printer-macOS-v0.3.33-rp108-power-guard.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.32-material-resume"
+          TAG="fts-printer-mac-v0.3.33-rp108-power-guard"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.32-material-resume.zip dist/FTS-Printer-macOS-v0.3.32-material-resume.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.33-rp108-power-guard.zip dist/FTS-Printer-macOS-v0.3.33-rp108-power-guard.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.32-material-resume.zip dist/FTS-Printer-macOS-v0.3.32-material-resume.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.32 · Material Resume" --notes "Build 122: Behebt ausschließlich die Materialwechsel-/Weiterdruck-Logik. Nach bestätigtem Papierwechsel (18 Blatt) oder Farbfilmwechsel (54 Prints) wird ein freier Drucker wieder auf Bereit gesetzt, macOS neu erkannt, die Materialwerte aktualisiert und wartende Jobs bei aktiver Automatik sofort weitergeschickt. Zusätzlich gibt es einen Button 'Material gewechselt · Weiterdrucken'. Wenn macOS nach einer Materialpause wieder IDLE meldet, kann ein freier ERROR-Slot automatisch zurück auf IDLE gehen. Ein Auftrag mit unklarem/aktuellem Druckstatus wird ausdrücklich nicht automatisch freigegeben, damit keine Doppelprints entstehen. Canon-Spooler, Spiegelkorrektur, SD A–E, Mehrdrucker-Verteilung, Rand-/Bannerlogik und Archiv bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.33-rp108-power-guard.zip dist/FTS-Printer-macOS-v0.3.33-rp108-power-guard.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.33 · RP-108 + Power Guard" --notes "Build 123: Ergänzt einen eigenen RP-108-Setzähler pro Drucker und einen bestätigten Button 'Neues RP-108 Set starten · 108'. Beim Start werden Set=108, Papierfach=18 und Farbfilm=54 gesetzt; jeder bestätigte Druck zählt automatisch herunter. Papier- und Farbfilmwechsel bleiben separat. Zusätzlich überwacht FTS den MacBook-Akku über macOS: Prozent, Akkubetrieb/Netzteil/Laden sowie Warnungen ab 35 % und kritisch ab 15 %. Beim Canon SELPHY wird bewusst kein erfundener Akkuprozentwert angezeigt, da CP1500/AirPrint diesen nicht verlässlich an macOS liefert; die Canon-eigene 1–4-Balken-Anzeige bleibt als Hinweis sichtbar. Canon-Spooler, Spiegelkorrektur, SD A–E, Mehrdrucker-Verteilung, Banner/Rand und Archiv bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.32-material-resume"
+          CURRENT="fts-printer-mac-v0.3.33-rp108-power-guard"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

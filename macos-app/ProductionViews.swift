@@ -31,6 +31,7 @@ struct ProductionQueueContent: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
+                FTSHostPowerView(status:core.hostPower,compact:true)
                 Toggle("Automatik",isOn:Binding(
                     get:{core.autoDispatch},
                     set:{v in
@@ -47,6 +48,16 @@ struct ProductionQueueContent: View {
                 Button("Fehlgeschlagene löschen",role:.destructive){
                     Task{await core.purgeFailedLocalJobs(state:state)}
                 }
+            }
+
+            if let warning=core.hostPowerWarning {
+                Label(warning,systemImage:"battery.25")
+                    .font(.caption.bold())
+                    .foregroundStyle(core.hostPower.critical ? Color.red : Color.orange)
+                    .padding(8)
+                    .frame(maxWidth:.infinity,alignment:.leading)
+                    .background((core.hostPower.critical ? Color.red : Color.orange).opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius:8))
             }
 
             if core.printerSlots.isEmpty {
@@ -182,6 +193,41 @@ struct ProductionQueueContent: View {
         .task {
             await core.discoverPrinters()
             await core.refresh(state:state)
+            while !Task.isCancelled {
+                try? await Task.sleep(for:.seconds(30))
+                await core.refreshHostPower()
+            }
+        }
+    }
+}
+
+private struct FTSHostPowerView: View {
+    let status:V80HostPowerStatus
+    var compact=false
+
+    var tint:Color {
+        if status.onACPower { return .green }
+        if status.critical { return .red }
+        if status.warning { return .orange }
+        return .green
+    }
+
+    var icon:String {
+        if status.onACPower { return status.charging ? "battery.100.bolt" : "powerplug.fill" }
+        guard let p=status.percentage else{return "battery.0"}
+        if p<=10{return "battery.0"}
+        if p<=35{return "battery.25"}
+        if p<=70{return "battery.50"}
+        return "battery.100"
+    }
+
+    var body:some View {
+        HStack(spacing:6) {
+            Image(systemName:icon).foregroundStyle(tint)
+            Text(status.summary)
+                .font(compact ? .caption2 : .callout)
+                .foregroundStyle(status.critical ? .red : (status.warning ? .orange : .secondary))
+                .lineLimit(compact ? 1 : 2)
         }
     }
 }
@@ -1473,9 +1519,12 @@ struct V81PrinterConsumableRow: View {
     @Binding var enabled:Bool
     let loadPaper:()->Void
     let loadFilm:()->Void
+    let startRP108:()->Void
     let resumeAfterChange:()->Void
     let coreBusyPaper:Bool
     let coreBusyFilm:Bool
+    let coreBusyRP108:Bool
+    @State private var confirmNewRP108=false
 
     var statusColor:Color {
         if slot.state=="ERROR" { return .red }
@@ -1500,6 +1549,9 @@ struct V81PrinterConsumableRow: View {
                     .fixedSize(horizontal:false,vertical:true)
             }
             HStack(spacing:12) {
+                Text("RP-108: \(consumable?.rp108_remaining.map(String.init) ?? "nicht gestartet") / 108")
+                    .font(.caption.bold())
+                    .foregroundStyle((consumable?.rp108_remaining ?? 108) <= 10 ? Color.red : ((consumable?.rp108_remaining ?? 108) <= 20 ? Color.orange : Color.primary))
                 Text("Papier: \(consumable?.paper_remaining.map(String.init) ?? "unbekannt") / 18")
                     .font(.caption)
                 Text("Farbfilm: \(consumable?.film_remaining.map(String.init) ?? "unbekannt") / 54")
@@ -1511,6 +1563,23 @@ struct V81PrinterConsumableRow: View {
                 Button("Farbfilm gewechselt · 54 neu",action:loadFilm)
                     .font(.caption)
                     .disabled(coreBusyFilm)
+            }
+            HStack(spacing:8) {
+                Button("Neues RP-108 Set starten · 108") {
+                    confirmNewRP108=true
+                }
+                .font(.caption.bold())
+                .disabled(coreBusyRP108 || ["PREPARING","TRANSFER","PRINTING"].contains(slot.state) || slot.currentUnit != nil)
+                if let remaining=consumable?.rp108_remaining,remaining<=20 {
+                    Text(remaining==0 ? "Set leer · neues Set einsetzen" : "Nur noch \(remaining) Prints im Set")
+                        .font(.caption.bold())
+                        .foregroundStyle(remaining<=10 ? .red : .orange)
+                }
+            }
+            if slot.name.lowercased().contains("selphy") || slot.name.lowercased().contains("cp1500") {
+                Label("SELPHY-Akku: Canon zeigt 1–4 Balken am Druckerdisplay. macOS/AirPrint liefert dafür keinen verlässlichen Akkuprozentwert.",systemImage:"battery.50")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
             if slot.state=="ERROR" || (consumable?.paper_remaining ?? 1) <= 0 || (consumable?.film_remaining ?? 1) <= 0 {
                 Button("Material gewechselt · Weiterdrucken",action:resumeAfterChange)
@@ -1529,6 +1598,12 @@ struct V81PrinterConsumableRow: View {
             }
         }
         .padding(.vertical,4)
+        .confirmationDialog("Neues RP-108 Set starten?",isPresented:$confirmNewRP108) {
+            Button("Ja · Zähler auf 108 neu starten",role:.destructive){startRP108()}
+            Button("Abbrechen",role:.cancel){}
+        } message: {
+            Text("Nur drücken, wenn wirklich ein neues RP-108 Set eingelegt wurde. Der FTS-Setzähler startet bei 108; Papierfach bei 18 und Farbfilm bei 54.")
+        }
     }
 }
 
@@ -1555,6 +1630,20 @@ struct ProductionSystemContent:View {
                     Button("Drucker neu erkennen"){Task{await core.discoverPrinters()}}
                 }
 
+                GroupBox("Stromversorgung Computer") {
+                    VStack(alignment:.leading,spacing:6) {
+                        FTSHostPowerView(status:core.hostPower)
+                        if let warning=core.hostPowerWarning {
+                            Label(warning,systemImage:"exclamationmark.triangle.fill")
+                                .font(.caption.bold())
+                                .foregroundStyle(core.hostPower.critical ? Color.red : Color.orange)
+                        } else if core.hostPower.hasBattery && core.hostPower.onACPower {
+                            Text("Laptop ist am Netzteil · Eventbetrieb abgesichert.")
+                                .font(.caption).foregroundStyle(.green)
+                        }
+                    }.padding(.vertical,5)
+                }
+
                 GroupBox("Verbindung FTS / Internet") {
                     VStack(alignment:.leading,spacing:5) {
                         Text(core.internetStatus)
@@ -1578,9 +1667,11 @@ struct ProductionSystemContent:View {
                                 ),
                                 loadPaper:{Task{await core.loadConsumable(printerName:p.name,component:"PAPER_PACK",state:state)}},
                                 loadFilm:{Task{await core.loadConsumable(printerName:p.name,component:"FILM_CASSETTE",state:state)}},
+                                startRP108:{Task{await core.startRP108Set(printerName:p.name,state:state)}},
                                 resumeAfterChange:{Task{await core.resumeAfterMaterialChange(printerName:p.name,state:state)}},
                                 coreBusyPaper:core.consumableActionBusy(printerName:p.name,component:"PAPER_PACK"),
-                                coreBusyFilm:core.consumableActionBusy(printerName:p.name,component:"FILM_CASSETTE")
+                                coreBusyFilm:core.consumableActionBusy(printerName:p.name,component:"FILM_CASSETTE"),
+                                coreBusyRP108:core.rp108ActionBusy(printerName:p.name)
                             )
                         }
                     }.padding(.vertical,5)
@@ -1650,6 +1741,10 @@ struct ProductionSystemContent:View {
             await core.discoverPrinters()
             await core.checkUpdate(platform:"macos")
             await core.refresh(state:state)
+            while !Task.isCancelled {
+                try? await Task.sleep(for:.seconds(30))
+                await core.refreshHostPower()
+            }
         }
     }
 }

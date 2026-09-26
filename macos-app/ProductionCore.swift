@@ -105,8 +105,10 @@ struct V81Consumable: Codable, Identifiable, Hashable {
     let printer_key: String
     let paper_remaining: Int?
     let film_remaining: Int?
+    let rp108_remaining: Int?
     let paper_loaded_at: String?
     let film_loaded_at: String?
+    let rp108_started_at: String?
     let last_print_at: String?
     let updated_at: String?
     var id:String { printer_key }
@@ -134,6 +136,26 @@ struct LocalPrinterSlot: Identifiable, Hashable {
     var lastError: String?
     var connection: String
     var id: String { name }
+}
+
+struct V80HostPowerStatus: Hashable {
+    let hasBattery: Bool
+    let percentage: Int?
+    let onACPower: Bool
+    let charging: Bool
+    let summary: String
+
+    static let unknown=V80HostPowerStatus(
+        hasBattery:false,percentage:nil,onACPower:false,charging:false,summary:"Stromstatus wird geprüft …"
+    )
+
+    var critical:Bool {
+        hasBattery && !onACPower && (percentage ?? 100) <= 15
+    }
+
+    var warning:Bool {
+        hasBattery && !onACPower && (percentage ?? 100) <= 35
+    }
 }
 
 enum V80PrintFrameMode: String, Codable, Hashable, CaseIterable {
@@ -700,6 +722,51 @@ enum V80MacSpooler {
         candidates.first { FileManager.default.isExecutableFile(atPath:$0) }
     }
 
+    static func hostPowerStatus() -> V80HostPowerStatus {
+        guard let raw=runProcess("/usr/bin/pmset",["-g","batt"],timeout:1.2) else {
+            return .unknown
+        }
+        let lower=raw.lowercased()
+        let onAC=lower.contains("'ac power'") || lower.contains("ac power")
+        guard let batteryLine=raw.split(separator:"\n").map(String.init).first(where:{$0.contains("%")}) else {
+            return V80HostPowerStatus(
+                hasBattery:false,
+                percentage:nil,
+                onACPower:onAC,
+                charging:false,
+                summary:onAC ? "Netzstrom · Desktop-Mac / kein interner Akku" : "Kein interner Akku erkannt"
+            )
+        }
+
+        var percent:Int?
+        let firstPart=batteryLine.split(separator:";",maxSplits:1).first.map(String.init) ?? batteryLine
+        for token in firstPart.split(whereSeparator:{$0==" " || $0=="\t"}) {
+            let cleaned=String(token).replacingOccurrences(of:"%","")
+            if let value=Int(cleaned),value>=0,value<=100 {
+                percent=value
+            }
+        }
+
+        let lineLower=batteryLine.lowercased()
+        let charging=lineLower.contains("charging")
+            && !lineLower.contains("discharging")
+            && !lineLower.contains("not charging")
+        let pct=percent.map{"\($0)%"} ?? "Akku"
+        let summary:String
+        if onAC {
+            summary=charging ? "Netzteil angeschlossen · \(pct) · lädt" : "Netzteil angeschlossen · \(pct)"
+        } else {
+            summary="Akkubetrieb · \(pct)"
+        }
+        return V80HostPowerStatus(
+            hasBattery:true,
+            percentage:percent,
+            onACPower:onAC,
+            charging:charging,
+            summary:summary
+        )
+    }
+
     static func installedPrinterNames() async -> [String] {
         let configured = await MainActor.run {
             NSPrinter.printerNames.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
@@ -972,8 +1039,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.31-material-resume"
-    static let build = 122
+    static let version = "1.1.32-rp108-power-guard"
+    static let build = 123
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -982,6 +1049,7 @@ final class ProductionCore: ObservableObject {
     @Published var consumables: [V81Consumable] = []
     @Published var localQueue = V80LocalQueueFile()
     @Published var printerSlots: [LocalPrinterSlot] = []
+    @Published var hostPower = V80HostPowerStatus.unknown
     @Published var internetStatus = "FTS-Server: Verbindung wird geprüft …"
     @Published var autoDispatch = UserDefaults.standard.object(forKey: "fts.autodispatch.v80") == nil ? true : UserDefaults.standard.bool(forKey: "fts.autodispatch.v80")
     @Published var queueStatus = ""
@@ -991,6 +1059,7 @@ final class ProductionCore: ObservableObject {
     @Published var pickupActionsInFlight: Set<String> = []
     @Published var archiveActionsInFlight: Set<String> = []
     @Published var consumableActionsInFlight: Set<String> = []
+    @Published var rp108ActionsInFlight: Set<String> = []
 
     private var activePrinterTasks: [String: Task<Void, Never>] = [:]
     private var lastDispatchedLocal = false
@@ -1158,12 +1227,13 @@ final class ProductionCore: ObservableObject {
             async let a: [V80ArchiveRow] = api.rpc("fts_printer_archived_v80", body: [
                 "p_device_token":dev, "p_session_token":session, "p_event_token":state.selectedEventToken, "p_limit":200
             ])
-            async let cc: [V81Consumable] = api.rpc("fts_printer_consumables_v81", body: [
+            async let cc: [V81Consumable] = api.rpc("fts_printer_consumables_v123", body: [
                 "p_device_token":dev, "p_session_token":session, "p_event_token":state.selectedEventToken
             ])
             let (qq,nn,pp,aa,cons) = try await (q,n,p,a,cc)
             workUnits = qq; printerNodes = nn; pickups = pp; archived = aa; consumables = cons
             if let e=lastError, isTransientTransportMessage(e) { lastError=nil }
+            await refreshHostPower()
             await refreshPrinterConnectivity()
             let waitingCount = qq.filter{$0.unit_status == "READY"}.count + localWaitingCount
             let enabled = printerSlots.filter{$0.enabled}
@@ -1184,6 +1254,19 @@ final class ProductionCore: ObservableObject {
 
     var hasDispatchableWork: Bool {
         localWaitingCount > 0 || workUnits.contains { $0.unit_status == "READY" }
+    }
+
+    var hostPowerWarning:String? {
+        guard hostPower.hasBattery,!hostPower.onACPower,let pct=hostPower.percentage else{return nil}
+        if pct <= 15 { return "Laptop-Akku kritisch: \(pct)% · Ladegerät jetzt anschließen, damit der Druckbetrieb nicht abbricht." }
+        if pct <= 35 { return "Laptop-Akku wird leer: \(pct)% · Ladegerät für den Eventbetrieb bereithalten." }
+        return nil
+    }
+
+    func refreshHostPower() async {
+        hostPower=await Task.detached(priority:.utility) {
+            V80MacSpooler.hostPowerStatus()
+        }.value
     }
 
     private func refreshPrinterConnectivity() async {
@@ -1415,20 +1498,59 @@ final class ProductionCore: ObservableObject {
         consumableActionsInFlight.contains(printerName+"::"+component)
     }
 
+    func rp108ActionBusy(printerName:String)->Bool {
+        rp108ActionsInFlight.contains(printerName)
+    }
+
+    func startRP108Set(printerName:String,state:AppState) async {
+        guard !rp108ActionsInFlight.contains(printerName) else{return}
+        guard let i=printerSlots.firstIndex(where:{$0.name==printerName}) else{return}
+        guard !["PREPARING","TRANSFER","PRINTING"].contains(printerSlots[i].state),
+              printerSlots[i].currentUnit == nil else {
+            lastError="Neues RP-108 Set erst starten, wenn dieser Drucker sicher frei ist."
+            return
+        }
+        guard let dev=state.deviceToken,let session=state.sessionToken,!state.selectedEventToken.isEmpty else{return}
+
+        rp108ActionsInFlight.insert(printerName)
+        defer{rp108ActionsInFlight.remove(printerName)}
+        do {
+            let _:JSONValue = try await api.rpc("fts_printer_start_rp108_v123",body:[
+                "p_device_token":dev,
+                "p_session_token":session,
+                "p_event_token":state.selectedEventToken,
+                "p_printer_key":backendPrinterKey(printerName)
+            ])
+            setSlot(printerName,state:"IDLE",eta:0,current:nil,error:nil)
+            lastError=nil
+            await state.refreshSelected()
+            await refresh(state:state)
+            if autoDispatch { dispatchAvailable(state:state) }
+        } catch {
+            lastError=error.localizedDescription
+        }
+    }
+
     func consumable(for printerName:String)->V81Consumable? {
         consumables.first{$0.printer_key==backendPrinterKey(printerName)}
     }
 
     func materialReady(for printerName:String) -> Bool {
         guard let c = consumable(for:printerName) else { return true }
-        return (c.paper_remaining ?? 1) > 0 && (c.film_remaining ?? 1) > 0
+        return (c.paper_remaining ?? 1) > 0
+            && (c.film_remaining ?? 1) > 0
+            && (c.rp108_remaining ?? 1) > 0
     }
 
     func materialMessage(for printerName:String) -> String? {
         guard let c = consumable(for:printerName) else { return nil }
+        if c.rp108_remaining == 0 { return "RP-108 Set leer · neues 108er Set starten" }
         if (c.paper_remaining ?? 1) <= 0 && (c.film_remaining ?? 1) <= 0 { return "Papier und Farbfilm leer" }
         if (c.paper_remaining ?? 1) <= 0 { return "Papier leer" }
         if (c.film_remaining ?? 1) <= 0 { return "Farbfilm leer" }
+        if let n=c.rp108_remaining,n<=10 { return "RP-108 kritisch · noch \(n) Prints" }
+        if let n=c.film_remaining,n<=5 { return "Farbfilm kritisch · noch \(n) Prints" }
+        if let n=c.paper_remaining,n<=3 { return "Papierfach bald leer · noch \(n) Blatt" }
         return nil
     }
 
