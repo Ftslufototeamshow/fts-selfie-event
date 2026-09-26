@@ -773,8 +773,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.13-live-device-panel"
-    static let build = 104
+    static let version = "1.1.14-header-clock"
+    static let build = 105
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []

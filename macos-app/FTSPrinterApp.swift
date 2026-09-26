@@ -662,7 +662,7 @@ final class AppState: ObservableObject {
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
-    static let appVersion = "0.3.14-live-device-panel"
+    static let appVersion = "0.3.15-header-clock"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -749,7 +749,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.14-live-device-panel"
+                "p_user_agent":"FTS Printer macOS 0.3.15-header-clock"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -780,7 +780,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.14-live-device-panel"
+                "p_user_agent":"FTS Printer macOS 0.3.15-header-clock"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session
@@ -1369,9 +1369,25 @@ struct MainView: View {
                     Text("Professionelle Event-Druckstation").font(.caption).foregroundStyle(.white.opacity(0.8))
                 }
                 Spacer()
-                VStack(alignment:.trailing,spacing:2){
-                    Text(state.currentUser?.display_name ?? "").font(.headline)
-                    Text(state.currentUser?.roleLabel ?? "").font(.caption).foregroundStyle(FTSTheme.muted)
+                HStack(spacing:14){
+                    TimelineView(.periodic(from:.now,by:1)) { context in
+                        HStack(spacing:6){
+                            Image(systemName:"clock.fill")
+                                .font(.caption)
+                                .foregroundStyle(FTSTheme.gold)
+                            Text(context.date,format:.dateTime.hour().minute().second())
+                                .font(.system(size:17,weight:.bold,design:.monospaced))
+                                .foregroundStyle(.white)
+                                .monospacedDigit()
+                        }
+                    }
+                    Rectangle()
+                        .fill(Color.white.opacity(0.18))
+                        .frame(width:1,height:30)
+                    VStack(alignment:.trailing,spacing:2){
+                        Text(state.currentUser?.display_name ?? "").font(.headline)
+                        Text(state.currentUser?.roleLabel ?? "").font(.caption).foregroundStyle(FTSTheme.muted)
+                    }
                 }
             }.padding(.horizontal,18).padding(.bottom,10)
         }
