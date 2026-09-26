@@ -677,7 +677,7 @@ final class AppState: ObservableObject {
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
-    static let appVersion = "0.3.30-print-path-restore"
+    static let appVersion = "0.3.31-stock-entry-guard"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -764,7 +764,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.30-print-path-restore"
+                "p_user_agent":"FTS Printer macOS 0.3.31-stock-entry-guard"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -795,7 +795,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.30-print-path-restore"
+                "p_user_agent":"FTS Printer macOS 0.3.31-stock-entry-guard"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session
@@ -1814,7 +1814,16 @@ struct StockSheet:View{
             Divider()
             Text("Bestand ändern").font(.headline)
             Text("Für jede Bestandsänderung muss der aktuell angemeldete Mitarbeiter seinen persönlichen Code nochmals bestätigen.").font(.caption).foregroundStyle(.secondary)
-            Picker("Buchung",selection:$kind){
+            Picker("Buchung",selection:Binding(
+                get:{kind},
+                set:{newKind in
+                    kind=newKind
+                    // Prevent the RP-108 package default (108) from being carried
+                    // into a consumption booking such as TEST_PRINT/MISPRINT/REPRINT.
+                    // Stock addition defaults to a full pack; consumption starts at 1.
+                    qty = newKind=="ADD_STOCK" ? "108" : "1"
+                }
+            )){
                 Text("Nachschub hinzufügen").tag("ADD_STOCK")
                 Text("Kamera-/Standprint").tag("CAMERA_PRINT")
                 Text("Testdruck").tag("TEST_PRINT")

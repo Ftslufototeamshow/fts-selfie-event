@@ -972,8 +972,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.29-print-path-restore"
-    static let build = 120
+    static let version = "1.1.30-stock-entry-guard"
+    static let build = 121
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
