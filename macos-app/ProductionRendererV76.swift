@@ -30,14 +30,23 @@ enum ProductionRendererV76 {
     private static let api = FTSAPI.shared
     private static let ciContext = CIContext(options: [.cacheIntermediates: true])
 
-    static func renderedImage(sourceURL: URL, event: EventRow) async throws -> NSImage {
+    static func renderedImage(
+        sourceURL: URL,
+        event: EventRow,
+        cropZoom: CGFloat = 1,
+        cropOffsetX: CGFloat = 0,
+        cropOffsetY: CGFloat = 0
+    ) async throws -> NSImage {
         guard let source = uprightImage(contentsOf: sourceURL) else {
             throw NSError(domain:"FTSPrinter",code:176,userInfo:[NSLocalizedDescriptionKey:"Lokales Foto konnte nicht geöffnet werden."])
         }
 
         let config = event.studio_config?.object ?? [:]
         let faces = detectFaces(source)
-        let plan = buildPlan(source: source, config: config, faces: faces)
+        let plan = buildPlan(
+            source:source,config:config,faces:faces,
+            cropZoom:cropZoom,cropOffsetX:cropOffsetX,cropOffsetY:cropOffsetY
+        )
 
         let out = NSImage(size: plan.canvas)
         out.lockFocus()
@@ -79,7 +88,14 @@ enum ProductionRendererV76 {
 
     // MARK: - v77 adaptive crop
 
-    private static func buildPlan(source:NSImage,config:[String:JSONValue],faces:[FaceBox])->Plan {
+    private static func buildPlan(
+        source:NSImage,
+        config:[String:JSONValue],
+        faces:[FaceBox],
+        cropZoom:CGFloat,
+        cropOffsetX:CGFloat,
+        cropOffsetY:CGFloat
+    )->Plan {
         let sw=max(source.size.width,1), sh=max(source.size.height,1), ratio=sw/sh
         let adaptive=config["adaptive"]?.object ?? [:]
         let autoOrientation=adaptive["auto_orientation"]?.bool != false
@@ -97,17 +113,12 @@ enum ProductionRendererV76 {
             cw=sw; ch=sw/target; cx=0; cy=(sh-ch)/2
         }
 
-        let mode=(landscape ? adaptive["landscape"] : adaptive["portrait"])?.object ?? [:]
-        let normal:CGFloat
-        let minimum:CGFloat
-        if landscape {
-            normal=clamp(CGFloat(mode["banner_max_pct"]?.double ?? 22),14,26)
-            minimum=clamp(CGFloat(mode["banner_min_pct"]?.double ?? 14),10,normal)
-        } else {
-            // Portrait must stay visually compact: the photo remains the hero, not the footer.
-            normal=clamp(CGFloat(mode["banner_max_pct"]?.double ?? 12),9,13)
-            minimum=min(clamp(CGFloat(mode["banner_min_pct"]?.double ?? 8),6,normal),8)
-        }
+        // Fixed FTS banner height: 15 mm on the SELPHY Postcard short side (100 mm).
+        // On the existing 3:2 raster this is 15% in landscape and 10% in portrait.
+        // Studio configuration may change content/colors, but never this physical height.
+        let fixedBannerPct=CGFloat(15.0)*min(canvas.width,canvas.height)/canvas.height
+        let normal=fixedBannerPct
+        let minimum=fixedBannerPct
         let gap=clamp(CGFloat(adaptive["face_gap_pct"]?.double ?? 2.5),1,8)
         let padding=clamp(CGFloat(adaptive["face_padding_ratio"]?.double ?? 0.34),0.12,0.65)
         let adaptiveEnabled=adaptive["enabled"]?.bool != false
@@ -138,6 +149,25 @@ enum ProductionRendererV76 {
             }
         }
 
+        // Manual crop adjustment happens after the existing automatic face-safe crop.
+        // This keeps the organizer overlay fixed while only the underlying photo crop moves.
+        let zoom=clamp(cropZoom,1,1.35)
+        if zoom>1.0001 {
+            let midX=cx+cw/2,midY=cy+ch/2
+            cw=max(1,cw/zoom);ch=max(1,ch/zoom)
+            cx=clamp(midX-cw/2,0,max(0,sw-cw))
+            cy=clamp(midY-ch/2,0,max(0,sh-ch))
+        }
+        let ox=clamp(cropOffsetX,-1,1),oy=clamp(cropOffsetY,-1,1)
+        if sw>cw+0.5 {
+            let room=ox>=0 ? max(0,sw-cw-cx) : max(0,cx)
+            cx=clamp(cx+ox*room,0,max(0,sw-cw))
+        }
+        if sh>ch+0.5 {
+            let room=oy>=0 ? max(0,sh-ch-cy) : max(0,cy)
+            cy=clamp(cy+oy*room,0,max(0,sh-ch))
+        }
+
         var faceBottom:CGFloat=0
         for b in faces {
             let mapped=FaceBox(
@@ -151,16 +181,9 @@ enum ProductionRendererV76 {
             faceBottom=max(faceBottom,(mapped.bottom+p)/canvas.height)
         }
 
-        var bannerPct=normal
-        var unresolved=false
-        if faceBottom>0 {
-            let available=(1-faceBottom-gap/100)*100
-            if available<normal { bannerPct=max(minimum,available) }
-            unresolved=available<minimum
-        }
-        bannerPct=clamp(bannerPct,minimum,normal)
-        let minScale=clamp(CGFloat(adaptive["min_text_scale"]?.double ?? 0.68),0.52,0.92)
-        let textScale=clamp((bannerPct/max(normal,1))*0.98,minScale,1)
+        let bannerPct=normal
+        let unresolved=faceBottom>0 && ((1-faceBottom-gap/100)*100 < normal)
+        let textScale:CGFloat=1
 
         return Plan(
             canvas:canvas,
@@ -296,23 +319,9 @@ enum ProductionRendererV76 {
         let ov=config["overlay"]?.object ?? [:]
         let banner=ov["banner"]?.object ?? [:]
         let w=plan.canvas.width,h=plan.canvas.height
-        let requested=clamp(CGFloat(banner["height_pct"]?.double ?? 30),12,48)
-
-        let adaptive=config["adaptive"]?.object ?? [:]
-        let mode=(plan.landscape ? adaptive["landscape"] : adaptive["portrait"])?.object ?? [:]
-        let normalCap:CGFloat
-        let minimum:CGFloat
-        if plan.landscape {
-            normalCap=clamp(CGFloat(mode["banner_max_pct"]?.double ?? 22),14,26)
-            minimum=clamp(CGFloat(mode["banner_min_pct"]?.double ?? 14),10,normalCap)
-        } else {
-            normalCap=clamp(CGFloat(mode["banner_max_pct"]?.double ?? 12),9,13)
-            minimum=min(clamp(CGFloat(mode["banner_min_pct"]?.double ?? 8),6,normalCap),8)
-        }
-        let automatic=adaptive["enabled"]?.bool != false
-        let heightPct=automatic ? clamp(plan.bannerPct,minimum,normalCap) : (plan.landscape ? requested : min(requested,normalCap))
+        let heightPct=plan.bannerPct
         let bh=h*heightPct/100
-        let visualTextScale=plan.textScale*(plan.landscape ? 1.0:0.72)
+        let visualTextScale=plan.textScale
 
         if banner["enabled"]?.bool != false {
             let color=NSColor(hex:banner["color"]?.string ?? "#071315")
@@ -343,7 +352,14 @@ enum ProductionRendererV76 {
         }
 
         let padPct=clamp(CGFloat(ov["padding_pct"]?.double ?? 4.5)/100,0.025,0.10)
-        let pad=w*padPct,maxW=w-pad*2
+        let printSafeInset=max(18,min(w,h)*0.02)
+        let pad=max(w*padPct,printSafeInset),maxW=max(1,w-pad*2)
+        let safeBottom=printSafeInset
+        let safeTop=max(safeBottom+1,bh-printSafeInset)
+        let safeHeight=max(1,safeTop-safeBottom)
+        let titleRect=NSRect(x:pad,y:safeBottom+safeHeight*0.52,width:maxW,height:safeHeight*0.48)
+        let subtitleRect=NSRect(x:pad,y:safeBottom+safeHeight*0.23,width:maxW,height:safeHeight*0.29)
+        let lineRect=NSRect(x:pad,y:safeBottom,width:maxW,height:safeHeight*0.23)
         let title=ov["title"]?.object ?? [:]
         let sub=ov["subtitle"]?.object ?? [:]
         let line=ov["line"]?.object ?? [:]
@@ -352,28 +368,28 @@ enum ProductionRendererV76 {
         if title["enabled"]?.bool != false {
             drawText(
                 textValue(title,event:event,fallback:"title"),
-                baseline:bh*0.60,
+                safeRect:titleRect,
                 spec:title,
                 fallbackAlign:titleAlign,
                 defaultSize:5.8,
                 defaultWeight:900,
                 defaultColor:"#ffffff",
                 textScale:visualTextScale,
-                pad:pad,maxWidth:maxW,canvas:plan.canvas
+                canvas:plan.canvas
             )
         }
 
         if sub["enabled"]?.bool != false {
             drawText(
                 textValue(sub,event:event,fallback:"subtitle"),
-                baseline:bh*0.33,
+                safeRect:subtitleRect,
                 spec:sub,
                 fallbackAlign:titleAlign,
                 defaultSize:3.2,
                 defaultWeight:800,
                 defaultColor:event.accent ?? "#d9b56d",
                 textScale:visualTextScale,
-                pad:pad,maxWidth:maxW,canvas:plan.canvas
+                canvas:plan.canvas
             )
         }
 
@@ -385,14 +401,14 @@ enum ProductionRendererV76 {
             }
             drawText(
                 value,
-                baseline:bh*0.13,
+                safeRect:lineRect,
                 spec:line,
                 fallbackAlign:titleAlign,
                 defaultSize:2.1,
                 defaultWeight:600,
                 defaultColor:"#e8efed",
                 textScale:visualTextScale,
-                pad:pad,maxWidth:maxW,canvas:plan.canvas
+                canvas:plan.canvas
             )
         }
 
@@ -406,39 +422,39 @@ enum ProductionRendererV76 {
             ]
             let s="FTS.lu · Selfie Event" as NSString
             let size=s.size(withAttributes:attrs)
-            s.draw(at:NSPoint(x:w-pad-size.width,y:max(8,h*0.012)),withAttributes:attrs)
+            s.draw(at:NSPoint(x:max(pad,w-pad-size.width),y:printSafeInset),withAttributes:attrs)
         }
     }
 
-    private static func drawText(_ text:String,baseline:CGFloat,spec:[String:JSONValue],fallbackAlign:String,
+    private static func drawText(_ text:String,safeRect:NSRect,spec:[String:JSONValue],fallbackAlign:String,
                                  defaultSize:CGFloat,defaultWeight:Int,defaultColor:String,textScale:CGFloat,
-                                 pad:CGFloat,maxWidth:CGFloat,canvas:NSSize) {
-        guard !text.isEmpty else{return}
+                                 canvas:NSSize) {
+        guard !text.isEmpty,safeRect.width>1,safeRect.height>1 else{return}
         let align=spec["align"]?.string ?? fallbackAlign
         let weight=Int(spec["weight"]?.double ?? Double(defaultWeight))
         let fontID=spec["font"]?.string ?? "clean"
         let base=min(canvas.width,canvas.height)
         let start=max(12,CGFloat(spec["size_pct"]?.double ?? Double(defaultSize))*base/100*textScale)
-        let minSize=max(11,start*0.55)
+        let minSize=max(10,min(start*0.55,safeRect.height*0.72))
         let shadowEnabled=spec["shadow"]?.bool != false
         let multicolor=spec["multicolor"]?.bool == true
         let colors=(spec["colors"]?.array ?? []).compactMap{$0.string}
         let fallbackColor=spec["color"]?.string ?? defaultColor
         let palette=colors.isEmpty ? [fallbackColor] : colors
 
-        var size=start
+        var size=min(start,safeRect.height*0.72)
         while size>minSize {
             let font=fontFor(fontID,size:size,weight:weight)
             let width=(text as NSString).size(withAttributes:[.font:font]).width
-            if width<=maxWidth { break }
+            if width<=safeRect.width { break }
             size-=2
         }
 
         let font=fontFor(fontID,size:size,weight:weight)
         let p=NSMutableParagraphStyle()
         p.alignment = align=="center" ? .center : (align=="right" ? .right:.left)
-        let x=pad
-        let rect=NSRect(x:x,y:baseline-size*0.35,width:maxWidth,height:size*1.45)
+        let textHeight=min(safeRect.height,max(size*1.30,size+4))
+        let rect=NSRect(x:safeRect.minX,y:safeRect.midY-textHeight/2,width:safeRect.width,height:textHeight)
         let shadow=NSShadow()
         shadow.shadowColor=shadowEnabled ? NSColor.black.withAlphaComponent(0.55) : .clear
         shadow.shadowBlurRadius=shadowEnabled ? max(3,canvas.width*0.004):0
@@ -454,18 +470,18 @@ enum ProductionRendererV76 {
             return
         }
 
-        // Character-by-character color cycle, preserving v76 alignment.
         let chars=Array(text)
         let widths=chars.map { (String($0) as NSString).size(withAttributes:[.font:font]).width }
         let total=widths.reduce(0,+)
-        var left=align=="center" ? canvas.width/2-total/2 : (align=="right" ? canvas.width-pad-total : pad)
+        var left=align=="center" ? safeRect.midX-total/2 : (align=="right" ? safeRect.maxX-total : safeRect.minX)
+        let y=safeRect.midY-size*0.45
         for (i,ch) in chars.enumerated() {
             let attrs:[NSAttributedString.Key:Any]=[
                 .font:font,
                 .foregroundColor:NSColor(hex:palette[i % palette.count]),
                 .shadow:shadow
             ]
-            String(ch).draw(at:NSPoint(x:left,y:baseline-size*0.35),withAttributes:attrs)
+            String(ch).draw(at:NSPoint(x:left,y:y),withAttributes:attrs)
             left += widths[i]
         }
     }
@@ -508,7 +524,7 @@ enum ProductionRendererV76 {
             groups[item["position"]?.string ?? "top-right",default:[]].append((item,img))
         }
 
-        let w=canvas.width,h=canvas.height,pad=max(22,w*0.035),gap=max(10,w*0.012)
+        let w=canvas.width,h=canvas.height,pad=max(22,max(w*0.035,min(w,h)*0.025)),gap=max(10,w*0.012)
         for (position,arr) in groups {
             var dims:[([String:JSONValue],NSImage,CGFloat,CGFloat)]=[]
             for (item,img) in arr {
@@ -545,7 +561,7 @@ enum ProductionRendererV76 {
         var groups:[String:[[String:JSONValue]]]=[:]
         for item in items { groups[item["position"]?.string ?? "bottom-right",default:[]].append(item) }
 
-        let w=canvas.width,h=canvas.height,pad=max(24,w*0.035),gap=max(8,w*0.01)
+        let w=canvas.width,h=canvas.height,pad=max(24,max(w*0.035,min(w,h)*0.025)),gap=max(8,w*0.01)
         for (position,arr) in groups {
             let dims=arr.map { item -> ([String:JSONValue],CGFloat,CGFloat,CGFloat) in
                 let size=item["size"]?.string ?? "medium"

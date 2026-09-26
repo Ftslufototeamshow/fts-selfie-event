@@ -152,6 +152,41 @@ struct V80PrintLayout: Codable, Hashable {
     var fitMode: V80PrintFitMode = .fill
     var borderMM: Double = 4.0
     var borderColorHex: String = "#FFFFFF"
+    var cropZoom: Double = 1.0
+    var cropOffsetX: Double = 0.0
+    var cropOffsetY: Double = 0.0
+
+    var hasCustomCrop: Bool {
+        abs(cropZoom - 1.0) > 0.001 || abs(cropOffsetX) > 0.001 || abs(cropOffsetY) > 0.001
+    }
+
+    init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case frameMode, fitMode, borderMM, borderColorHex, cropZoom, cropOffsetX, cropOffsetY
+    }
+
+    init(from decoder: Decoder) throws {
+        let c=try decoder.container(keyedBy:CodingKeys.self)
+        frameMode=try c.decodeIfPresent(V80PrintFrameMode.self,forKey:.frameMode) ?? .borderless
+        fitMode=try c.decodeIfPresent(V80PrintFitMode.self,forKey:.fitMode) ?? .fill
+        borderMM=try c.decodeIfPresent(Double.self,forKey:.borderMM) ?? 4.0
+        borderColorHex=try c.decodeIfPresent(String.self,forKey:.borderColorHex) ?? "#FFFFFF"
+        cropZoom=try c.decodeIfPresent(Double.self,forKey:.cropZoom) ?? 1.0
+        cropOffsetX=try c.decodeIfPresent(Double.self,forKey:.cropOffsetX) ?? 0.0
+        cropOffsetY=try c.decodeIfPresent(Double.self,forKey:.cropOffsetY) ?? 0.0
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c=encoder.container(keyedBy:CodingKeys.self)
+        try c.encode(frameMode,forKey:.frameMode)
+        try c.encode(fitMode,forKey:.fitMode)
+        try c.encode(borderMM,forKey:.borderMM)
+        try c.encode(borderColorHex,forKey:.borderColorHex)
+        try c.encode(cropZoom,forKey:.cropZoom)
+        try c.encode(cropOffsetX,forKey:.cropOffsetX)
+        try c.encode(cropOffsetY,forKey:.cropOffsetY)
+    }
 }
 
 enum V80PrintLayoutComposer {
@@ -224,6 +259,7 @@ struct V80LocalPrintUnit: Codable, Identifiable, Hashable {
     var printedAt: Date?
     var lastError: String?
     var componentSynced: Bool?
+    var sourceImagePath: String? = nil
     var printLayout: V80PrintLayout? = nil
 }
 
@@ -932,8 +968,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.25-photo-preview-confirm"
-    static let build = 116
+    static let version = "1.1.26-photo-crop-safe-banner"
+    static let build = 117
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -1396,8 +1432,18 @@ final class ProductionCore: ObservableObject {
 
         do {
             guard let event=state.selectedEvent else{throw NSError(domain:"FTSPrinter",code:85,userInfo:[NSLocalizedDescriptionKey:"Event nicht mehr ausgewählt."])}
+            let unit=localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex]
+            let printLayout=unit.printLayout ?? V80PrintLayout()
             let rendered:NSImage
-            if preRendered {
+            if printLayout.hasCustomCrop,let sourcePath=unit.sourceImagePath,!sourcePath.isEmpty {
+                rendered=try await ProductionRendererV76.renderedImage(
+                    sourceURL:URL(fileURLWithPath:sourcePath),
+                    event:event,
+                    cropZoom:CGFloat(printLayout.cropZoom),
+                    cropOffsetX:CGFloat(printLayout.cropOffsetX),
+                    cropOffsetY:CGFloat(printLayout.cropOffsetY)
+                )
+            } else if preRendered {
                 guard let ready=NSImage(contentsOfFile:path) else {
                     throw NSError(domain:"FTSPrinter",code:189,userInfo:[NSLocalizedDescriptionKey:"Druckbereite Design-Datei konnte nicht geöffnet werden."])
                 }
@@ -1405,7 +1451,6 @@ final class ProductionCore: ObservableObject {
             } else {
                 rendered=try await ProductionRendererV76.renderedImage(sourceURL:URL(fileURLWithPath:path),event:event)
             }
-            let printLayout=localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex].printLayout ?? V80PrintLayout()
             let finalImage=V80PrintLayoutComposer.apply(rendered,layout:printLayout)
             let estimate=V80MacSpooler.learnedSeconds(printerName:printerName)
             let start=Date()
@@ -1634,7 +1679,7 @@ final class ProductionCore: ObservableObject {
                         preRendered:(m.designedPath?.isEmpty == false),
                         originalName:m.originalName,copyIndex:copy,status:.waiting,printerName:nil,
                         startedAt:nil,printedAt:nil,lastError:nil,componentSynced:false,
-                        printLayout:layouts[m.id]
+                        sourceImagePath:m.importedPath,printLayout:layouts[m.id]
                     ))
                 }
             }

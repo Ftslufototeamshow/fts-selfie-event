@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.26-photo-preview-confirm.zip
-            dist/FTS-Printer-macOS-v0.3.26-photo-preview-confirm.dmg
+            dist/FTS-Printer-macOS-v0.3.27-photo-crop-safe-banner.zip
+            dist/FTS-Printer-macOS-v0.3.27-photo-crop-safe-banner.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.26-photo-preview-confirm"
+          TAG="fts-printer-mac-v0.3.27-photo-crop-safe-banner"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.26-photo-preview-confirm.zip dist/FTS-Printer-macOS-v0.3.26-photo-preview-confirm.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.27-photo-crop-safe-banner.zip dist/FTS-Printer-macOS-v0.3.27-photo-crop-safe-banner.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.26-photo-preview-confirm.zip dist/FTS-Printer-macOS-v0.3.26-photo-preview-confirm.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.26 · Photo Preview + Confirm" --notes "Build 116: Ergänzt eine große Druckvorschau pro SD-/WLAN-Foto und stellt das manuelle Bestätigen vor dem Druck wieder her. Ein Klick auf das Vorschaubild öffnet die fertige Druckdatei groß. Dort können Randlos, weißer Rand oder Farbrand, Randbreite, Randfarbe sowie Bild füllen oder Einpassen gewählt und die Stückzahl 1–20 festgelegt werden. Erst „OK · Zum Druck“ legt den Auftrag an; die Mengenwahl allein startet keinen Druck mehr. Die zuletzt gewählte Rand-/Einpass-Einstellung wird pro Event gespeichert. Die bestehende Warteschlange, Mehrdrucker-Verteilung, Canon-Druckerkennung, SELPHY-Spiegelkorrektur, SD-Geschwindigkeit und Live-Design-Synchronisation bleiben unverändert; der neue Rahmen wird nur auf die bereits fertige Druckdatei angewendet."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.27-photo-crop-safe-banner.zip dist/FTS-Printer-macOS-v0.3.27-photo-crop-safe-banner.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.27 · Photo Crop + Safe Banner" --notes "Build 117: Vervollständigt die Druckvorschau: Das Foto kann jetzt in der großen Vorschau gezoomt und per Ziehen im Ausschnitt verschoben werden; derselbe Crop wird erst beim bestätigten Druck mit dem aktuellen Veranstalter-Design neu gerendert. Die untere FTS-Bannerhöhe ist physisch auf 15 mm bezogen auf die 100-mm-Postcard-Seite fixiert (Querformat 15 %, Hochformat 10 % im bestehenden 3:2-Raster). Text, Logos und Dekorationen erhalten eine feste Druck-Sicherheitszone; Text wird innerhalb sicherer Bannerbereiche verkleinert statt abgeschnitten. Randlos/weißer Rand/Farbrand, Randbreite, Randfarbe und die explizite OK-zum-Druck-Logik bleiben erhalten. Canon-SELPHY-Spiegelkorrektur, Druckererkennung, Mehrdrucker-Verteilung, SD A–E, Archivworkflow und Live-Design-Sync bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.26-photo-preview-confirm"
+          CURRENT="fts-printer-mac-v0.3.27-photo-crop-safe-banner"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

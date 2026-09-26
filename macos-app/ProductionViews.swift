@@ -367,6 +367,7 @@ private struct FTSCameraLiveTile: View {
 
 struct V80PhotoPrintPreviewSheet: View {
     let item:V80MediaItem
+    let event:EventRow?
     let photoNumber:Int
     let sourceTitle:String
     let initialLayout:V80PrintLayout
@@ -376,9 +377,14 @@ struct V80PhotoPrintPreviewSheet: View {
 
     @State private var quantity:Int
     @State private var layout:V80PrintLayout
+    @State private var previewImage:NSImage?
+    @State private var renderingPreview=false
+    @State private var dragStartX:Double?
+    @State private var dragStartY:Double?
 
     init(
         item:V80MediaItem,
+        event:EventRow?,
         photoNumber:Int,
         sourceTitle:String,
         initialLayout:V80PrintLayout,
@@ -387,6 +393,7 @@ struct V80PhotoPrintPreviewSheet: View {
         onConfirm:@escaping(Int,V80PrintLayout)->Void
     ) {
         self.item=item
+        self.event=event
         self.photoNumber=photoNumber
         self.sourceTitle=sourceTitle
         self.initialLayout=initialLayout
@@ -395,16 +402,22 @@ struct V80PhotoPrintPreviewSheet: View {
         self.onConfirm=onConfirm
         _quantity=State(initialValue:max(1,initialQuantity))
         _layout=State(initialValue:initialLayout)
+        let seedPath=(item.designedPath?.isEmpty == false) ? item.designedPath! : item.importedPath
+        let seed=NSImage(contentsOfFile:seedPath).map{V80PrintLayoutComposer.apply($0,layout:initialLayout)}
+        _previewImage=State(initialValue:seed)
     }
 
-    private var sourceImage:NSImage? {
-        let path=(item.designedPath?.isEmpty == false) ? item.designedPath! : item.importedPath
-        return NSImage(contentsOfFile:path)
-    }
-
-    private var previewImage:NSImage? {
-        guard let image=sourceImage else{return nil}
-        return V80PrintLayoutComposer.apply(image,layout:layout)
+    private var previewKey:String {
+        [
+            item.id,
+            String(format:"%.3f",layout.cropZoom),
+            String(format:"%.3f",layout.cropOffsetX),
+            String(format:"%.3f",layout.cropOffsetY),
+            layout.frameMode.rawValue,
+            layout.fitMode.rawValue,
+            String(format:"%.2f",layout.borderMM),
+            layout.borderColorHex.uppercased()
+        ].joined(separator:"|")
     }
 
     private var frameLabel:String {
@@ -412,6 +425,38 @@ struct V80PhotoPrintPreviewSheet: View {
         case .borderless:return "Randlos"
         case .white:return "Weißer Rand"
         case .color:return "Farbrand"
+        }
+    }
+
+    private func refreshPreview() async {
+        renderingPreview=true
+        defer{renderingPreview=false}
+        do {
+            try await Task.sleep(nanoseconds:80_000_000)
+            try Task.checkCancellation()
+            let rendered:NSImage
+            if let event {
+                rendered=try await ProductionRendererV76.renderedImage(
+                    sourceURL:URL(fileURLWithPath:item.importedPath),
+                    event:event,
+                    cropZoom:CGFloat(layout.cropZoom),
+                    cropOffsetX:CGFloat(layout.cropOffsetX),
+                    cropOffsetY:CGFloat(layout.cropOffsetY)
+                )
+            } else {
+                let path=(item.designedPath?.isEmpty == false) ? item.designedPath! : item.importedPath
+                guard let image=NSImage(contentsOfFile:path) else{return}
+                rendered=image
+            }
+            try Task.checkCancellation()
+            previewImage=V80PrintLayoutComposer.apply(rendered,layout:layout)
+        } catch is CancellationError {
+            return
+        } catch {
+            let path=(item.designedPath?.isEmpty == false) ? item.designedPath! : item.importedPath
+            if let fallback=NSImage(contentsOfFile:path) {
+                previewImage=V80PrintLayoutComposer.apply(fallback,layout:layout)
+            }
         }
     }
 
@@ -428,22 +473,67 @@ struct V80PhotoPrintPreviewSheet: View {
                             .resizable()
                             .scaledToFit()
                             .padding(10)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance:1)
+                                    .onChanged { value in
+                                        if dragStartX == nil {
+                                            dragStartX=layout.cropOffsetX
+                                            dragStartY=layout.cropOffsetY
+                                        }
+                                        let sx=dragStartX ?? layout.cropOffsetX
+                                        let sy=dragStartY ?? layout.cropOffsetY
+                                        layout.cropOffsetX=max(-1,min(1,sx-Double(value.translation.width/220)))
+                                        layout.cropOffsetY=max(-1,min(1,sy-Double(value.translation.height/220)))
+                                    }
+                                    .onEnded { _ in
+                                        dragStartX=nil
+                                        dragStartY=nil
+                                    }
+                            )
                     } else {
                         VStack(spacing:8) {
                             Image(systemName:"photo").font(.system(size:36))
                             Text("Vorschau konnte nicht geladen werden.")
                         }.foregroundStyle(.secondary)
                     }
+                    if renderingPreview {
+                        ProgressView().controlSize(.small).padding(10)
+                            .background(.ultraThinMaterial).clipShape(Capsule())
+                    }
                 }
                 .frame(minWidth:520,minHeight:520)
-                Text("Diese Vorschau benutzt dieselbe Rand-/Einpass-Logik wie der spätere Ausdruck.")
+                Text("Foto direkt in der Vorschau ziehen. Die Vorschau wird mit derselben Crop-, Rand- und Designlogik wie der Ausdruck erzeugt.")
                     .font(.caption2).foregroundStyle(.secondary)
             }
 
             Divider()
 
-            VStack(alignment:.leading,spacing:14) {
+            VStack(alignment:.leading,spacing:12) {
                 Text("Druck einstellen").font(.headline)
+
+                GroupBox("Ausschnitt") {
+                    VStack(alignment:.leading,spacing:7) {
+                        HStack {
+                            Text("Zoom")
+                            Spacer()
+                            Text(String(format:"%.0f %%",layout.cropZoom*100)).monospacedDigit()
+                        }.font(.caption)
+                        Slider(value:$layout.cropZoom,in:1...1.35,step:0.01)
+                        HStack {
+                            Text("Zum Verschieben Foto links/rechts oder hoch/runter ziehen.")
+                                .font(.caption2).foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Zentrieren") {
+                                layout.cropZoom=1
+                                layout.cropOffsetX=0
+                                layout.cropOffsetY=0
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                    .padding(.vertical,3)
+                }
 
                 Picker("Druckrand",selection:$layout.frameMode) {
                     Text("Randlos").tag(V80PrintFrameMode.borderless)
@@ -497,8 +587,8 @@ struct V80PhotoPrintPreviewSheet: View {
                 .pickerStyle(.segmented)
 
                 Text(layout.fitMode == .fit
-                     ? "Einpassen zeigt die komplette fertige Druckdatei innerhalb des gewählten Randes."
-                     : "Bild füllen nutzt die Fläche vollständig und kann am inneren Rand minimal beschneiden.")
+                     ? "Einpassen zeigt die komplette fertige Druckfläche innerhalb des gewählten Randes."
+                     : "Bild füllen nutzt die Fläche vollständig.")
                     .font(.caption2).foregroundStyle(.secondary)
 
                 Divider()
@@ -528,10 +618,11 @@ struct V80PhotoPrintPreviewSheet: View {
                 Text("Aktuell: \(frameLabel)")
                     .font(.caption2).foregroundStyle(.secondary)
             }
-            .frame(width:310)
+            .frame(width:330)
         }
         .padding(16)
-        .frame(minWidth:900,minHeight:640)
+        .frame(minWidth:940,minHeight:680)
+        .task(id:previewKey){await refreshPreview()}
     }
 }
 
@@ -639,6 +730,7 @@ struct ProductionMediaContent: View {
         .sheet(item:$previewItem) { item in
             V80PhotoPrintPreviewSheet(
                 item:item,
+                event:event,
                 photoNumber:stablePhotoNumber(item),
                 sourceTitle:mediaSourceTitle(item),
                 initialLayout:printLayouts[item.id] ?? defaultPrintLayout,
