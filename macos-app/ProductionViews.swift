@@ -383,6 +383,7 @@ struct ProductionMediaContent: View {
     @State private var clearingDay=false
     @State private var showManualCardPhotos=false
     @State private var autoSubmitTask:Task<Void,Never>?=nil
+    @State private var refreshingOrganizerDesign=false
 
     var event:EventRow? { state.selectedEvent }
 
@@ -492,6 +493,10 @@ struct ProductionMediaContent: View {
                 Button("Archiv"){ingest.revealArchiveFolder()}
                 Button("WLAN-Eingang"){ingest.revealWLANFolder()}
                 Button("SD/USB auf Desktop anzeigen"){ingest.showExternalMediaOnDesktop()}
+                Button(refreshingOrganizerDesign ? "Design wird aktualisiert …":"Veranstalter-Design aktualisieren"){
+                    refreshOrganizerDesign()
+                }
+                .disabled(refreshingOrganizerDesign || ingest.scanning)
                 Button("Alte Fotos auf SD suchen"){
                     showManualCardPhotos=true
                 }
@@ -710,12 +715,34 @@ struct ProductionMediaContent: View {
     }
 
     private func monitorEvent() async {
-        guard let e=event else{return}
-        ingest.load(event:e)
+        guard let initial=event else{return}
+        ingest.load(event:initial)
         core.loadLocalQueue(folderPath:ingest.activation?.folderPath)
+        var designRefreshTicks=5
         while !Task.isCancelled {
-            if ingest.activation != nil { await ingest.scan(event:e) }
+            if designRefreshTicks>=5 {
+                _=await state.refreshSelectedEventDefinition()
+                designRefreshTicks=0
+            }
+            // Never keep the EventRow captured at screen-open time. Studio changes
+            // must flow into the very next design pass without re-opening the app.
+            if let current=state.selectedEvent,ingest.activation != nil {
+                await ingest.scan(event:current)
+            }
             try? await Task.sleep(for:.seconds(1))
+            designRefreshTicks += 1
+        }
+    }
+
+    private func refreshOrganizerDesign() {
+        guard !refreshingOrganizerDesign else{return}
+        refreshingOrganizerDesign=true
+        Task {
+            defer{refreshingOrganizerDesign=false}
+            _=await state.refreshSelectedEventDefinition()
+            if let current=state.selectedEvent {
+                await ingest.refreshDesign(event:current)
+            }
         }
     }
 }

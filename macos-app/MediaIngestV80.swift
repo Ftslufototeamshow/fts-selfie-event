@@ -374,6 +374,22 @@ final class MediaIngestV80: ObservableObject {
         }
     }
 
+    func refreshDesign(event:EventRow) async {
+        guard let a=activation,!scanning else{return}
+        scanning=true
+        status="Aktuelles Veranstalter-Design wird geladen …"
+        defer{scanning=false}
+        let designed=await ensureDesignedCopies(event:event,activation:a,items:items)
+        items=designed.items.sorted{$0.importedAt>$1.importedAt}
+        if designed.failed>0 {
+            status="Design aktualisiert · \(designed.failed) Datei(en) konnten nicht neu erstellt werden."
+        } else if designed.created>0 {
+            status="Veranstalter-Design aktualisiert · \(designed.created) Druckdatei\(designed.created==1 ? "" : "en") neu erstellt."
+        } else {
+            status="Veranstalter-Design ist bereits aktuell."
+        }
+    }
+
     func scan(event: EventRow) async {
         guard let a=activation,!scanning else{return}
         scanning=true
@@ -449,7 +465,10 @@ final class MediaIngestV80: ObservableObject {
         var failed=0
 
         for i in out.indices {
-            guard out[i].visibleInPrinter else{continue}
+            let workflow=out[i].effectiveWorkflow
+            // Active photos and already queued local jobs must follow live studio
+            // changes. Produced/delivered/error/hidden history stays immutable.
+            guard workflow == .active || workflow == .queued else{continue}
             let existing=out[i].designedPath
             if out[i].designSignature==signature,
                let existing,
