@@ -972,8 +972,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.30-stock-entry-guard"
-    static let build = 121
+    static let version = "1.1.31-material-resume"
+    static let build = 122
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -1109,7 +1109,10 @@ final class ProductionCore: ObservableObject {
             if let old = printerSlots.first(where: { $0.name == name }) {
                 var slot = old
                 slot.enabled = enabled.contains(name)
-                if slot.state == "OFFLINE" {
+                if (slot.state == "OFFLINE" || slot.state == "ERROR") && slot.currentUnit == nil {
+                    // A material/transport pause is recoverable after macOS sees the
+                    // printer again. Never clear an ERROR that still owns a current
+                    // unit; that remains protected against accidental double prints.
                     slot.state = "IDLE"
                     slot.eta = 0
                     slot.currentUnit = nil
@@ -1161,6 +1164,7 @@ final class ProductionCore: ObservableObject {
             let (qq,nn,pp,aa,cons) = try await (q,n,p,a,cc)
             workUnits = qq; printerNodes = nn; pickups = pp; archived = aa; consumables = cons
             if let e=lastError, isTransientTransportMessage(e) { lastError=nil }
+            await refreshPrinterConnectivity()
             let waitingCount = qq.filter{$0.unit_status == "READY"}.count + localWaitingCount
             let enabled = printerSlots.filter{$0.enabled}
             let materialBlocked = waitingCount > 0 && !enabled.isEmpty && enabled.allSatisfy{ !materialReady(for:$0.name) }
@@ -1212,7 +1216,11 @@ final class ProductionCore: ObservableObject {
                 printerSlots[i].connection=connection
             }
             if nativeState=="STOPPED" && slot.state != "ERROR" {
-                setSlot(name,state:"ERROR",eta:0,current:nil,error:"macOS-Druckwarteschlange ist gestoppt. Drucker in macOS prüfen.")
+                setSlot(name,state:"ERROR",eta:0,current:nil,error:"macOS-Druckwarteschlange ist gestoppt. Papier/Farbfilm prüfen.")
+            } else if nativeState=="IDLE" && slot.state=="ERROR" && slot.currentUnit == nil {
+                // Canon/macOS becomes IDLE again after a resolved paper/film pause.
+                // Recover automatically only when no uncertain print is attached.
+                setSlot(name,state:"IDLE",eta:0,current:nil,error:nil)
             }
         }
     }
@@ -1369,8 +1377,38 @@ final class ProductionCore: ObservableObject {
                 "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
                 "p_printer_key":backendPrinterKey(printerName),"p_component":component
             ])
+            // A confirmed material change is an explicit operator recovery action.
+            // Clear only a free printer; uncertain/current jobs remain protected.
+            if let i=printerSlots.firstIndex(where:{$0.name==printerName}),
+               printerSlots[i].currentUnit == nil {
+                setSlot(printerName,state:"IDLE",eta:0,current:nil,error:nil)
+            }
+            await discoverPrinters()
             await refresh(state:state)
+            if autoDispatch { dispatchAvailable(state:state) }
         } catch { lastError=error.localizedDescription }
+    }
+
+    func resumeAfterMaterialChange(printerName:String,state:AppState) async {
+        guard let i=printerSlots.firstIndex(where:{$0.name==printerName}) else{return}
+        if printerSlots[i].currentUnit != nil {
+            lastError="Druckstatus noch unklar. Ausdruck zuerst prüfen, damit nichts doppelt gedruckt wird."
+            return
+        }
+
+        let c=consumable(for:printerName)
+        let needsPaper=(c?.paper_remaining ?? 1) <= 0
+        let needsFilm=(c?.film_remaining ?? 1) <= 0
+
+        if needsPaper { await loadConsumable(printerName:printerName,component:"PAPER_PACK",state:state) }
+        if needsFilm { await loadConsumable(printerName:printerName,component:"FILM_CASSETTE",state:state) }
+
+        if !needsPaper && !needsFilm {
+            setSlot(printerName,state:"IDLE",eta:0,current:nil,error:nil)
+            await discoverPrinters()
+            await refresh(state:state)
+            if autoDispatch { dispatchAvailable(state:state) }
+        }
     }
 
     func consumableActionBusy(printerName:String,component:String)->Bool {

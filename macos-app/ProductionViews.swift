@@ -1473,6 +1473,7 @@ struct V81PrinterConsumableRow: View {
     @Binding var enabled:Bool
     let loadPaper:()->Void
     let loadFilm:()->Void
+    let resumeAfterChange:()->Void
     let coreBusyPaper:Bool
     let coreBusyFilm:Bool
 
@@ -1504,12 +1505,18 @@ struct V81PrinterConsumableRow: View {
                 Text("Farbfilm: \(consumable?.film_remaining.map(String.init) ?? "unbekannt") / 54")
                     .font(.caption)
                 Spacer()
-                Button("18 Blatt eingelegt",action:loadPaper)
+                Button("Papier gewechselt · 18 neu",action:loadPaper)
                     .font(.caption)
                     .disabled(coreBusyPaper)
-                Button("Farbfilm eingelegt",action:loadFilm)
+                Button("Farbfilm gewechselt · 54 neu",action:loadFilm)
                     .font(.caption)
                     .disabled(coreBusyFilm)
+            }
+            if slot.state=="ERROR" || (consumable?.paper_remaining ?? 1) <= 0 || (consumable?.film_remaining ?? 1) <= 0 {
+                Button("Material gewechselt · Weiterdrucken",action:resumeAfterChange)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(coreBusyPaper || coreBusyFilm)
             }
             if let e=slot.lastError,!e.isEmpty {
                 Text(e).font(.caption).foregroundStyle(slot.state=="ERROR" ? .red : .orange)
@@ -1571,6 +1578,7 @@ struct ProductionSystemContent:View {
                                 ),
                                 loadPaper:{Task{await core.loadConsumable(printerName:p.name,component:"PAPER_PACK",state:state)}},
                                 loadFilm:{Task{await core.loadConsumable(printerName:p.name,component:"FILM_CASSETTE",state:state)}},
+                                resumeAfterChange:{Task{await core.resumeAfterMaterialChange(printerName:p.name,state:state)}},
                                 coreBusyPaper:core.consumableActionBusy(printerName:p.name,component:"PAPER_PACK"),
                                 coreBusyFilm:core.consumableActionBusy(printerName:p.name,component:"FILM_CASSETTE")
                             )
