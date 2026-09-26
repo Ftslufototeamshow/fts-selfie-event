@@ -155,7 +155,6 @@ struct V80PrintLayout: Codable, Hashable {
 }
 
 enum V80PrintLayoutComposer {
-    @MainActor
     static func apply(_ image:NSImage,layout:V80PrintLayout)->NSImage {
         // Exact legacy path: no extra raster work when the user leaves the
         // established borderless/fill output untouched.
