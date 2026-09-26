@@ -136,6 +136,79 @@ struct LocalPrinterSlot: Identifiable, Hashable {
     var id: String { name }
 }
 
+enum V80PrintFrameMode: String, Codable, Hashable, CaseIterable {
+    case borderless
+    case white
+    case color
+}
+
+enum V80PrintFitMode: String, Codable, Hashable, CaseIterable {
+    case fill
+    case fit
+}
+
+struct V80PrintLayout: Codable, Hashable {
+    var frameMode: V80PrintFrameMode = .borderless
+    var fitMode: V80PrintFitMode = .fill
+    var borderMM: Double = 4.0
+    var borderColorHex: String = "#FFFFFF"
+}
+
+enum V80PrintLayoutComposer {
+    @MainActor
+    static func apply(_ image:NSImage,layout:V80PrintLayout)->NSImage {
+        // Exact legacy path: no extra raster work when the user leaves the
+        // established borderless/fill output untouched.
+        if layout.frameMode == .borderless && layout.fitMode == .fill { return image }
+
+        let size=image.size
+        guard size.width>0,size.height>0 else{return image}
+        let out=NSImage(size:size)
+        out.lockFocus()
+        defer{out.unlockFocus()}
+
+        let background:NSColor
+        switch layout.frameMode {
+        case .borderless: background = .black
+        case .white: background = .white
+        case .color: background = NSColor(hex:layout.borderColorHex)
+        }
+        background.setFill()
+        NSRect(origin:.zero,size:size).fill()
+
+        let shortSide=max(1,min(size.width,size.height))
+        let borderPx:CGFloat
+        if layout.frameMode == .borderless {
+            borderPx=0
+        } else {
+            // SELPHY Postcard short side is 100 mm. Keep the UI value physically
+            // meaningful regardless of portrait/landscape orientation.
+            borderPx=shortSide*CGFloat(max(0,min(layout.borderMM,12.0))/100.0)
+        }
+        let inner=NSRect(
+            x:borderPx,y:borderPx,
+            width:max(1,size.width-borderPx*2),
+            height:max(1,size.height-borderPx*2)
+        )
+
+        let iw=max(image.size.width,1),ih=max(image.size.height,1)
+        let sx=inner.width/iw, sy=inner.height/ih
+        let scale = layout.fitMode == .fit ? min(sx,sy) : max(sx,sy)
+        let drawSize=NSSize(width:iw*scale,height:ih*scale)
+        let drawRect=NSRect(
+            x:inner.midX-drawSize.width/2,
+            y:inner.midY-drawSize.height/2,
+            width:drawSize.width,height:drawSize.height
+        )
+
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(rect:inner).addClip()
+        image.draw(in:drawRect,from:.zero,operation:.copy,fraction:1)
+        NSGraphicsContext.restoreGraphicsState()
+        return out
+    }
+}
+
 struct V80LocalPrintUnit: Codable, Identifiable, Hashable {
     enum Status: String, Codable { case waiting, printing, printed, uncertain, cancelled }
     let id: UUID
@@ -152,6 +225,7 @@ struct V80LocalPrintUnit: Codable, Identifiable, Hashable {
     var printedAt: Date?
     var lastError: String?
     var componentSynced: Bool?
+    var printLayout: V80PrintLayout? = nil
 }
 
 struct V80LocalPrintJob: Codable, Identifiable, Hashable {
@@ -859,8 +933,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.24-macos-printer-names"
-    static let build = 115
+    static let version = "1.1.25-photo-preview-confirm"
+    static let build = 116
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -1332,10 +1406,12 @@ final class ProductionCore: ObservableObject {
             } else {
                 rendered=try await ProductionRendererV76.renderedImage(sourceURL:URL(fileURLWithPath:path),event:event)
             }
+            let printLayout=localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex].printLayout ?? V80PrintLayout()
+            let finalImage=V80PrintLayoutComposer.apply(rendered,layout:printLayout)
             let estimate=V80MacSpooler.learnedSeconds(printerName:printerName)
             let start=Date()
             setSlot(printerName,state:"PRINTING",eta:Int(estimate),current:"LOCAL:"+jobID.uuidString,error:nil)
-            let cupsRequestID = try V80MacSpooler.submit(image:rendered,printerName:printerName,title:"FTS Kamera · \(customer) · \(original)")
+            let cupsRequestID = try V80MacSpooler.submit(image:finalImage,printerName:printerName,title:"FTS Kamera · \(customer) · \(original)")
             let ticker=Task { [weak self] in
                 while !Task.isCancelled {
                     try? await Task.sleep(for:.seconds(1))
@@ -1534,7 +1610,7 @@ final class ProductionCore: ObservableObject {
         }
     }
 
-    func createLocalJob(state:AppState, media:[V80MediaItem:Int], sourceType:String, sourceLabel:String, eventDay:String) async -> String? {
+    func createLocalJob(state:AppState, media:[V80MediaItem:Int], layouts:[String:V80PrintLayout] = [:], sourceType:String, sourceLabel:String, eventDay:String) async -> String? {
         guard let dev=state.deviceToken,let session=state.sessionToken,!state.selectedEventToken.isEmpty,
               !loadedFolderPath.isEmpty else{return nil}
         let filtered=media.filter{$0.value>0}
@@ -1558,7 +1634,8 @@ final class ProductionCore: ObservableObject {
                         id:UUID(),jobID:id,customerCode:code,mediaID:m.id,imagePath:readyPath,
                         preRendered:(m.designedPath?.isEmpty == false),
                         originalName:m.originalName,copyIndex:copy,status:.waiting,printerName:nil,
-                        startedAt:nil,printedAt:nil,lastError:nil,componentSynced:false
+                        startedAt:nil,printedAt:nil,lastError:nil,componentSynced:false,
+                        printLayout:layouts[m.id]
                     ))
                 }
             }

@@ -365,6 +365,176 @@ private struct FTSCameraLiveTile: View {
     }
 }
 
+struct V80PhotoPrintPreviewSheet: View {
+    let item:V80MediaItem
+    let photoNumber:Int
+    let sourceTitle:String
+    let initialLayout:V80PrintLayout
+    let initialQuantity:Int
+    let onCancel:()->Void
+    let onConfirm:(Int,V80PrintLayout)->Void
+
+    @State private var quantity:Int
+    @State private var layout:V80PrintLayout
+
+    init(
+        item:V80MediaItem,
+        photoNumber:Int,
+        sourceTitle:String,
+        initialLayout:V80PrintLayout,
+        initialQuantity:Int,
+        onCancel:@escaping()->Void,
+        onConfirm:@escaping(Int,V80PrintLayout)->Void
+    ) {
+        self.item=item
+        self.photoNumber=photoNumber
+        self.sourceTitle=sourceTitle
+        self.initialLayout=initialLayout
+        self.initialQuantity=initialQuantity
+        self.onCancel=onCancel
+        self.onConfirm=onConfirm
+        _quantity=State(initialValue:max(1,initialQuantity))
+        _layout=State(initialValue:initialLayout)
+    }
+
+    private var sourceImage:NSImage? {
+        let path=(item.designedPath?.isEmpty == false) ? item.designedPath! : item.importedPath
+        return NSImage(contentsOfFile:path)
+    }
+
+    private var previewImage:NSImage? {
+        guard let image=sourceImage else{return nil}
+        return V80PrintLayoutComposer.apply(image,layout:layout)
+    }
+
+    private var frameLabel:String {
+        switch layout.frameMode {
+        case .borderless:return "Randlos"
+        case .white:return "Weißer Rand"
+        case .color:return "Farbrand"
+        }
+    }
+
+    var body:some View {
+        HStack(spacing:18) {
+            VStack(alignment:.leading,spacing:8) {
+                Text("Druckvorschau").font(.title2.bold())
+                Text("\(sourceTitle) · Foto \(String(format:"%03d",photoNumber)) · \(item.originalName)")
+                    .font(.caption).foregroundStyle(.secondary)
+                ZStack {
+                    RoundedRectangle(cornerRadius:12).fill(Color.black.opacity(0.12))
+                    if let image=previewImage {
+                        Image(nsImage:image)
+                            .resizable()
+                            .scaledToFit()
+                            .padding(10)
+                    } else {
+                        VStack(spacing:8) {
+                            Image(systemName:"photo").font(.system(size:36))
+                            Text("Vorschau konnte nicht geladen werden.")
+                        }.foregroundStyle(.secondary)
+                    }
+                }
+                .frame(minWidth:520,minHeight:520)
+                Text("Diese Vorschau benutzt dieselbe Rand-/Einpass-Logik wie der spätere Ausdruck.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+
+            Divider()
+
+            VStack(alignment:.leading,spacing:14) {
+                Text("Druck einstellen").font(.headline)
+
+                Picker("Druckrand",selection:$layout.frameMode) {
+                    Text("Randlos").tag(V80PrintFrameMode.borderless)
+                    Text("Weißer Rand").tag(V80PrintFrameMode.white)
+                    Text("Farbrand").tag(V80PrintFrameMode.color)
+                }
+                .pickerStyle(.segmented)
+
+                if layout.frameMode != .borderless {
+                    VStack(alignment:.leading,spacing:5) {
+                        HStack {
+                            Text("Randbreite")
+                            Spacer()
+                            Text(String(format:"%.1f mm",layout.borderMM)).monospacedDigit()
+                        }.font(.caption)
+                        Slider(value:$layout.borderMM,in:1...10,step:0.5)
+                    }
+                }
+
+                if layout.frameMode == .color {
+                    VStack(alignment:.leading,spacing:7) {
+                        Text("Randfarbe").font(.caption.bold())
+                        HStack(spacing:7) {
+                            ForEach(["#FFFFFF","#000000","#D4AF37","#D93025","#1A73E8","#188038"],id:\.self) { hex in
+                                Button {
+                                    layout.borderColorHex=hex
+                                } label: {
+                                    Circle()
+                                        .fill(Color(nsColor:NSColor(hex:hex)))
+                                        .frame(width:24,height:24)
+                                        .overlay(
+                                            Circle().stroke(
+                                                layout.borderColorHex.uppercased()==hex ? Color.primary : Color.secondary.opacity(0.25),
+                                                lineWidth:layout.borderColorHex.uppercased()==hex ? 2:1
+                                            )
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        TextField("#RRGGBB",text:$layout.borderColorHex)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width:130)
+                    }
+                }
+
+                Picker("Bildanpassung",selection:$layout.fitMode) {
+                    Text("Bild füllen").tag(V80PrintFitMode.fill)
+                    Text("Einpassen").tag(V80PrintFitMode.fit)
+                }
+                .pickerStyle(.segmented)
+
+                Text(layout.fitMode == .fit
+                     ? "Einpassen zeigt die komplette fertige Druckdatei innerhalb des gewählten Randes."
+                     : "Bild füllen nutzt die Fläche vollständig und kann am inneren Rand minimal beschneiden.")
+                    .font(.caption2).foregroundStyle(.secondary)
+
+                Divider()
+
+                Stepper(value:$quantity,in:1...20) {
+                    HStack {
+                        Text("Anzahl").bold()
+                        Spacer()
+                        Text("\(quantity) ×").font(.title3.bold()).monospacedDigit()
+                    }
+                }
+
+                Text("Der Auftrag wird erst nach „OK · Zum Druck“ angelegt. Die Mengenwahl allein startet keinen Druck.")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                Spacer()
+
+                HStack {
+                    Button("Abbrechen"){onCancel()}
+                    Spacer()
+                    Button("OK · Zum Druck"){
+                        onConfirm(quantity,layout)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+
+                Text("Aktuell: \(frameLabel)")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            .frame(width:310)
+        }
+        .padding(16)
+        .frame(minWidth:900,minHeight:640)
+    }
+}
+
 struct ProductionMediaView: View {
     @EnvironmentObject var state: AppState
     var body: some View {
@@ -383,8 +553,10 @@ struct ProductionMediaContent: View {
     @State private var showClearDay=false
     @State private var clearingDay=false
     @State private var showManualCardPhotos=false
-    @State private var autoSubmitTask:Task<Void,Never>?=nil
     @State private var refreshingOrganizerDesign=false
+    @State private var previewItem:V80MediaItem?
+    @State private var printLayouts:[String:V80PrintLayout]=[:]
+    @State private var defaultPrintLayout=V80PrintLayout()
 
     var event:EventRow? { state.selectedEvent }
 
@@ -446,7 +618,6 @@ struct ProductionMediaContent: View {
         }
         .padding(8)
         .onAppear { prepareForEvent() }
-        .onDisappear { autoSubmitTask?.cancel() }
         .onChange(of:ingest.items) { _ in normalizeSource(preferNewest:true) }
         .task(id:event?.event_token) { await monitorEvent() }
         .alert("Tagesalbum leeren und Nummern zurücksetzen?",isPresented:$showClearDay) {
@@ -464,6 +635,24 @@ struct ProductionMediaContent: View {
                 )
                 .frame(minWidth:820,minHeight:620)
             }
+        }
+        .sheet(item:$previewItem) { item in
+            V80PhotoPrintPreviewSheet(
+                item:item,
+                photoNumber:stablePhotoNumber(item),
+                sourceTitle:mediaSourceTitle(item),
+                initialLayout:printLayouts[item.id] ?? defaultPrintLayout,
+                initialQuantity:quantities[item.id] ?? 0,
+                onCancel:{previewItem=nil},
+                onConfirm:{qty,layout in
+                    quantities[item.id]=qty
+                    printLayouts[item.id]=layout
+                    defaultPrintLayout=layout
+                    saveDefaultPrintLayout()
+                    previewItem=nil
+                    submitSelection(only:item.id)
+                }
+            )
         }
     }
 
@@ -587,7 +776,7 @@ struct ProductionMediaContent: View {
             if total>0 {
                 Text("\(total) Ausdruck\(total==1 ? "" : "e") ausgewählt").font(.headline)
             }
-            Button(submitting ? "Wird angelegt …" : "GO · Zum Druck"){submitSelection()}
+            Button(submitting ? "Wird angelegt …" : "OK · Zum Druck"){submitSelection()}
                 .buttonStyle(.borderedProminent)
                 .disabled(total==0 || submitting || ingest.scanning)
         }
@@ -609,13 +798,12 @@ struct ProductionMediaContent: View {
                         photoNumber:stablePhotoNumber(item),
                         quantity:Binding(
                             get:{quantities[item.id] ?? 0},
-                            set:{newValue in
-                                quantities[item.id]=newValue
-                                scheduleAutomaticSubmit()
-                            }
+                            set:{newValue in quantities[item.id]=newValue}
                         ),
+                        onPreview:{previewItem=item},
                         onHide:{
                             quantities.removeValue(forKey:item.id)
+                            printLayouts.removeValue(forKey:item.id)
                             ingest.hideFromProgram(item)
                         }
                     )
@@ -635,46 +823,75 @@ struct ProductionMediaContent: View {
         }
     }
 
-    private func scheduleAutomaticSubmit() {
-        autoSubmitTask?.cancel()
-        guard core.autoDispatch else{return}
-        guard total>0 else{return}
-        autoSubmitTask=Task { @MainActor in
-            // Short debounce: pressing + twice or more builds the final quantity first.
-            try? await Task.sleep(for:.milliseconds(1200))
-            guard !Task.isCancelled else{return}
-            while ingest.scanning && !Task.isCancelled {
-                try? await Task.sleep(for:.milliseconds(150))
-            }
-            guard !Task.isCancelled,total>0,!submitting else{return}
-            submitSelection()
-        }
-    }
-
-    private func submitSelection() {
-        guard total>0, !submitting else{return}
-        autoSubmitTask?.cancel()
+    private func submitSelection(only mediaID:String?=nil) {
+        guard !submitting else{return}
         submitting=true
         var selection:[V80MediaItem:Int]=[:]
         for item in visibleItems {
+            if let mediaID, item.id != mediaID { continue }
             let q=quantities[item.id] ?? 0
             if q>0 { selection[item]=q }
         }
-        let selectedType = sourceLabel=="W" ? "WIFI":"SD"
-        let selectedLabel = sourceLabel
+        guard !selection.isEmpty else {
+            submitting=false
+            return
+        }
+
+        let first=selection.keys.first
+        let selectedType=(first?.sourceType=="WIFI" || first?.sourceLabel=="W") ? "WIFI":"SD"
+        let selectedLabel=first?.sourceLabel ?? sourceLabel
+        let layouts=Dictionary(uniqueKeysWithValues:selection.keys.map {
+            ($0.id,printLayouts[$0.id] ?? defaultPrintLayout)
+        })
+        let submittedIDs=Set(selection.keys.map{$0.id})
+
         Task {
             defer { submitting=false }
             if let code=await core.createLocalJob(
                 state:state,
                 media:selection,
+                layouts:layouts,
                 sourceType:selectedType,
                 sourceLabel:selectedLabel,
                 eventDay:ingest.selectedDay
             ) {
                 lastCode=code
-                quantities.removeAll()
+                for id in submittedIDs {
+                    quantities.removeValue(forKey:id)
+                    printLayouts.removeValue(forKey:id)
+                }
                 if core.autoDispatch { core.dispatchAvailable(state:state) }
             }
+        }
+    }
+
+    private func mediaSourceTitle(_ item:V80MediaItem)->String {
+        if item.sourceType=="WIFI" {
+            if let camera=item.cameraID,!camera.isEmpty {
+                let parts=camera.split(separator:"·").map{String($0).trimmingCharacters(in:.whitespacesAndNewlines)}
+                if parts.count>=2 { return parts[1] }
+            }
+            return "WLAN-Kamera"
+        }
+        return "Karte \(item.sourceLabel)"
+    }
+
+    private func printLayoutDefaultsKey()->String {
+        "fts.print.layout.v116.\(event?.event_token ?? "default")"
+    }
+
+    private func loadDefaultPrintLayout() {
+        guard let data=UserDefaults.standard.data(forKey:printLayoutDefaultsKey()),
+              let value=try? JSONDecoder().decode(V80PrintLayout.self,from:data) else {
+            defaultPrintLayout=V80PrintLayout()
+            return
+        }
+        defaultPrintLayout=value
+    }
+
+    private func saveDefaultPrintLayout() {
+        if let data=try? JSONEncoder().encode(defaultPrintLayout) {
+            UserDefaults.standard.set(data,forKey:printLayoutDefaultsKey())
         }
     }
 
@@ -699,6 +916,8 @@ struct ProductionMediaContent: View {
         guard let e=event else{return}
         ingest.load(event:e)
         core.loadLocalQueue(folderPath:ingest.activation?.folderPath)
+        loadDefaultPrintLayout()
+        printLayouts.removeAll()
         normalizeSource()
     }
 
@@ -984,6 +1203,7 @@ struct V80MediaItemCell: View {
     let item:V80MediaItem
     let photoNumber:Int
     @Binding var quantity:Int
+    let onPreview:()->Void
     let onHide:()->Void
     @State private var showHide=false
 
@@ -1002,13 +1222,25 @@ struct V80MediaItemCell: View {
         VStack(alignment:.leading,spacing:5) {
             let previewPath=(item.designedPath?.isEmpty == false) ? item.designedPath! : item.importedPath
             if let image=NSImage(contentsOfFile:previewPath) {
-                Image(nsImage:image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth:.infinity)
-                    .frame(height:100)
-                    .background(Color.black.opacity(0.10))
-                    .clipShape(RoundedRectangle(cornerRadius:7))
+                Button(action:onPreview) {
+                    ZStack(alignment:.bottomTrailing) {
+                        Image(nsImage:image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth:.infinity)
+                            .frame(height:100)
+                            .background(Color.black.opacity(0.10))
+                            .clipShape(RoundedRectangle(cornerRadius:7))
+                        Image(systemName:"arrow.up.left.and.arrow.down.right")
+                            .font(.caption.bold())
+                            .padding(5)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                            .padding(5)
+                    }
+                }
+                .buttonStyle(.plain)
+                .help("Große Druckvorschau öffnen")
             }
             Text("\(sourceTitle) · Foto \(String(format:"%03d",photoNumber))")
                 .font(.caption.bold())
