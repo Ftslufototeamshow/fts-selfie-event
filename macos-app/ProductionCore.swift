@@ -372,14 +372,19 @@ enum V80MacSpooler {
             || (uri.contains("localhost") && isSelphy)
 
         if usbTransport || (rawURI.isEmpty && usbPresent) {
-            guard usbPresent else {
+            // macOS often exposes a physically attached SELPHY as ippusb:// or
+            // ipp://localhost. In that mode ioreg may not contain the SELPHY model
+            // name even though the local IPP-over-USB service is fully reachable.
+            // Probe that live service first; fall back to direct USB enumeration.
+            let latency = rawURI.isEmpty ? nil : networkPrinterLatency(uri:rawURI)
+            guard latency != nil || usbPresent else {
                 return ConnectionProbe(connected:false,summary:"USB · nicht angeschlossen")
             }
             let details=usbLinkSummary()
-            return ConnectionProbe(
-                connected:true,
-                summary:"USB · verbunden" + (details.isEmpty ? "" : " · "+details)
-            )
+            var summary="USB · verbunden"
+            if let latency { summary += " · \(latency) ms" }
+            if !details.isEmpty { summary += " · "+details }
+            return ConnectionProbe(connected:true,summary:summary)
         }
 
         let networkTransport=uri.hasPrefix("dnssd:")
@@ -503,7 +508,12 @@ enum V80MacSpooler {
 
     private static func resolveDNSSD(uri:String) -> (host:String,port:Int)? {
         guard let decoded=uri.removingPercentEncoding else{return nil}
-        let body=decoded.replacingOccurrences(of:"dnssd://",with:"",options:[.caseInsensitive])
+        let body:String
+        if let schemeRange=decoded.range(of:"://") {
+            body=String(decoded[schemeRange.upperBound...])
+        } else {
+            body=decoded
+        }
         let serviceTypes=["._ipps._tcp","._ipp._tcp"]
         guard let type=serviceTypes.first(where:{body.lowercased().contains($0)}) else{return nil}
         guard let range=body.lowercased().range(of:type) else{return nil}
@@ -773,8 +783,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.18-manual-sd-recovery"
-    static let build = 109
+    static let version = "1.1.19-ippusb-print-fix"
+    static let build = 110
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -892,7 +902,19 @@ final class ProductionCore: ObservableObject {
         internetStatus = await internetTask
         names.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
 
-        let enabled = Set(UserDefaults.standard.stringArray(forKey: "fts.enabled.printers.v80") ?? [])
+        var enabled = Set(UserDefaults.standard.stringArray(forKey: "fts.enabled.printers.v80") ?? [])
+        let liveEnabled=names.filter{enabled.contains($0)}
+        if liveEnabled.isEmpty {
+            let liveSelphy=names.filter {
+                let lower=$0.lowercased()
+                return lower.contains("selphy") || lower.contains("cp1500")
+            }
+            if liveSelphy.count==1,let only=liveSelphy.first {
+                enabled.insert(only)
+                UserDefaults.standard.set(Array(enabled).sorted(),forKey:"fts.enabled.printers.v80")
+            }
+        }
+
         var next: [LocalPrinterSlot] = []
         for name in names {
             if let old = printerSlots.first(where: { $0.name == name }) {

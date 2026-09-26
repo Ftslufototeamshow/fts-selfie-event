@@ -59,26 +59,23 @@ struct ProductionQueueContent: View {
                 ScrollView(.horizontal,showsIndicators:true) {
                     HStack(spacing:8) {
                         ForEach(core.printerSlots.filter(\.enabled)) { p in
-                            VStack(alignment:.leading,spacing:4) {
-                                Text(p.name).font(.caption.bold()).lineLimit(1)
-                                Text(p.state).font(.caption2).foregroundStyle(p.state=="ERROR" ? .red : (p.state=="IDLE" ? .green : .orange))
-                                if p.eta>0 { Text("ca. \(p.eta) Sek.").font(.caption2.monospacedDigit()) }
-                                if let material = core.materialMessage(for:p.name) {
-                                    Text(material).font(.caption2.bold()).foregroundStyle(.red)
+                            VStack(alignment:.leading,spacing:5) {
+                                FTSPrinterLiveTile(slot:p)
+                                if p.eta>0 {
+                                    Text("Druck läuft · ca. \(p.eta) Sek.")
+                                        .font(.caption2.monospacedDigit())
+                                        .foregroundStyle(.orange)
                                 }
-                                if let err=p.lastError,!err.isEmpty {
-                                    Text(err)
-                                        .font(.caption2)
-                                        .foregroundStyle(p.state=="ERROR" ? .red : .secondary)
-                                        .lineLimit(4)
+                                if let material=core.materialMessage(for:p.name) {
+                                    Label(material,systemImage:"exclamationmark.triangle.fill")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.red)
                                 }
                                 if p.state=="ERROR" {
-                                    Button("Fehler geprüft"){core.clearPrinterError(p.name)}.font(.caption2)
+                                    Button("Fehler geprüft"){core.clearPrinterError(p.name)}
+                                        .font(.caption2)
                                 }
                             }
-                            .padding(10).frame(width:180,alignment:.leading)
-                            .background(Color(nsColor:.controlBackgroundColor))
-                            .clipShape(RoundedRectangle(cornerRadius:10))
                         }
                     }
                 }
@@ -128,13 +125,38 @@ struct ProductionQueueContent: View {
                     ForEach(core.localQueue.jobs.filter{$0.status != .archived && $0.status != .cancelled && $0.status != .readyForPickup}) { job in
                         let printed=job.units.filter{$0.status == .printed}.count
                         VStack(alignment:.leading,spacing:7) {
-                            HStack {
-                                Text("\(job.sourceType) · \(job.customerCode)").font(.headline.monospacedDigit())
-                                Spacer()
-                                Text("\(printed)/\(job.units.count) gedruckt").font(.caption.bold())
+                            HStack(alignment:.top,spacing:10) {
+                                if let first=job.units.first,
+                                   let image=NSImage(contentsOfFile:first.imagePath) {
+                                    Image(nsImage:image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width:72,height:94)
+                                        .clipped()
+                                        .clipShape(RoundedRectangle(cornerRadius:8))
+                                } else {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius:8).fill(Color.secondary.opacity(0.10))
+                                        Image(systemName:"photo").foregroundStyle(.secondary)
+                                    }
+                                    .frame(width:72,height:94)
+                                }
+                                VStack(alignment:.leading,spacing:6) {
+                                    HStack {
+                                        Text("\(job.sourceType) · \(job.customerCode)").font(.headline.monospacedDigit())
+                                        Spacer()
+                                        Text("\(printed)/\(job.units.count) gedruckt").font(.caption.bold())
+                                    }
+                                    ProgressView(value:Double(printed),total:Double(max(1,job.units.count)))
+                                    Text(job.status.rawValue.uppercased()).font(.caption).foregroundStyle(.secondary)
+                                    if let first=job.units.first {
+                                        Text(first.originalName)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
                             }
-                            ProgressView(value:Double(printed),total:Double(max(1,job.units.count)))
-                            Text(job.status.rawValue.uppercased()).font(.caption).foregroundStyle(.secondary)
                             ForEach(job.units.filter{$0.status == .uncertain}) { unit in
                                 HStack {
                                     Image(systemName:"exclamationmark.triangle.fill").foregroundStyle(.orange)
@@ -288,10 +310,18 @@ private struct FTSPrinterLiveTile: View {
                     .font(.system(size:9))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                if let error=slot.lastError,!error.isEmpty {
+                    HStack(spacing:4) {
+                        Image(systemName:"exclamationmark.triangle.fill")
+                        Text(error).lineLimit(2)
+                    }
+                    .font(.system(size:9,weight:.semibold))
+                    .foregroundStyle(.red)
+                }
             }
         }
         .padding(8)
-        .frame(width:260,height:92,alignment:.leading)
+        .frame(width:260,height:(slot.lastError?.isEmpty == false ? 112 : 92),alignment:.leading)
         .background(Color(nsColor:.controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius:12))
     }
