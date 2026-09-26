@@ -204,8 +204,10 @@ enum V80QueueStore {
 
 final class V80BorderlessPrintView: NSView {
     let image: NSImage
-    init(image: NSImage, size: NSSize) {
+    let compensateHorizontalMirror: Bool
+    init(image: NSImage, size: NSSize, compensateHorizontalMirror: Bool = false) {
         self.image = image
+        self.compensateHorizontalMirror = compensateHorizontalMirror
         super.init(frame: NSRect(origin: .zero, size: size))
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -225,7 +227,21 @@ final class V80BorderlessPrintView: NSView {
             width: s.width,
             height: s.height
         )
-        image.draw(in: r, from: .zero, operation: .copy, fraction: 1)
+        if compensateHorizontalMirror {
+            // The native SELPHY path on this macOS setup outputs the complete
+            // composed page horizontally mirrored. Compensate only at the final
+            // print surface so previews, originals, EXIF orientation and studio
+            // rendering remain untouched.
+            NSGraphicsContext.saveGraphicsState()
+            let transform=NSAffineTransform()
+            transform.translateX(by:bounds.width,yBy:0)
+            transform.scaleX(by:-1,yBy:1)
+            transform.concat()
+            image.draw(in:r,from:.zero,operation:.copy,fraction:1)
+            NSGraphicsContext.restoreGraphicsState()
+        } else {
+            image.draw(in:r,from:.zero,operation:.copy,fraction:1)
+        }
     }
 }
 
@@ -714,7 +730,14 @@ enum V80MacSpooler {
         let drawingPaper=landscape
             ? NSSize(width:portraitPaper.height,height:portraitPaper.width)
             : portraitPaper
-        let view=V80BorderlessPrintView(image:image,size:drawingPaper)
+        let lowerPrinterName=printerName.lowercased()
+        let selphyMirrorCompensation =
+            lowerPrinterName.contains("selphy") || lowerPrinterName.contains("cp1500")
+        let view=V80BorderlessPrintView(
+            image:image,
+            size:drawingPaper,
+            compensateHorizontalMirror:selphyMirrorCompensation
+        )
         let op=NSPrintOperation(view:view,printInfo:info)
         op.jobTitle=title
         op.showsPrintPanel=false
@@ -836,8 +859,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.22-live-design-sync"
-    static let build = 113
+    static let version = "1.1.23-selphy-mirror-fix"
+    static let build = 114
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []

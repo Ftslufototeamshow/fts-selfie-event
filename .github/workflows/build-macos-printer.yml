@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.23-live-design-sync.zip
-            dist/FTS-Printer-macOS-v0.3.23-live-design-sync.dmg
+            dist/FTS-Printer-macOS-v0.3.24-selphy-mirror-fix.zip
+            dist/FTS-Printer-macOS-v0.3.24-selphy-mirror-fix.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.23-live-design-sync"
+          TAG="fts-printer-mac-v0.3.24-selphy-mirror-fix"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.23-live-design-sync.zip dist/FTS-Printer-macOS-v0.3.23-live-design-sync.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.24-selphy-mirror-fix.zip dist/FTS-Printer-macOS-v0.3.24-selphy-mirror-fix.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.23-live-design-sync.zip dist/FTS-Printer-macOS-v0.3.23-live-design-sync.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.23 · Live Design Sync" --notes "Build 113: Repariert ausschließlich die Live-Synchronisation des Veranstalter-/Studio-Designs für lokale SD-/WLAN-Fotos. Die Mac-App lädt die aktuelle Event-/studio_config regelmäßig neu statt ein beim Öffnen eingefrorenes Event-Objekt zu verwenden. Änderungen wie Bannerbild hinzufügen/entfernen, Text, Farben, Logos oder Studio-Einstellungen ändern dadurch automatisch die Design-Signatur und rendern aktive sowie bereits wartende lokale Druckdateien neu. Ein zusätzlicher Button „Veranstalter-Design aktualisieren“ erzwingt die Synchronisation sofort. Bereits produzierte/abgegebene/fehlgeschlagene Historie bleibt unverändert. SD-Geschwindigkeit, Auto-Dispatch und der funktionierende Canon-Druckpfad bleiben unangetastet."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.24-selphy-mirror-fix.zip dist/FTS-Printer-macOS-v0.3.24-selphy-mirror-fix.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.24 · SELPHY Mirror Fix" --notes "Build 114: Korrigiert ausschließlich die horizontale Spiegelung beim nativen Canon-SELPHY-Druck. Die fertige, bereits gerenderte Druckfläche wird für SELPHY/CP1500 direkt vor der Übergabe an macOS horizontal gegengespiegelt, damit der physische Ausdruck genauso lesbar und ausgerichtet ist wie die FTS-Vorschau. Fotoimport, EXIF-Rotation, Design-Studio, Live-Design-Sync, SD-Geschwindigkeit, Auto-Dispatch, Mehrdrucker-Verteilung und Druckererkennung bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.23-live-design-sync"
+          CURRENT="fts-printer-mac-v0.3.24-selphy-mirror-fix"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
