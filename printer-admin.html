@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#071315">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>FTS Printer Admin</title>
+<link rel="manifest" href="./printer-admin.webmanifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<style>
+:root{color-scheme:dark;--bg:#061012;--panel:#0b1b1e;--panel2:#10262a;--line:#233b3f;--gold:#e0b964;--cyan:#25c7df;--green:#55d78b;--red:#ff7272;--orange:#ffb45f;--muted:#9db0ad}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#061012,#071719 38%,#041012);color:#eef5f3;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;min-height:100svh}
+button,input,select,textarea{font:inherit}.hidden{display:none!important}.wrap{max-width:1180px;margin:auto;padding:env(safe-area-inset-top) 12px calc(24px + env(safe-area-inset-bottom))}
+.top{position:sticky;top:0;z-index:20;background:#061012ee;backdrop-filter:blur(16px);border-bottom:1px solid #20363a;margin:0 -12px;padding:10px 12px}
+.brand{display:flex;align-items:center;gap:10px}.brand img{width:46px;height:46px;border-radius:11px}.brand h1{font-size:1.15rem;margin:0;color:var(--gold)}.brand small{display:block;color:var(--muted);margin-top:2px}
+.toprow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px}.toprow select{flex:1;min-width:180px}.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);padding:7px 9px;border-radius:999px;background:#0a2023;font-size:.76rem;font-weight:800}.dot{width:8px;height:8px;border-radius:50%;background:var(--green)}.dot.off{background:var(--red)}
+button{border:0;border-radius:11px;padding:11px 13px;background:var(--cyan);color:#00191e;font-weight:900}button.secondary{background:#173137;color:#e6f1ef;border:1px solid #315056}button.danger{background:#59272a;color:#ffd8d8}button.gold{background:var(--gold);color:#211600}button:disabled{opacity:.45}
+select,input,textarea{width:100%;border:1px solid #315056;background:#07191c;color:#fff;border-radius:10px;padding:11px}textarea{min-height:72px;resize:vertical}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.metric,.card{background:linear-gradient(145deg,#0d2023,#091719);border:1px solid var(--line);border-radius:15px;padding:13px;box-shadow:0 14px 35px #0004}.metric b{font-size:1.6rem;color:var(--gold);display:block}.metric span{font-size:.73rem;color:var(--muted)}
+.section{margin-top:16px}.section h2{font-size:1rem;color:var(--gold);margin:0 0 8px}.stack{display:grid;gap:9px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.grow{flex:1}.muted{color:var(--muted)}.small{font-size:.76rem}.tiny{font-size:.69rem}
+.stationHead{display:flex;justify-content:space-between;gap:10px}.online{color:var(--green);font-weight:900}.offline{color:var(--red);font-weight:900}.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.chip{padding:6px 8px;border-radius:999px;background:#102a2e;border:1px solid #26444a;font-size:.7rem}.chip.good{color:#8ff0b6}.chip.warn{color:#ffd188}.chip.bad{color:#ff9b9b}
+.subcard{margin-top:9px;padding:9px;border-radius:11px;background:#071619;border:1px solid #1b3539}.list{display:grid;gap:5px;margin-top:6px}.line{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #173034}.line:last-child{border-bottom:0}
+.issue{border-left:4px solid var(--orange)}.issue.applied{border-left-color:var(--green)}.issue.rejected{border-left-color:var(--red)}.issue .photo{width:100%;max-height:280px;object-fit:contain;background:#020708;border-radius:10px;margin:8px 0}.msg{padding:8px 9px;border-radius:10px;background:#10252a;margin-top:6px}.msg.admin{border-left:3px solid var(--gold)}.msg.employee{border-left:3px solid var(--cyan)}.msg.system{border-left:3px solid var(--green)}
+table{width:100%;border-collapse:collapse;font-size:.76rem}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #1a3438}th{color:var(--muted)}
+.login{max-width:480px;margin:12vh auto}.login h1{color:var(--gold)}.login .card{padding:18px}.login label{display:block;margin:10px 0 5px;color:var(--muted);font-size:.8rem}
+.notice{padding:10px;border-radius:10px;background:#31260f;border:1px solid #6b5420;color:#ffe2a1;margin-top:10px}.ok{color:var(--green)}.err{color:var(--red)}
+.fab{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:30;width:54px;height:54px;border-radius:50%;display:grid;place-items:center;font-size:1.25rem;box-shadow:0 12px 36px #0008}
+@media(max-width:760px){.grid{grid-template-columns:1fr 1fr}.metric b{font-size:1.3rem}.wrap{padding-left:9px;padding-right:9px}.top{margin-left:-9px;margin-right:-9px}.hideMobile{display:none}.card{padding:11px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="loginView" class="login hidden">
+    <div class="card">
+      <div class="brand"><img src="./icon-192.png"><div><h1>FTS Printer Admin</h1><small>Persönlicher mobiler Administrator-Zugang</small></div></div>
+      <p class="muted small">Einmal Administrator auswählen und persönlichen Printer-Code eingeben. Danach bleibt dieses Handy angemeldet.</p>
+      <label>Administrator</label><select id="adminChoice"></select>
+      <label>Persönlicher Administrator-Code</label><input id="adminCode" type="password" inputmode="numeric" autocomplete="off">
+      <div class="row" style="margin-top:12px"><button id="loginBtn" class="grow">Handy freischalten</button></div>
+      <div id="loginStatus" class="small" style="margin-top:9px"></div>
+    </div>
+  </section>
+
+  <main id="appView" class="hidden">
+    <div class="top">
+      <div class="brand"><img src="./icon-192.png"><div class="grow"><h1>FTS Printer Admin</h1><small id="identity">Live-Übersicht</small></div><button id="logoutBtn" class="secondary">Abmelden</button></div>
+      <div class="toprow">
+        <select id="eventSelect"></select>
+        <span class="pill"><i id="liveDot" class="dot"></i><span id="liveText">Live</span></span>
+        <button id="pushBtn" class="secondary">🔔 Push aktivieren</button>
+        <button id="installBtn" class="secondary hidden">Zum Startbildschirm</button>
+      </div>
+    </div>
+
+    <div id="status" class="small muted" style="padding:9px 2px"></div>
+    <section class="grid" id="metrics"></section>
+
+    <section class="section">
+      <h2>Stationen · Mitarbeiter · Akku · Drucker</h2>
+      <div id="stations" class="stack"></div>
+    </section>
+
+    <section class="section">
+      <h2>Druckprobleme / Admin-Freigaben</h2>
+      <div id="issues" class="stack"></div>
+    </section>
+
+    <section class="section">
+      <h2>Material / RP-108</h2>
+      <div id="materials" class="stack"></div>
+    </section>
+
+    <section class="section">
+      <h2>Mitarbeiter heute</h2>
+      <div class="card" style="overflow:auto"><table><thead><tr><th>Mitarbeiter</th><th>Rolle</th><th>SD/WLAN</th><th>Selfie</th><th>Physisch</th><th>Gut</th><th>Fehler</th><th>Ersatz</th></tr></thead><tbody id="staff"></tbody></table></div>
+    </section>
+
+    <section class="section">
+      <h2>Papier-/Filmwechsel heute</h2>
+      <div id="materialChanges" class="card"></div>
+    </section>
+  </main>
+</div>
+<script src="./config.js"></script>
+<script>
+const cfg=window.FTS_CONFIG;
+const TOKEN_KEY='fts_printer_mobile_admin_v127';
+const VAPID_PUBLIC='BA4ooYZBIcpChVCyvDWS-ovJF6I6VFJ5UVOrDdv0EoDHJ7hCUOQXxShbV9VJ-KPKAKVXdiYDaZ4bLOwidSUSgtA';
+let mobileToken=localStorage.getItem(TOKEN_KEY)||'',identity=null,events=[],selectedEvent='',detail=null,refreshTimer=null,installPrompt=null;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const fmt=n=>Number(n||0).toLocaleString('de-DE');
+const time=v=>{if(!v)return'—';try{return new Date(v).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}catch{return v}};
+const ago=v=>{if(!v)return'—';const s=Math.max(0,Math.floor((Date.now()-new Date(v).getTime())/1000));if(s<60)return s+' Sek.';if(s<3600)return Math.floor(s/60)+' Min.';return Math.floor(s/3600)+' Std. '+Math.floor((s%3600)/60)+' Min.'};
+const H=()=>({'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':'application/json'});
+async function rpc(name,body={}){const r=await fetch(cfg.supabaseUrl+'/rest/v1/rpc/'+name,{method:'POST',headers:H(),body:JSON.stringify(body),cache:'no-store'});const t=await r.text();if(!r.ok)throw new Error(t||('HTTP '+r.status));return t?JSON.parse(t):null}
+function showLogin(){clearInterval(refreshTimer);$('#loginView').classList.remove('hidden');$('#appView').classList.add('hidden');loadAdmins()}
+function showApp(){ $('#loginView').classList.add('hidden');$('#appView').classList.remove('hidden');$('#identity').textContent=(identity?.display_name||'Administrator')+' · nur Übersicht/Freigabe';loadEvents(true)}
+async function loadAdmins(){try{const rows=await rpc('fts_printer_device_admin_choices_v75');$('#adminChoice').innerHTML=(rows||[]).map(x=>'<option value="'+esc(x.user_id)+'">'+esc(x.display_name)+'</option>').join('')}catch(e){$('#loginStatus').textContent='Administratoren konnten nicht geladen werden.'}}
+$('#loginBtn').onclick=async()=>{const user=$('#adminChoice').value,code=$('#adminCode').value.trim();if(!user||!code)return;$('#loginBtn').disabled=true;try{const r=await rpc('fts_printer_mobile_admin_register_v127',{p_admin_user_id:user,p_admin_code:code,p_device_label:/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent)?'FTS Printer Admin · Handy':'FTS Printer Admin · Browser',p_user_agent:navigator.userAgent});mobileToken=r.mobile_token;localStorage.setItem(TOKEN_KEY,mobileToken);identity=r;showApp()}catch(e){$('#loginStatus').innerHTML='<span class="err">Anmeldung fehlgeschlagen.</span>'}finally{$('#loginBtn').disabled=false}};
+$('#logoutBtn').onclick=async()=>{try{await rpc('fts_printer_mobile_admin_revoke_v127',{p_mobile_token:mobileToken})}catch{}localStorage.removeItem(TOKEN_KEY);mobileToken='';identity=null;showLogin()};
+async function boot(){if(!mobileToken)return showLogin();try{identity=await rpc('fts_printer_mobile_admin_validate_v127',{p_mobile_token:mobileToken});showApp()}catch{localStorage.removeItem(TOKEN_KEY);mobileToken='';showLogin()}}
+async function loadEvents(first=false){try{events=await rpc('fts_printer_mobile_events_v127',{p_mobile_token:mobileToken})||[];const q=new URLSearchParams(location.search);const wanted=q.get('event');if(first&&wanted&&events.some(e=>e.event_token===wanted))selectedEvent=wanted;if(!selectedEvent||!events.some(e=>e.event_token===selectedEvent))selectedEvent=events[0]?.event_token||'';renderEventSelect();await refreshDetail();clearInterval(refreshTimer);refreshTimer=setInterval(()=>{if(!document.hidden)refreshDetail()},5000)}catch(e){$('#status').textContent='Eventübersicht konnte nicht geladen werden.'}}
+function renderEventSelect(){const s=$('#eventSelect');s.innerHTML=events.map(e=>'<option value="'+esc(e.event_token)+'">'+esc(e.event_title)+' · '+esc(e.event_date||'')+(e.pending_issues?' · ⚠ '+e.pending_issues:'')+'</option>').join('');s.value=selectedEvent;s.onchange=()=>{selectedEvent=s.value;refreshDetail()}}
+async function refreshDetail(){if(!selectedEvent)return;try{detail=await rpc('fts_printer_mobile_event_detail_v127',{p_mobile_token:mobileToken,p_event_token:selectedEvent});render();$('#liveDot').classList.remove('off');$('#liveText').textContent='Live · '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});$('#status').textContent=(detail.event?.event_title||'')+' · Aktualisierung alle 5 Sekunden';const q=new URLSearchParams(location.search),issue=q.get('issue');if(issue){setTimeout(()=>document.getElementById('issue-'+issue)?.scrollIntoView({behavior:'smooth',block:'center'}),100)}}catch(e){$('#liveDot').classList.add('off');$('#liveText').textContent='Verbindung';$('#status').textContent='Live-Daten gerade nicht erreichbar · automatische Wiederholung aktiv.'}}
+function render(){if(!detail)return;const stock=detail.event?.stock||{},stations=detail.stations||[],issues=detail.issues||[],staff=detail.staff||[],cons=detail.consumables||[];
+const online=stations.filter(s=>s.online).length,physical=staff.reduce((a,x)=>a+Number(x.total_physical_prints||0),0),pending=issues.filter(i=>['PENDING_ADMIN','NEEDS_ATTENTION'].includes(i.status)).length;
+$('#metrics').innerHTML=[
+ ['Stationen online',online+'/'+stations.length],['Physische Prints heute',physical],['Sicher verfügbar',stock.safe_available??'—'],['Offene Probleme',pending]
+].map(x=>'<div class="metric"><b>'+esc(x[1])+'</b><span>'+esc(x[0])+'</span></div>').join('');
+$('#stations').innerHTML=stations.length?stations.map(renderStation).join(''):'<div class="card muted">Noch keine Printer-Station für dieses Event online.</div>';
+$('#issues').innerHTML=issues.length?issues.map(renderIssue).join(''):'<div class="card muted">Keine Druckprobleme gemeldet.</div>';
+$('#materials').innerHTML=cons.length?cons.map(c=>'<div class="card"><b>'+esc(c.printer_key)+'</b><div class="chips"><span class="chip">Papier '+esc(c.paper_remaining??'—')+'/18</span><span class="chip">Film '+esc(c.film_remaining??'—')+'/54</span><span class="chip">RP-108 '+esc(c.rp108_remaining??'—')+'/108</span></div><div class="tiny muted" style="margin-top:7px">Letzter Druck: '+esc(time(c.last_print_at))+'</div></div>').join(''):'<div class="card muted">Noch kein Materialstatus.</div>';
+$('#staff').innerHTML=staff.map(r=>'<tr><td><b>'+esc(r.display_name)+'</b></td><td>'+esc(r.role==='printer_admin'?'Admin':'Mitarbeiter')+'</td><td>'+fmt(r.local_prints)+'</td><td>'+fmt(r.selfie_prints)+'</td><td>'+fmt(r.total_physical_prints)+'</td><td>'+fmt(r.good_prints)+'</td><td>'+fmt(r.misprints)+'</td><td>'+fmt(r.replacements)+'</td></tr>').join('');
+const changes=detail.material_changes||[];$('#materialChanges').innerHTML=changes.length?changes.map(x=>'<div class="line"><span>'+esc(x.action.replaceAll('_',' '))+' · '+esc(x.user||'System')+'</span><span>'+esc(time(x.created_at))+'</span></div>').join(''):'<span class="muted small">Heute noch kein Papier-/Filmwechsel protokolliert.</span>';
+}
+function renderStation(s){const p=s.host_power||{},printers=Array.isArray(s.printers)?s.printers:[],media=s.media||{},items=Array.isArray(media.items)?media.items:[],cards=Array.isArray(media.cards)?media.cards:[],queue=Array.isArray(s.local_queue)?s.local_queue:[];
+const battery=p.hasBattery?(String(p.percentage??'—')+'%'+(p.onACPower?' · Netz':'')+' '+(p.charging?'· lädt':'')):(p.onACPower?'Netzstrom':'—');
+const recent=items.slice(0,30).map(i=>'<div class="line"><span>'+esc((i.source_label||i.source_type||'')+' · '+(i.original_name||''))+'</span><span>'+esc(i.workflow||'')+'</span></div>').join('');
+return '<div class="card"><div class="stationHead"><div><b>'+esc(s.display_name||'Unbekannt')+'</b><div class="small muted">'+esc(s.device_label||'FTS Printer')+' · Login '+esc(time(s.logged_in_at))+' · '+esc(ago(s.logged_in_at))+'</div></div><span class="'+(s.online?'online':'offline')+'">'+(s.online?'● ONLINE':'● OFFLINE')+'</span></div>'+
+'<div class="chips"><span class="chip '+(p.onACPower?'good':'warn')+'">Mac '+esc(battery)+'</span><span class="chip">'+esc(s.internet_status||'Netzwerk —')+'</span><span class="chip">App '+esc(s.app_version||'—')+'</span><span class="chip">Tag '+esc(s.selected_day||'—')+'</span></div>'+
+'<div class="subcard"><b>Drucker</b><div class="list">'+(printers.length?printers.map(x=>'<div class="line"><span>'+esc(x.name||'Drucker')+'</span><span>'+esc((x.connection||'')+' · '+(x.state||''))+'</span></div>').join(''):'<span class="muted small">Kein Drucker gemeldet.</span>')+'</div></div>'+
+'<div class="subcard"><b>SD / WLAN</b><div class="chips">'+cards.map(c=>'<span class="chip">'+esc('SD '+(c.label||'?')+' · '+(c.registered?'registriert':'nicht registriert'))+'</span>').join('')+(media.wlan_active?'<span class="chip good">WLAN '+esc(media.wlan_name||'aktiv')+'</span>':'')+'</div><div class="tiny muted" style="margin-top:6px">'+fmt(items.length)+' Fotos im aktuellen Tagesalbum · '+fmt(queue.length)+' lokale Aufträge</div><div class="list">'+(recent||'<span class="muted small">Noch keine Fotodaten.</span>')+'</div></div></div>'}
+function issueStatus(i){return ({PENDING_ADMIN:'Wartet auf Admin',APPROVED:'Freigegeben · PC übernimmt',APPLIED:'Am PC übernommen',NEEDS_ATTENTION:'Problem besteht noch',REJECTED:'Abgelehnt',RESOLVED:'Erledigt'})[i.status]||i.status}
+function renderIssue(i){const msgs=Array.isArray(i.messages)?i.messages:[],cls=i.status==='REJECTED'?'rejected':(['APPLIED','RESOLVED'].includes(i.status)?'applied':'');
+const img=i.preview_path?'<img class="photo" src="'+esc(cfg.supabaseUrl+'/storage/v1/object/public/'+encodeURIComponent(cfg.liveBucket)+'/'+i.preview_path.split('/').map(encodeURIComponent).join('/'))+'">':'';
+const actions=['PENDING_ADMIN','NEEDS_ATTENTION'].includes(i.status)?'<div class="row"><button class="gold" onclick="decide(\''+i.issue_id+'\',\'MISPRINT\')">1× Ersatz freigeben</button><button class="secondary" onclick="decide(\''+i.issue_id+'\',\'NOT_PRINTED\')">Gar nicht gedruckt · erneut</button><button class="danger" onclick="decide(\''+i.issue_id+'\',\'REJECTED\')">Ablehnen</button></div>':'';
+return '<div id="issue-'+esc(i.issue_id)+'" class="card issue '+cls+'"><div class="row"><b>'+esc((i.target_kind||'')+' · '+(i.customer_code||'Druckproblem'))+'</b><span class="pill">'+esc(issueStatus(i))+'</span></div><div class="small muted">'+esc((i.reported_by||'Mitarbeiter')+' · '+(i.reason_code||'').replaceAll('_',' ')+' · '+time(i.created_at))+'</div>'+img+'<p class="small">'+esc(i.employee_note||'Keine Zusatznotiz.')+'</p>'+actions+
+'<div class="subcard"><b>Kurzchat</b>'+msgs.map(m=>'<div class="msg '+String(m.sender_kind||'').toLowerCase()+'"><b>'+esc(m.sender_name||m.sender_kind)+'</b><div>'+esc(m.body)+'</div><span class="tiny muted">'+esc(time(m.created_at))+'</span></div>').join('')+'<div class="row" style="margin-top:8px"><input id="msg-'+i.issue_id+'" class="grow" placeholder="Kurze Nachricht an den Printer-PC"><button class="secondary" onclick="sendMsg(\''+i.issue_id+'\')">Senden</button></div></div></div>'}
+async function decide(id,decision){const note=prompt(decision==='REJECTED'?'Kurze Begründung (optional):':'Nachricht an den Mitarbeiter / PC (optional):','')??'';try{await rpc('fts_printer_mobile_issue_decide_v127',{p_mobile_token:mobileToken,p_issue_id:id,p_decision:decision,p_admin_note:note});await refreshDetail()}catch(e){alert('Freigabe fehlgeschlagen. '+e.message)}}
+async function sendMsg(id){const el=document.getElementById('msg-'+id),msg=el?.value.trim();if(!msg)return;try{await rpc('fts_printer_mobile_issue_message_v127',{p_mobile_token:mobileToken,p_issue_id:id,p_message:msg});el.value='';await refreshDetail()}catch(e){alert('Nachricht konnte nicht gesendet werden.')}}
+window.decide=decide;window.sendMsg=sendMsg;
+
+function b64urlToUint8Array(v){const pad='='.repeat((4-v.length%4)%4),b64=(v+pad).replace(/-/g,'+').replace(/_/g,'/'),raw=atob(b64),out=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out}
+async function enablePush(){try{if(!('serviceWorker'in navigator)||!('PushManager'in window))throw new Error('Push wird auf diesem Gerät/Browser nicht unterstützt.');const perm=await Notification.requestPermission();if(perm!=='granted')throw new Error('Benachrichtigungen wurden nicht erlaubt.');const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64urlToUint8Array(VAPID_PUBLIC)});const j=sub.toJSON();await rpc('fts_printer_mobile_push_subscribe_v127',{p_mobile_token:mobileToken,p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth:j.keys.auth,p_user_agent:navigator.userAgent});$('#pushBtn').textContent='🔔 Push aktiv';$('#pushBtn').classList.remove('secondary')}catch(e){alert('Push konnte nicht aktiviert werden. Auf iPhone/iPad zuerst diese Seite zum Home-Bildschirm hinzufügen und als App öffnen.\n\n'+e.message)}}
+$('#pushBtn').onclick=enablePush;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('#installBtn').classList.remove('hidden')});
+$('#installBtn').onclick=async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$('#installBtn').classList.add('hidden')}else alert('Auf iPhone/iPad: Teilen → Zum Home-Bildschirm. Danach die FTS Printer Admin App vom Home-Bildschirm öffnen.')};
+if('serviceWorker'in navigator){navigator.serviceWorker.register('./sw.js?v=79',{updateViaCache:'none'}).then(async reg=>{await reg.update().catch(()=>{});navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!sessionStorage.getItem('fts-pa-reloaded')){sessionStorage.setItem('fts-pa-reloaded','1');location.reload()}})}).catch(()=>{})}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&mobileToken){loadEvents(false)}});
+boot();
+</script>
+</body>
+</html>

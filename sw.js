@@ -1,8 +1,8 @@
 importScripts('./config.js');
 const cfg=self.FTS_CONFIG;
 const CACHE_PREFIX='fts-selfie-';
-const CACHE='fts-selfie-production-v78-compact-portrait-20260925';
-const CORE=['./','./index.html','./dashboard.html','./studio.html','./print.html','./config.js','./social-share.js','./printer-staff-v72.js','./fts-photo-engine.js?v=78','./camera-live.js','./print-pickup-guest-v57.js','./print-pickup-station-v57.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
+const CACHE='fts-selfie-production-v79-printer-admin-20260927';
+const CORE=['./','./index.html','./dashboard.html','./studio.html','./print.html','./printer-admin.html','./config.js','./social-share.js','./printer-staff-v72.js','./fts-photo-engine.js?v=78','./camera-live.js','./print-pickup-guest-v57.js','./print-pickup-station-v57.js','./manifest.webmanifest','./dashboard.webmanifest','./print.webmanifest','./printer-admin.webmanifest','./offline.html','./icon-192.png','./icon-512.png'];
 
 async function purgeOldFtsCaches(){
   const keys=await caches.keys();
@@ -56,9 +56,35 @@ self.addEventListener('message',event=>{if(event.data?.type==='FTS_FLUSH_QUEUE')
 
 self.addEventListener('push', event => {
   let data = {};try {data = event.data ? event.data.json() : {}} catch {data = { body: event.data ? event.data.text() : '' }}
-  const title = data.title || 'FTS Selfie';
-  const options = {body: data.body || 'Ein neues Eventfoto ist da.',icon: './icon-192.png',badge: './icon-192.png',tag: data.tag || ('fts-photo-' + Date.now()),renotify: true,data: {url: data.url || './dashboard.html',event_token: data.event_token || '',photo_id: data.photo_id || '',print_order_id: data.print_order_id || '',kind: data.kind || ''},actions: data.test ? [] : [{action: data.kind === 'print_ready' ? 'open-print' : 'open-photo',title: data.kind === 'print_ready' ? 'Druckauftrag öffnen' : 'Foto ansehen'}]};
-  event.waitUntil(self.registration.showNotification(title, options));
+  const printerIssue = data.kind === 'printer_issue' || data.kind === 'printer_issue_reply';
+  const issueId = data.photo_id || '';
+  const issueUrl = './printer-admin.html?event='+encodeURIComponent(data.event_token||'')+'&issue='+encodeURIComponent(issueId);
+  const title = printerIssue
+    ? (data.kind === 'printer_issue_reply' ? 'FTS Druckproblem · Rückmeldung' : 'FTS Druckproblem · Freigabe nötig')
+    : (data.title || 'FTS Selfie');
+  let body = data.body || 'Ein neues Eventfoto ist da.';
+  if(printerIssue){
+    body=body.replace(/: Tippe hier, um das neue Foto direkt zu öffnen\.?$/,'').replace(/Neues FTS Eventfoto/gi,'').trim();
+  }
+  const options = {
+    body,
+    icon:'./icon-192.png',
+    badge:'./icon-192.png',
+    tag: printerIssue ? ('fts-printer-issue-'+issueId) : (data.tag || ('fts-photo-'+Date.now())),
+    renotify:true,
+    data:{
+      url: printerIssue ? issueUrl : (data.url || './dashboard.html'),
+      event_token:data.event_token||'',
+      photo_id:data.photo_id||'',
+      print_order_id:data.print_order_id||'',
+      kind:data.kind||''
+    },
+    actions:data.test ? [] : [{
+      action: printerIssue ? 'open-printer-admin' : (data.kind === 'print_ready' ? 'open-print' : 'open-photo'),
+      title: printerIssue ? 'Problem öffnen' : (data.kind === 'print_ready' ? 'Druckauftrag öffnen' : 'Foto ansehen')
+    }]
+  };
+  event.waitUntil(self.registration.showNotification(title,options));
 });
 async function clearPhotoNotifications(eventToken=''){try{const notes=await self.registration.getNotifications();for(const n of notes){const tag=String(n.tag||''),noteEvent=String(n.data?.event_token||'');const isLegacyPhoto=tag.startsWith('fts-photo-')&&!noteEvent;const isPhoto=isLegacyPhoto||tag.startsWith('fts-event-')||tag.startsWith('fts-photo-')||tag.startsWith('fts-guest-');const sameEvent=!eventToken||isLegacyPhoto||noteEvent===String(eventToken)||tag==='fts-event-'+eventToken;if(isPhoto&&sameEvent)n.close()}}catch{}try{if(self.navigator?.clearAppBadge)await self.navigator.clearAppBadge()}catch{}}
 self.addEventListener('notificationclick', event => {const eventToken=String(event.notification?.data?.event_token||'');event.notification.close();event.waitUntil((async () => {await clearPhotoNotifications(eventToken);const target = new URL(event.notification?.data?.url || './dashboard.html',self.registration.scope).href;const windows = await self.clients.matchAll({type: 'window',includeUncontrolled: true});for(const client of windows){if('focus' in client){try{if('navigate' in client)await client.navigate(target)}catch{}return client.focus()}}if(self.clients.openWindow)return self.clients.openWindow(target)})())});
