@@ -88,9 +88,9 @@ test -s "$RES/FTSPrinter.icns"
 
 chmod +x "$MACOS/FTS Printer"
 codesign --force --deep --sign - "$APP"
-rm -f "$DIST/FTS-Printer-macOS-v0.3.43-card-render-fix.zip" "$DIST/FTS-Printer-macOS-v0.3.43-card-render-fix.dmg"
-ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/FTS-Printer-macOS-v0.3.43-card-render-fix.zip"
-DMG="$DIST/FTS-Printer-macOS-v0.3.43-card-render-fix.dmg"
+rm -f "$DIST/FTS-Printer-macOS-v0.3.44-card-render-refresh.zip" "$DIST/FTS-Printer-macOS-v0.3.44-card-render-refresh.dmg"
+ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/FTS-Printer-macOS-v0.3.44-card-render-refresh.zip"
+DMG="$DIST/FTS-Printer-macOS-v0.3.44-card-render-refresh.dmg"
 rm -f "$DMG"
 for attempt in 1 2 3; do
   if hdiutil create -volname "FTS Printer" -srcfolder "$APP" -ov -format UDZO "$DMG"; then

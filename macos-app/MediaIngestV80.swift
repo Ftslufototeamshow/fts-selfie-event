@@ -531,6 +531,9 @@ final class MediaIngestV80: ObservableObject {
         add(event.accent);add(event.photo_branding)
         addJSON(event.studio_config);addJSON(event.logo_items);addJSON(event.decoration_items)
         add(FTSGreenScreenStore.settings(eventToken:event.event_token).signature)
+        // Renderer salt forces active/queued photos made by the old concurrent
+        // renderer to be rebuilt once after the v134 repair.
+        add("renderer-v134-safe-context")
         return hasher.finalize().map{String(format:"%02x",$0)}.joined()
     }
 

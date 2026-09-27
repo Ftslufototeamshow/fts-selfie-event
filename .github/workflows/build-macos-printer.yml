@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.43-card-render-fix.zip
-            dist/FTS-Printer-macOS-v0.3.43-card-render-fix.dmg
+            dist/FTS-Printer-macOS-v0.3.44-card-render-refresh.zip
+            dist/FTS-Printer-macOS-v0.3.44-card-render-refresh.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.43-card-render-fix"
+          TAG="fts-printer-mac-v0.3.44-card-render-refresh"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.43-card-render-fix.zip dist/FTS-Printer-macOS-v0.3.43-card-render-fix.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.44-card-render-refresh.zip dist/FTS-Printer-macOS-v0.3.44-card-render-refresh.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.43-card-render-fix.zip dist/FTS-Printer-macOS-v0.3.43-card-render-fix.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.43 · SD Card + Render Fix" --notes "Build 133: Repariert zwei Produktionsfehler ohne Änderung am Canon-Druckpfad. SD-Karten A-Z werden bei Leser-/Metadatenwechsel wieder über dieselben normalisierten Fast-Keys und zusätzlich über stabile Inhalts-Signaturen erkannt; leere oder transiente Mounts lösen keine automatische Freigabe mehr aus und die Format-Erkennung ist konservativer. Der Foto-Renderer lädt Banner und Logos vollständig vor dem AppKit-Grafikkontext, sodass parallele Vorschau-/Import-Renderings keine zwei Fotos mehr ineinander zeichnen können. Green Screen, Einzelfoto-Filter/Comic, Materiallogik, Spiegelkorrektur, Archiv, QR, 148x15-mm-Banner und Druckübertragung bleiben bestehen."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.44-card-render-refresh.zip dist/FTS-Printer-macOS-v0.3.44-card-render-refresh.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.44 · Card + Render Refresh" --notes "Build 134: Enthält den SD-Karten- und Render-Fix aus Build 133 und erzwingt zusätzlich einmalig die Neuerstellung aller aktiven/queued Druckdesigns mit dem sicheren Renderer. Dadurch werden bereits unter dem alten parallelen Grafikkontext falsch zusammengesetzte Vorschaudateien nicht weiterverwendet. SD-Karten A-Z bleiben bei Leser-/Metadatenwechsel stabil zugeordnet; leere/transiente Mounts lösen keine Freigabe aus. Canon-Spooler, Spiegelkorrektur, Materiallogik, Green Screen, Einzelfoto-Filter/Comic, Archiv, QR, 148x15-mm-Banner und Druckübertragung bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.43-card-render-fix"
+          CURRENT="fts-printer-mac-v0.3.44-card-render-refresh"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
