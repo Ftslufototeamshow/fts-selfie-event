@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.40-sd-printer-list-fix.zip
-            dist/FTS-Printer-macOS-v0.3.40-sd-printer-list-fix.dmg
+            dist/FTS-Printer-macOS-v0.3.41-card-material-controls.zip
+            dist/FTS-Printer-macOS-v0.3.41-card-material-controls.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.40-sd-printer-list-fix"
+          TAG="fts-printer-mac-v0.3.41-card-material-controls"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.40-sd-printer-list-fix.zip dist/FTS-Printer-macOS-v0.3.40-sd-printer-list-fix.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.41-card-material-controls.zip dist/FTS-Printer-macOS-v0.3.41-card-material-controls.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.40-sd-printer-list-fix.zip dist/FTS-Printer-macOS-v0.3.40-sd-printer-list-fix.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.40 · SD Printer List Fix" --notes "Build 130: Kleiner gezielter UI-Fix. In der SD-/WLAN-Ansicht wird nun dieselbe aktivierte Druckerliste wie auf der Printer-Seite verwendet, sodass alle aktivierten Canon-Drucker gleichzeitig sichtbar sind. Der funktionierende Live-Druckoverlay, Canon-Spooler, Druckpfad, Archiv-Fix, Materialzählung, SD/WLAN-Import, QR und Remote-Admin bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.41-card-material-controls.zip dist/FTS-Printer-macOS-v0.3.41-card-material-controls.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.41 · Card + Material Controls" --notes "Build 131: Stellt die SD-Karten-Zuordnung A–Z wieder her und trennt aktive Kartenreservierungen von historischen Baselines. Belegte Kennungen bleiben sichtbar und können bei einer formatierten/neuen Karte gezielt neu vergeben werden; bei eindeutig erkannter frischer Kartengeneration wird die alte aktive Zuordnung lokal freigegeben. FTS schreibt weiterhin nichts auf Kamera-SD-Karten. Pro Canon-Drucker bleiben Papier 18, Farbfilm 54 und RP-108 108 getrennt; neu ist Restbestand ändern 0–108/0–18/0–54 für angebrochene Sets, z. B. RP-108 auf 102. Bei leerem Material erscheint programmweit eine Meldung pro Drucker mit direkter Bestätigung für Papier/Farbfilm/RP-108; danach kann die vorhandene Warteschlange automatisch weiterlaufen. Canon-Spooler, Spiegelkorrektur, Druckrendering, Archiv, QR, Remote-Admin, Live-Druckfenster und bestehende Drucklogik bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.40-sd-printer-list-fix"
+          CURRENT="fts-printer-mac-v0.3.41-card-material-controls"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

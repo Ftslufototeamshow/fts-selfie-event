@@ -1805,9 +1805,9 @@ struct V80CardRegistrationRow: View {
     @State private var showReplace=false
     @State private var showRelease=false
 
-    var freeLabels:[String] {
-        ["A","B","C","D","E"].filter{!usedLabels.contains($0)}
-    }
+    var allLabels:[String] { Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ").map(String.init) }
+    var freeLabels:[String] { allLabels.filter{!usedLabels.contains($0)} }
+    var usedLabelsSorted:[String] { allLabels.filter{usedLabels.contains($0)} }
     var statusColor:Color {
         if card.marker == nil { return .orange }
         return isScanning ? .orange : .green
@@ -1831,23 +1831,36 @@ struct V80CardRegistrationRow: View {
                 if card.marker == nil {
                     if !freeLabels.isEmpty {
                         HStack(spacing:4) {
-                            ForEach(freeLabels,id:\.self) { label in
+                            ForEach(Array(freeLabels.prefix(6)),id:\.self) { label in
                                 Button(label){onRegister(label)}
                                     .font(.caption2.bold())
                                     .buttonStyle(.borderedProminent)
                                     .controlSize(.mini)
                             }
+                            if freeLabels.count>6 {
+                                Menu("Weitere") {
+                                    ForEach(Array(freeLabels.dropFirst(6)),id:\.self) { label in
+                                        Button("Karte \(label) zuordnen"){onRegister(label)}
+                                    }
+                                }
+                                .font(.caption2)
+                            }
                         }
-                    } else {
-                        Menu("Kennung ersetzen") {
-                            ForEach(["A","B","C","D","E"],id:\.self) { label in
-                                Button("Karte \(label) ersetzen") {
+                    }
+                    if !usedLabelsSorted.isEmpty {
+                        Menu("Formatiert / Kennung neu vergeben") {
+                            ForEach(usedLabelsSorted,id:\.self) { label in
+                                Button("Kennung \(label) neu vergeben") {
                                     replaceLabel=label
                                     showReplace=true
                                 }
                             }
                         }
                         .font(.caption2)
+                        Text("Belegt: \(usedLabelsSorted.joined(separator:", "))")
+                            .font(.system(size:8))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 } else {
                     HStack(spacing:6) {
@@ -1858,20 +1871,20 @@ struct V80CardRegistrationRow: View {
             }
         }
         .padding(8)
-        .frame(width:card.marker == nil ? 255 : 205,height:92,alignment:.leading)
+        .frame(width:card.marker == nil ? 320 : 205,height:card.marker == nil ? 112 : 92,alignment:.leading)
         .background(Color(nsColor:.controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius:12))
         .alert("Karte \(replaceLabel) ersetzen?",isPresented:$showReplace) {
             Button("Abbrechen",role:.cancel){}
             Button("Karte \(replaceLabel) ersetzen",role:.destructive) { onReplace(replaceLabel) }
         } message: {
-            Text("Die bisherige Zuordnung von Karte \(replaceLabel) wird für dieses Event gesperrt. Die neu eingesteckte Karte übernimmt diese Kennung.")
+            Text("Die bisherige aktive Zuordnung von Karte \(replaceLabel) wird beendet. Die neu eingesteckte bzw. formatierte Karte übernimmt diese Kennung. Importierte Originale und Archivfotos bleiben erhalten.")
         }
         .alert("Karte \(card.label ?? "") freigeben?",isPresented:$showRelease) {
             Button("Abbrechen",role:.cancel){}
             Button("Freigeben",role:.destructive){onRelease()}
         } message: {
-            Text("Nur die FTS-Zuordnung A–E wird entfernt. Fotos auf der Karte und bereits importierte Originale bleiben erhalten.")
+            Text("Nur die aktive FTS-Zuordnung A–Z wird entfernt. Fotos auf der Karte und bereits importierte Originale bleiben erhalten.")
         }
     }
 }
@@ -2468,11 +2481,17 @@ struct V81PrinterConsumableRow: View {
     let loadPaper:()->Void
     let loadFilm:()->Void
     let startRP108:()->Void
+    let setCounts:(Int,Int,Int)->Void
     let resumeAfterChange:()->Void
     let coreBusyPaper:Bool
     let coreBusyFilm:Bool
     let coreBusyRP108:Bool
+    let coreBusyManual:Bool
     @State private var confirmNewRP108=false
+    @State private var showManualCounts=false
+    @State private var manualRP108=108
+    @State private var manualPaper=18
+    @State private var manualFilm=54
 
     var statusColor:Color {
         if slot.state=="ERROR" { return .red }
@@ -2518,6 +2537,37 @@ struct V81PrinterConsumableRow: View {
                 }
                 .font(.caption.bold())
                 .disabled(coreBusyRP108 || ["PREPARING","TRANSFER","PRINTING"].contains(slot.state) || slot.currentUnit != nil)
+
+                Button("Restbestand ändern …") {
+                    manualRP108=consumable?.rp108_remaining ?? 108
+                    manualPaper=consumable?.paper_remaining ?? 18
+                    manualFilm=consumable?.film_remaining ?? 54
+                    showManualCounts=true
+                }
+                .font(.caption)
+                .disabled(coreBusyManual || ["PREPARING","TRANSFER","PRINTING"].contains(slot.state) || slot.currentUnit != nil)
+                .popover(isPresented:$showManualCounts) {
+                    VStack(alignment:.leading,spacing:12) {
+                        Text("Restbestand · \(slot.name)").font(.headline)
+                        Text("Für ein angebrochenes Set, z. B. RP-108 direkt auf 102 setzen.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Stepper("RP-108: \(manualRP108) / 108",value:$manualRP108,in:0...108)
+                        Stepper("Papier: \(manualPaper) / 18",value:$manualPaper,in:0...18)
+                        Stepper("Farbfilm: \(manualFilm) / 54",value:$manualFilm,in:0...54)
+                        HStack {
+                            Button("Abbrechen"){showManualCounts=false}
+                            Spacer()
+                            Button("Übernehmen") {
+                                setCounts(manualRP108,manualPaper,manualFilm)
+                                showManualCounts=false
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
+                    .padding(14)
+                    .frame(width:340)
+                }
+
                 if let remaining=consumable?.rp108_remaining,remaining<=20 {
                     Text(remaining==0 ? "Set leer · neues Set einsetzen" : "Nur noch \(remaining) Prints im Set")
                         .font(.caption.bold())
@@ -2616,10 +2666,14 @@ struct ProductionSystemContent:View {
                                 loadPaper:{Task{await core.loadConsumable(printerName:p.name,component:"PAPER_PACK",state:state)}},
                                 loadFilm:{Task{await core.loadConsumable(printerName:p.name,component:"FILM_CASSETTE",state:state)}},
                                 startRP108:{Task{await core.startRP108Set(printerName:p.name,state:state)}},
+                                setCounts:{rp,paper,film in
+                                    Task{await core.setMaterialCounts(printerName:p.name,rp108:rp,paper:paper,film:film,state:state)}
+                                },
                                 resumeAfterChange:{Task{await core.resumeAfterMaterialChange(printerName:p.name,state:state)}},
                                 coreBusyPaper:core.consumableActionBusy(printerName:p.name,component:"PAPER_PACK"),
                                 coreBusyFilm:core.consumableActionBusy(printerName:p.name,component:"FILM_CASSETTE"),
-                                coreBusyRP108:core.rp108ActionBusy(printerName:p.name)
+                                coreBusyRP108:core.rp108ActionBusy(printerName:p.name),
+                                coreBusyManual:core.consumableActionBusy(printerName:p.name,component:"MANUAL_COUNTS")
                             )
                         }
                     }.padding(.vertical,5)

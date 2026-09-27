@@ -752,7 +752,7 @@ final class AppState: ObservableObject {
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
-    static let appVersion = "0.3.40-sd-printer-list-fix"
+    static let appVersion = "0.3.41-card-material-controls"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -839,7 +839,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.40-sd-printer-list-fix"
+                "p_user_agent":"FTS Printer macOS 0.3.41-card-material-controls"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -870,7 +870,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v125",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.40-sd-printer-list-fix"
+                "p_user_agent":"FTS Printer macOS 0.3.41-card-material-controls"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session
@@ -1410,6 +1410,11 @@ struct MainView: View {
         .sheet(isPresented:$showRemoteIssues){
             V127RemoteIssuesPanel(state:state,core:state.production)
                 .frame(minWidth:760,minHeight:620)
+        }
+        .overlay(alignment:.top) {
+            FTSMaterialAlertOverlay(state:state,core:state.production)
+                .padding(.top,178)
+                .padding(.horizontal,250)
         }
         .overlay(alignment:.bottomLeading) {
             if section != .orders && section != .printers {
@@ -2037,6 +2042,75 @@ struct FTSTopOperationalStatus:View {
             .padding(.vertical,1)
         }
         .frame(minWidth:180,maxWidth:650)
+    }
+}
+
+
+struct FTSMaterialAlertOverlay:View {
+    @ObservedObject var state:AppState
+    @ObservedObject var core:ProductionCore
+
+    private var blocked:[LocalPrinterSlot] {
+        core.printerSlots.filter { slot in
+            guard slot.enabled,let c=core.consumable(for:slot.name) else{return false}
+            return (c.paper_remaining ?? 1)<=0 || (c.film_remaining ?? 1)<=0 || (c.rp108_remaining ?? 1)<=0
+        }
+    }
+
+    var body:some View {
+        if !blocked.isEmpty {
+            ScrollView(.horizontal,showsIndicators:false) {
+                HStack(spacing:8) {
+                    ForEach(blocked) { slot in
+                        let c=core.consumable(for:slot.name)
+                        VStack(alignment:.leading,spacing:7) {
+                            HStack {
+                                Image(systemName:"exclamationmark.triangle.fill").foregroundStyle(.orange)
+                                Text(slot.shortDisplayName).font(.caption.bold())
+                                Spacer()
+                                Text("Material prüfen").font(.caption2.bold()).foregroundStyle(.orange)
+                            }
+
+                            if (c?.paper_remaining ?? 1)<=0 {
+                                Text("Papier leer · neues 18-Blatt-Paket einlegen.")
+                                    .font(.caption).foregroundStyle(.red)
+                                Button("Papier eingelegt · auf 18 setzen") {
+                                    Task{await core.loadConsumable(printerName:slot.name,component:"PAPER_PACK",state:state)}
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                            } else if (c?.film_remaining ?? 1)<=0 {
+                                Text("Farbfilm leer · neue 54-Print-Kassette einlegen.")
+                                    .font(.caption).foregroundStyle(.red)
+                                Button("Farbfilm eingelegt · auf 54 setzen") {
+                                    Task{await core.loadConsumable(printerName:slot.name,component:"FILM_CASSETTE",state:state)}
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                            } else if (c?.rp108_remaining ?? 1)<=0 {
+                                Text("RP-108 Set leer · neues Set einlegen.")
+                                    .font(.caption).foregroundStyle(.red)
+                                Button("Neues RP-108 Set · 108") {
+                                    Task{await core.startRP108Set(printerName:slot.name,state:state)}
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                            }
+
+                            Text("Nach Bestätigung wird dieser Drucker wieder freigegeben; die Warteschlange kann automatisch weiterlaufen.")
+                                .font(.system(size:9))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(10)
+                        .frame(width:310,alignment:.leading)
+                        .background(.ultraThinMaterial)
+                        .overlay(RoundedRectangle(cornerRadius:12).stroke(Color.orange.opacity(0.40),lineWidth:1))
+                        .clipShape(RoundedRectangle(cornerRadius:12))
+                    }
+                }
+            }
+            .frame(maxWidth:980)
+        }
     }
 }
 

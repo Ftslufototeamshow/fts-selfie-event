@@ -298,8 +298,9 @@ final class MediaIngestV80: ObservableObject {
     func register(card: V80DetectedCard, label: String, event: EventRow, replaceExisting: Bool = false) async {
         guard let a=activation else{return}
         let clean=label.uppercased().trimmingCharacters(in:.whitespacesAndNewlines)
-        guard ["A","B","C","D","E"].contains(clean) else {
-            status="Kartenname muss A, B, C, D oder E sein.";return
+        let allowed=Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ").map(String.init)
+        guard allowed.contains(clean) else {
+            status="Kartenname muss ein Buchstabe von A bis Z sein.";return
         }
         scanning=true
         defer{scanning=false}
@@ -353,7 +354,7 @@ final class MediaIngestV80: ObservableObject {
     func restoreCardPhoto(_ candidate:V80CardPhotoCandidate,from card:V80DetectedCard,event:EventRow) async -> Bool {
         guard let a=activation else{return false}
         guard let marker=card.marker,marker.eventToken==event.event_token else {
-            status="Diese SD-Karte zuerst A/B/C/D/E zuordnen. Danach können alte Fotos einzeln zurückgeholt werden."
+            status="Diese SD-Karte zuerst A–Z zuordnen. Danach können alte Fotos einzeln zurückgeholt werden."
             return false
         }
         scanning=true
@@ -659,9 +660,10 @@ final class MediaIngestV80: ObservableObject {
         var manifest=try loadManifestSync(activation)
         var registry=loadCardRegistry(activation)
         let existingRegistryIDs=registry.cards.filter{$0.value.eventToken==eventToken && $0.value.label==label}.map{$0.key}
+        let existingSignatureIDs=(registry.signatures ?? [:]).filter{$0.value.eventToken==eventToken && $0.value.label==label}.map{$0.key}
         let existingIDs=manifest.baselines.filter{$0.value.label==label}.map{$0.key}
-        if (!existingRegistryIDs.isEmpty || !existingIDs.isEmpty) && !replaceExisting {
-            throw NSError(domain:"FTSPrinter",code:101,userInfo:[NSLocalizedDescriptionKey:"Karte \(label) ist für dieses Event bereits registriert. Zum Ersetzen ausdrücklich „\(label) ersetzen“ wählen."])
+        if (!existingRegistryIDs.isEmpty || !existingSignatureIDs.isEmpty) && !replaceExisting {
+            throw NSError(domain:"FTSPrinter",code:101,userInfo:[NSLocalizedDescriptionKey:"Karte \(label) ist für dieses Event bereits aktiv registriert. Bei einer formatierten/neuen Karte ausdrücklich „\(label) neu vergeben“ wählen."])
         }
         if replaceExisting {
             let oldMarkers=registry.cards.values.filter{$0.eventToken==eventToken && $0.label==label}
@@ -990,7 +992,8 @@ final class MediaIngestV80: ObservableObject {
 
     nonisolated private static func detectCardsSync(eventToken:String,activation:V80MediaActivation) -> [V80DetectedCard] {
         let fm=FileManager.default
-        let registry=loadCardRegistry(activation)
+        var registry=loadCardRegistry(activation)
+        var registryChanged=false
         let keys:Set<URLResourceKey>=[
             .volumeIsRemovableKey,.volumeIsEjectableKey,.volumeIsInternalKey,
             .volumeNameKey,.volumeIdentifierKey,.volumeUUIDStringKey,.isWritableKey
@@ -1022,10 +1025,27 @@ final class MediaIngestV80: ObservableObject {
             var marker=technicalReleased ? nil : registry.cards[tid]
             if marker?.eventToken != eventToken { marker=nil }
 
-            // Signature generation enumerates card media. Only pay that cost when
-            // the fast technical-ID lookup did not already identify the card.
             var signature:String?=nil
             var explicitlyReleased=technicalReleased
+
+            // Same card identity, but no trace of its old baseline anymore:
+            // treat it as a fresh camera generation (typically after Format).
+            // FTS still writes nothing to the camera SD card.
+            if let currentMarker=marker,
+               cardLooksReformatted(volume:v,marker:currentMarker,activation:activation) {
+                retireCardMarker(
+                    marker:currentMarker,
+                    currentTechnicalID:tid,
+                    volume:v,
+                    registry:&registry
+                )
+                marker=nil
+                explicitlyReleased=true
+                registryChanged=true
+            }
+
+            // Signature generation enumerates card media. Only pay that cost when
+            // the fast technical-ID lookup did not already identify the card.
             if marker == nil {
                 signature=cardSignature(v)
                 if let signature,registry.releasedSignatures?.contains(signature)==true {
@@ -1059,7 +1079,66 @@ final class MediaIngestV80: ObservableObject {
                 writable:rv?.isWritable ?? fm.isWritableFile(atPath:v.path)
             ))
         }
+        if registryChanged { try? saveCardRegistry(registry,activation) }
         return out.sorted{$0.volumeName.localizedCaseInsensitiveCompare($1.volumeName) == .orderedAscending}
+    }
+
+    nonisolated private static func cardLooksReformatted(
+        volume:URL,
+        marker:V80CardMarker,
+        activation:V80MediaActivation
+    )->Bool {
+        guard let baseline=eventBaselines(activation)[marker.cardUUID],
+              !baseline.knownSourceKeys.isEmpty else{return false}
+
+        let current=mediaFiles(on:volume)
+        if current.isEmpty { return true }
+
+        let knownFast=Set(baseline.knownSourceKeys.map{fastKeyFromStoredKey($0)})
+        let knownHashes=Set((baseline.knownFingerprints ?? [:]).values.filter{!$0.isEmpty})
+
+        for file in current.prefix(12) {
+            if let key=fastSourceKey(file,root:volume),knownFast.contains(key) { return false }
+            if !knownHashes.isEmpty,
+               let hash=try? sha256(file),
+               knownHashes.contains(hash) { return false }
+        }
+
+        guard baseline.knownSourceKeys.count>=2 else{return false}
+        let cutoff=marker.registeredAt.addingTimeInterval(5)
+        let sample=current.prefix(12).map{quickMediaDate($0)}
+        return !sample.isEmpty && sample.allSatisfy{$0>cutoff}
+    }
+
+    nonisolated private static func retireCardMarker(
+        marker:V80CardMarker,
+        currentTechnicalID:String,
+        volume:URL,
+        registry:inout V80LocalCardRegistry
+    ) {
+        let technicalIDs=registry.cards
+            .filter{$0.value.eventToken==marker.eventToken && $0.value.cardUUID==marker.cardUUID}
+            .map{$0.key}
+        for id in technicalIDs {
+            registry.cards.removeValue(forKey:id)
+            registry.releasedTechnicalIDs=(registry.releasedTechnicalIDs ?? []).union([id])
+        }
+
+        if var signatures=registry.signatures {
+            let signatureIDs=signatures
+                .filter{$0.value.eventToken==marker.eventToken && $0.value.cardUUID==marker.cardUUID}
+                .map{$0.key}
+            for signature in signatureIDs {
+                signatures.removeValue(forKey:signature)
+                registry.releasedSignatures=(registry.releasedSignatures ?? []).union([signature])
+            }
+            registry.signatures=signatures
+        }
+
+        registry.releasedTechnicalIDs=(registry.releasedTechnicalIDs ?? []).union([currentTechnicalID])
+        if let currentSignature=cardSignature(volume) {
+            registry.releasedSignatures=(registry.releasedSignatures ?? []).union([currentSignature])
+        }
     }
 
     nonisolated private static func isPhysicalRemovableVolume(_ volume:URL,fallbackRemovable:Bool)->Bool {
@@ -1137,7 +1216,7 @@ final class MediaIngestV80: ObservableObject {
                 .filter{$0.eventToken==eventToken}
                 .map{$0.label}
         )
-        labels.formUnion(eventBaselines(activation).values.map{$0.label})
+        // Baselines remain for history/recovery, but no longer reserve A–Z forever.
         return labels
     }
 

@@ -1134,8 +1134,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.38-archive-local-reconcile"
-    static let build = 129
+    static let version = "1.1.39-card-material-controls"
+    static let build = 131
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -1658,6 +1658,48 @@ final class ProductionCore: ObservableObject {
             await refresh(state:state)
             if autoDispatch { dispatchAvailable(state:state) }
         } catch { lastError=error.localizedDescription }
+    }
+
+
+    func setMaterialCounts(
+        printerName:String,
+        rp108:Int,
+        paper:Int,
+        film:Int,
+        state:AppState
+    ) async {
+        let key=printerName+"::MANUAL_COUNTS"
+        guard !consumableActionsInFlight.contains(key) else{return}
+        guard let i=printerSlots.firstIndex(where:{$0.name==printerName}) else{return}
+        guard !["PREPARING","TRANSFER","PRINTING"].contains(printerSlots[i].state),
+              printerSlots[i].currentUnit == nil else {
+            lastError="Restbestand erst ändern, wenn dieser Drucker sicher frei ist."
+            return
+        }
+        guard let dev=state.deviceToken,let session=state.sessionToken,!state.selectedEventToken.isEmpty else{return}
+
+        consumableActionsInFlight.insert(key)
+        defer{consumableActionsInFlight.remove(key)}
+        do {
+            let _:JSONValue = try await api.rpc("fts_printer_set_material_counts_v131",body:[
+                "p_device_token":dev,
+                "p_session_token":session,
+                "p_event_token":state.selectedEventToken,
+                "p_printer_key":backendPrinterKey(printerName),
+                "p_rp108_remaining":max(0,min(108,rp108)),
+                "p_paper_remaining":max(0,min(18,paper)),
+                "p_film_remaining":max(0,min(54,film))
+            ])
+            if printerSlots[i].currentUnit == nil {
+                setSlot(printerName,state:"IDLE",eta:0,current:nil,error:nil)
+            }
+            lastError=nil
+            await state.refreshSelected()
+            await refresh(state:state)
+            if autoDispatch { dispatchAvailable(state:state) }
+        } catch {
+            lastError=error.localizedDescription
+        }
     }
 
     func resumeAfterMaterialChange(printerName:String,state:AppState) async {
