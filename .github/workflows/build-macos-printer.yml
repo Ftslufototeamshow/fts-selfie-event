@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.39-archive-local-reconcile.zip
-            dist/FTS-Printer-macOS-v0.3.39-archive-local-reconcile.dmg
+            dist/FTS-Printer-macOS-v0.3.40-sd-printer-list-fix.zip
+            dist/FTS-Printer-macOS-v0.3.40-sd-printer-list-fix.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.39-archive-local-reconcile"
+          TAG="fts-printer-mac-v0.3.40-sd-printer-list-fix"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.39-archive-local-reconcile.zip dist/FTS-Printer-macOS-v0.3.39-archive-local-reconcile.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.40-sd-printer-list-fix.zip dist/FTS-Printer-macOS-v0.3.40-sd-printer-list-fix.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.39-archive-local-reconcile.zip dist/FTS-Printer-macOS-v0.3.39-archive-local-reconcile.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.39 · Archive Local Reconcile" --notes "Build 129: Kleiner gezielter Archiv-Fix. Lokale Job-IDs werden bei Abholung als UUID statt als case-sensitive Text verglichen. Bereits serverseitig archivierte LOCAL-Aufträge werden beim Refresh automatisch in der lokalen Queue auf ARCHIVED nachgezogen und vorhandene Mediendateien nach Archiv/Abgegeben synchronisiert. Archivvorschau und Nachdruck dürfen bei einem serverseitig bestätigten Archiv-Eintrag zusätzlich auf die vorhandene lokale Jobdatei zurückfallen, auch wenn ein alter lokaler Status noch nicht synchron war. Canon-Spooler, Druckpfad, Spiegelkorrektur, SD/WLAN, Material, QR, Remote-Admin und sonstige Build-128-Funktionen bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.40-sd-printer-list-fix.zip dist/FTS-Printer-macOS-v0.3.40-sd-printer-list-fix.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.40 · SD Printer List Fix" --notes "Build 130: Kleiner gezielter UI-Fix. In der SD-/WLAN-Ansicht wird nun dieselbe aktivierte Druckerliste wie auf der Printer-Seite verwendet, sodass alle aktivierten Canon-Drucker gleichzeitig sichtbar sind. Der funktionierende Live-Druckoverlay, Canon-Spooler, Druckpfad, Archiv-Fix, Materialzählung, SD/WLAN-Import, QR und Remote-Admin bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.39-archive-local-reconcile"
+          CURRENT="fts-printer-mac-v0.3.40-sd-printer-list-fix"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

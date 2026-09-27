@@ -1370,7 +1370,7 @@ struct ProductionMediaContent: View {
     }
 
     @ViewBuilder private var liveDevicesView: some View {
-        let connectedPrinters=core.printerSlots.filter{$0.isConnectedForUI}
+        let connectedPrinters=core.printerSlots.filter(\.enabled)
         let unregisteredCards=ingest.detectedCards.filter{!$0.registered}
         if !connectedPrinters.isEmpty || !sourceChoices.isEmpty || !unregisteredCards.isEmpty {
             VStack(alignment:.leading,spacing:8) {
