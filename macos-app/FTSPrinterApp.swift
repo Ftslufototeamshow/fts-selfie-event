@@ -752,7 +752,7 @@ final class AppState: ObservableObject {
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
-    static let appVersion = "0.3.36-admin-misprint-staff-report"
+    static let appVersion = "0.3.37-mobile-admin-remote-control"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -839,7 +839,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.36-admin-misprint-staff-report"
+                "p_user_agent":"FTS Printer macOS 0.3.37-mobile-admin-remote-control"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -870,7 +870,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v125",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.36-admin-misprint-staff-report"
+                "p_user_agent":"FTS Printer macOS 0.3.37-mobile-admin-remote-control"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session
@@ -1366,6 +1366,7 @@ struct MainView: View {
     @State private var updatePrompt=false
     @State private var updateInstalling=false
     @State private var postponedUpdateBuild:Int?=nil
+    @State private var showRemoteIssues=false
 
     var printingActive:Bool {
         state.production.printerSlots.contains{["PREPARING","TRANSFER","PRINTING"].contains($0.state)}
@@ -1406,6 +1407,33 @@ struct MainView: View {
         .frame(minWidth:1080,minHeight:720)
         .sheet(isPresented:$showStock){StockSheet(isPresented:$showStock).environmentObject(state)}
         .sheet(item:$state.currentReceipt){r in ReceiptSheet(receipt:r).environmentObject(state)}
+        .sheet(isPresented:$showRemoteIssues){
+            V127RemoteIssuesPanel(state:state,core:state.production)
+                .frame(minWidth:760,minHeight:620)
+        }
+        .overlay(alignment:.bottomTrailing) {
+            let openCount=state.production.remoteIssues.filter{$0.status != "RESOLVED"}.count
+            if openCount>0 {
+                Button {
+                    showRemoteIssues=true
+                } label: {
+                    ZStack {
+                        Circle().fill(FTSTheme.cyan).frame(width:58,height:58)
+                        Image(systemName:"message.badge.fill").font(.title2).foregroundStyle(.black)
+                        Text("\(openCount)")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.white)
+                            .padding(4)
+                            .background(Color.red)
+                            .clipShape(Circle())
+                            .offset(x:20,y:-20)
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(20)
+                .help("Admin-Handy / Druckprobleme")
+            }
+        }
         .overlay(alignment:.topTrailing) {
             if let message=state.errorMessage,!message.isEmpty {
                 HStack(alignment:.top,spacing:10) {

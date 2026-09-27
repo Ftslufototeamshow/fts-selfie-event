@@ -97,6 +97,42 @@ struct V126StaffDailyRow: Codable, Identifiable, Hashable {
     var id:String { user_id }
 }
 
+struct V127IssueMessage: Codable, Identifiable, Hashable {
+    let id:String
+    let sender_kind:String
+    let sender_name:String?
+    let body:String
+    let message_kind:String
+    let created_at:String
+}
+
+struct V127RemoteIssue: Codable, Identifiable, Hashable {
+    let issue_id:String
+    let target_kind:String
+    let target_unit_id:String
+    let target_job_id:String
+    let customer_code:String?
+    let requested_resolution:String
+    let reason_code:String
+    let employee_note:String?
+    let status:String
+    let decision:String?
+    let admin_note:String?
+    let approved_by_name:String?
+    let approved_at:String?
+    let applied_at:String?
+    let created_at:String
+    let messages:[V127IssueMessage]
+    var id:String { issue_id }
+}
+
+struct V127ReportIssueResult: Codable, Hashable {
+    let ok:Bool?
+    let existing:Bool?
+    let issue_id:String?
+    let status:String?
+}
+
 struct V80Claim: Codable, Hashable {
     let ok: Bool?
     let empty: Bool?
@@ -1077,8 +1113,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.35-admin-misprint-staff-report"
-    static let build = 126
+    static let version = "1.1.36-mobile-admin-remote-control"
+    static let build = 127
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -1103,6 +1139,8 @@ final class ProductionCore: ObservableObject {
     @Published var staffDaily: [V126StaffDailyRow] = []
     @Published var staffDailyLoading = false
     @Published var staffDailyError: String?
+    @Published var remoteIssues:[V127RemoteIssue] = []
+    @Published var remoteIssueStatus = ""
     @Published var consumableActionsInFlight: Set<String> = []
     @Published var rp108ActionsInFlight: Set<String> = []
 
@@ -1371,6 +1409,86 @@ final class ProductionCore: ObservableObject {
                 "p_last_error":slot.lastError as Any? ?? NSNull()
             ], as: Bool.self)
         }
+
+        let power:[String:Any] = [
+            "hasBattery":hostPower.hasBattery,
+            "percentage":hostPower.percentage as Any? ?? NSNull(),
+            "onACPower":hostPower.onACPower,
+            "charging":hostPower.charging,
+            "summary":hostPower.summary
+        ]
+        let printers:[[String:Any]] = printerSlots.filter(\.enabled).map { p in
+            [
+                "name":p.name,
+                "state":p.state,
+                "eta":p.eta,
+                "connection":p.connection,
+                "last_error":p.lastError as Any? ?? NSNull()
+            ]
+        }
+        let cards:[[String:Any]] = state.mediaIngest.detectedCards.map { c in
+            [
+                "label":c.label as Any? ?? NSNull(),
+                "volume_name":c.volumeName,
+                "registered":c.registered,
+                "writable":c.writable
+            ]
+        }
+        let mediaItems:[[String:Any]] = state.mediaIngest.items.prefix(120).map { m in
+            [
+                "id":m.id,
+                "original_name":m.originalName,
+                "source_type":m.sourceType,
+                "source_label":m.sourceLabel,
+                "workflow":m.effectiveWorkflow.rawValue,
+                "imported_at":ISO8601DateFormatter().string(from:m.importedAt)
+            ]
+        }
+        let media:[String:Any] = [
+            "status":state.mediaIngest.status,
+            "cards":cards,
+            "registered_labels":state.mediaIngest.registeredCardLabels.sorted(),
+            "items":mediaItems,
+            "wlan_active":state.mediaIngest.wlanCameraActive,
+            "wlan_name":state.mediaIngest.wlanCameraName,
+            "wlan_bars":state.mediaIngest.wlanCameraBars,
+            "wlan_quality":state.mediaIngest.wlanCameraQuality
+        ]
+        let localJobs:[[String:Any]] = localQueue.jobs.suffix(80).map { j in
+            [
+                "job_id":j.id.uuidString,
+                "customer_code":j.customerCode,
+                "source_type":j.sourceType,
+                "source_label":j.sourceLabel,
+                "status":j.status.rawValue,
+                "created_at":ISO8601DateFormatter().string(from:j.createdAt),
+                "units":j.units.map { u in
+                    [
+                        "unit_id":u.id.uuidString,
+                        "original_name":u.originalName,
+                        "copy_index":u.copyIndex,
+                        "status":u.status.rawValue,
+                        "printer":u.printerName as Any? ?? NSNull()
+                    ] as [String:Any]
+                }
+            ]
+        ]
+
+        let _:Bool? = try? await api.rpc("fts_printer_station_heartbeat_v127",body:[
+            "p_device_token":dev,
+            "p_session_token":session,
+            "p_event_token":state.selectedEventToken,
+            "p_host_id":hostID,
+            "p_app_version":AppState.appVersion,
+            "p_selected_day":state.mediaIngest.selectedDay.isEmpty ? NSNull() : state.mediaIngest.selectedDay,
+            "p_host_power":power,
+            "p_internet_status":internetStatus,
+            "p_printer_snapshot":printers,
+            "p_media_snapshot":media,
+            "p_local_queue_snapshot":localJobs
+        ],as:Bool.self)
+
+        await refreshRemoteIssues(state:state)
     }
 
     func dispatchAvailable(state: AppState) {
@@ -1931,6 +2049,185 @@ final class ProductionCore: ObservableObject {
         } catch { lastError=error.localizedDescription }
     }
 
+
+
+    func reportRemoteIssue(
+        targetKind:String,
+        targetUnitID:String,
+        targetJobID:String,
+        customerCode:String,
+        requestedResolution:String,
+        reasonCode:String,
+        note:String,
+        state:AppState
+    ) async -> Bool {
+        guard let dev=state.deviceToken,let session=state.sessionToken,!state.selectedEventToken.isEmpty else{return false}
+        do {
+            let result:V127ReportIssueResult = try await api.rpc("fts_printer_report_issue_v127",body:[
+                "p_device_token":dev,
+                "p_session_token":session,
+                "p_event_token":state.selectedEventToken,
+                "p_target_kind":targetKind,
+                "p_target_unit_id":targetUnitID,
+                "p_target_job_id":targetJobID,
+                "p_customer_code":customerCode,
+                "p_requested_resolution":requestedResolution,
+                "p_reason_code":reasonCode,
+                "p_employee_note":note
+            ])
+            guard result.ok==true else {
+                throw NSError(domain:"FTSPrinter",code:270,userInfo:[NSLocalizedDescriptionKey:"Problem konnte nicht an den Administrator gesendet werden."])
+            }
+            remoteIssueStatus = result.existing==true
+                ? "Dieses Druckproblem wartet bereits auf den Administrator."
+                : "Druckproblem an das Admin-Handy gesendet."
+            await refreshRemoteIssues(state:state)
+            return true
+        } catch {
+            lastError=error.localizedDescription
+            return false
+        }
+    }
+
+    func refreshRemoteIssues(state:AppState) async {
+        guard let dev=state.deviceToken,let session=state.sessionToken,!state.selectedEventToken.isEmpty else{return}
+        do {
+            let rows:[V127RemoteIssue] = try await api.rpc("fts_printer_station_issues_v127",body:[
+                "p_device_token":dev,
+                "p_session_token":session,
+                "p_event_token":state.selectedEventToken
+            ])
+            remoteIssues=rows
+            await applyApprovedRemoteIssues(state:state)
+        } catch {
+            if !isTransientTransportMessage(error.localizedDescription) {
+                remoteIssueStatus="Admin-Verbindung: "+error.localizedDescription
+            }
+        }
+    }
+
+    private func applyApprovedRemoteIssues(state:AppState) async {
+        let approved=remoteIssues.filter{$0.status=="APPROVED"}
+        guard !approved.isEmpty,let dev=state.deviceToken,let session=state.sessionToken else{return}
+
+        for issue in approved {
+            do {
+                if issue.target_kind=="SELFIE" {
+                    let result:JSONValue = try await api.rpc("fts_printer_apply_remote_selfie_v127",body:[
+                        "p_device_token":dev,"p_session_token":session,"p_issue_id":issue.issue_id
+                    ])
+                    if result["ok"]?.bool==true {
+                        remoteIssueStatus="Admin hat bestätigt · "+(issue.admin_note ?? "Freigabe wurde übernommen.")
+                        printIssueStatus=remoteIssueStatus
+                    }
+                } else {
+                    guard let jobID=UUID(uuidString:issue.target_job_id),
+                          let unitID=UUID(uuidString:issue.target_unit_id),
+                          let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
+                          let ui=localQueue.jobs[ji].units.firstIndex(where:{$0.id==unitID}) else{continue}
+
+                    if issue.decision=="MISPRINT" && localQueue.jobs[ji].units[ui].status == .uncertain {
+                        let printerName=localQueue.jobs[ji].units[ui].printerName
+                        if let printerName {
+                            let result:JSONValue = try await api.rpc("fts_printer_consume_local_unit_component_v87",body:[
+                                "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
+                                "p_printer_key":backendPrinterKey(printerName),"p_local_unit_id":unitID.uuidString
+                            ])
+                            localQueue.jobs[ji].units[ui].componentSynced = result["ok"]?.bool == true
+                        }
+                        localQueue.jobs[ji].units[ui].status = .printed
+                        localQueue.jobs[ji].units[ui].printedAt = Date()
+                        localQueue.jobs[ji].units[ui].lastError=nil
+                        saveLocalQueue()
+                    }
+
+                    if issue.decision=="NOT_PRINTED" {
+                        let result:JSONValue = try await api.rpc("fts_printer_apply_remote_local_v127",body:[
+                            "p_device_token":dev,"p_session_token":session,"p_issue_id":issue.issue_id,
+                            "p_replacement_job_id":NSNull()
+                        ])
+                        if result["ok"]?.bool==true {
+                            let oldPrinter=localQueue.jobs[ji].units[ui].printerName
+                            localQueue.jobs[ji].units[ui].status = .waiting
+                            localQueue.jobs[ji].units[ui].printerName=nil
+                            localQueue.jobs[ji].units[ui].startedAt=nil
+                            localQueue.jobs[ji].units[ui].lastError=nil
+                            localQueue.jobs[ji].status = .waiting
+                            saveLocalQueue()
+                            if let oldPrinter{clearPrinterError(oldPrinter)}
+                            remoteIssueStatus="Admin hat bestätigt · Auftrag erneut freigegeben."
+                        }
+                    } else {
+                        let originalJob=localQueue.jobs[ji]
+                        let originalUnit=localQueue.jobs[ji].units[ui]
+                        var readyPath=originalUnit.imagePath
+                        var sourcePath=originalUnit.sourceImagePath
+                        var preRendered=originalUnit.preRendered ?? false
+
+                        if let item=MediaIngestV80.archivedMediaItemSync(folderPath:loadedFolderPath,mediaID:originalUnit.mediaID) {
+                            sourcePath=item.importedPath
+                            if let designed=item.designedPath,!designed.isEmpty,FileManager.default.fileExists(atPath:designed) {
+                                readyPath=designed;preRendered=true
+                            } else if FileManager.default.fileExists(atPath:item.importedPath) {
+                                readyPath=item.importedPath;preRendered=false
+                            }
+                        }
+                        if !FileManager.default.fileExists(atPath:readyPath),let sourcePath,FileManager.default.fileExists(atPath:sourcePath) {
+                            readyPath=sourcePath;preRendered=false
+                        }
+                        guard FileManager.default.fileExists(atPath:readyPath) else {
+                            lastError="Admin hat Ersatzdruck freigegeben, aber die lokale Druckdatei fehlt."
+                            continue
+                        }
+
+                        let replacementJobID=UUID()
+                        let result:V80LocalJobCreate = try await api.rpc("fts_printer_apply_remote_local_v127",body:[
+                            "p_device_token":dev,"p_session_token":session,"p_issue_id":issue.issue_id,
+                            "p_replacement_job_id":replacementJobID.uuidString
+                        ])
+                        guard result.ok==true,let code=result.customer_code else{continue}
+                        let replacementUnit=V80LocalPrintUnit(
+                            id:UUID(),jobID:replacementJobID,customerCode:code,
+                            mediaID:"remote-misprint-"+unitID.uuidString.lowercased(),
+                            imagePath:readyPath,preRendered:preRendered,
+                            originalName:"Ersatz · "+originalUnit.originalName,copyIndex:1,status:.waiting,
+                            printerName:nil,startedAt:nil,printedAt:nil,lastError:nil,componentSynced:false,
+                            sourceImagePath:sourcePath,printLayout:originalUnit.printLayout
+                        )
+                        localQueue.jobs.append(V80LocalPrintJob(
+                            id:replacementJobID,eventToken:state.selectedEventToken,eventDay:originalJob.eventDay,
+                            customerCode:code,sourceType:"LOCAL",sourceLabel:"R",createdAt:Date(),status:.waiting,units:[replacementUnit]
+                        ))
+                        saveLocalQueue()
+                        remoteIssueStatus="Admin hat bestätigt · Ersatzdruck \(code) wurde angelegt."
+                    }
+                }
+            } catch {
+                lastError="Remote-Admin-Freigabe: "+error.localizedDescription
+            }
+        }
+        if autoDispatch && hasDispatchableWork { dispatchAvailable(state:state) }
+        do {
+            remoteIssues = try await api.rpc("fts_printer_station_issues_v127",body:[
+                "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken
+            ])
+        } catch {}
+    }
+
+    func sendRemoteIssueReply(issueID:String,message:String,outcome:String?,state:AppState) async -> Bool {
+        guard let dev=state.deviceToken,let session=state.sessionToken,!state.selectedEventToken.isEmpty else{return false}
+        do {
+            let ok:Bool = try await api.rpc("fts_printer_station_issue_message_v127",body:[
+                "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
+                "p_issue_id":issueID,"p_message":message,"p_outcome":outcome as Any? ?? NSNull()
+            ])
+            if ok { await refreshRemoteIssues(state:state) }
+            return ok
+        } catch {
+            lastError=error.localizedDescription
+            return false
+        }
+    }
 
     func selfieMisprintCandidates(orderID:String,state:AppState) async -> [V126SelfieMisprintCandidate] {
         guard let dev=state.deviceToken,let session=state.sessionToken,

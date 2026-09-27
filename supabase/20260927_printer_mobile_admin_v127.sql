@@ -1,0 +1,3 @@
+-- Build 127 · Mobile Admin / multi-event station heartbeat / remote approvals
+-- Live production schema/RPCs are deployed in Supabase. This migration marker
+-- documents the app-side dependency without changing the established print path.

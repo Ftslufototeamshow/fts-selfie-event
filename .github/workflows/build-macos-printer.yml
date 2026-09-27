@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.36-admin-misprint-staff-report.zip
-            dist/FTS-Printer-macOS-v0.3.36-admin-misprint-staff-report.dmg
+            dist/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.zip
+            dist/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.36-admin-misprint-staff-report"
+          TAG="fts-printer-mac-v0.3.37-mobile-admin-remote-control"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.36-admin-misprint-staff-report.zip dist/FTS-Printer-macOS-v0.3.36-admin-misprint-staff-report.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.zip dist/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.36-admin-misprint-staff-report.zip dist/FTS-Printer-macOS-v0.3.36-admin-misprint-staff-report.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.36 · Admin Misprint + Staff Report" --notes "Build 126: Ergänzt eine administratorgeschützte Fehldruck-/Ersatzdruck-Funktion und eine nur für Administratoren sichtbare Mitarbeiter-Tagesleistung. Bei UNCERTAIN kann ein Administrator mit persönlichem Code entweder 'gar nicht gedruckt' bestätigen und sicher erneut freigeben oder einen tatsächlich unbrauchbaren physischen Druck als Fehldruck deklarieren. Für bereits produzierte Aufträge gibt es in Kundenabholung 'Fehldruck / Ersatz'. Gründe wie Farbfehler, Papierstau, Teildruck, Stromausfall und beschädigtes Papier werden protokolliert; genau ein Ersatzdruck wird freigegeben und der Kunde wird nicht erneut berechnet. Die Tagesliste zeigt lokale, Selfie- und gesamte physische Prints, gute Prints, Fehldrucke, Ersatzdrucke und Admin-Freigaben pro Mitarbeiter. Canon-Spooler, Spiegelkorrektur, Material-/RP-108-Zähler, SD A-E, QR-Download, Archiv, Banner/Rand und der bestehende Druckpfad bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.zip dist/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.37 · Mobile Admin Remote Control" --notes "Build 127: Ergänzt ausschließlich Fernübersicht und Admin-Kommunikation. Jede Printer-Station sendet einen Live-Heartbeat pro ausgewähltem Event mit angemeldetem Mitarbeiter, Login-Zeit, Mac-Strom/Akku, Netzwerk, Druckerstatus, lokalem SD/WLAN-Status, Foto-Dateinamen/Workflow und lokaler Queue. Druckprobleme können ohne Admin vor Ort an die installierbare FTS Printer Admin Web-App gesendet werden; der Administrator kann remote 1× Ersatz, 'gar nicht gedruckt' oder Ablehnung freigeben und eine kurze Nachricht schreiben. Der Mac übernimmt bestätigte Freigaben sicher und zeigt sie über einen runden Chat-Button; Mitarbeiter kann 'Ist okay', 'Problem besteht noch' oder kurzen Text zurückmelden. Mehrere Events/Computer bleiben getrennt über Event- und Geräte-IDs. Canon-Spooler, SELPHY-Spiegelkorrektur, Druckrendering, Material/RP-108, SD A-E, QR-Download, Archiv, Banner/Rand und bestehender Druckpfad bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.36-admin-misprint-staff-report"
+          CURRENT="fts-printer-mac-v0.3.37-mobile-admin-remote-control"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

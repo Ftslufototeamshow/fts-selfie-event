@@ -307,8 +307,16 @@ struct V126PrintIssueSheet:View {
                 TextField("Notiz optional",text:$note)
                     .textFieldStyle(.roundedBorder)
 
+                Button(busy ? "Wird gesendet …" : "📱 An Admin-Handy senden") {
+                    sendToRemoteAdmin()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(busy)
+                Text("Der Administrator bekommt eine Push-Nachricht und kann vom Handy freigeben oder antworten.")
+                    .font(.caption2).foregroundStyle(.secondary)
+
                 Divider()
-                Text("Administrator-Freigabe").font(.headline)
+                Text("Oder Administrator direkt hier").font(.headline)
                 Picker("Administrator",selection:$selectedAdmin) {
                     ForEach(state.deviceAdmins){a in Text(a.display_name).tag(a.user_id)}
                 }
@@ -347,6 +355,32 @@ struct V126PrintIssueSheet:View {
         }
     }
 
+    private func sendToRemoteAdmin() {
+        guard !busy else{return}
+        busy=true
+        Task {
+            let ok:Bool
+            switch target.kind {
+            case .server:
+                guard let unit=target.serverUnit else{busy=false;return}
+                ok=await core.reportRemoteIssue(
+                    targetKind:"SELFIE",targetUnitID:unit.unit_id,targetJobID:unit.order_id,
+                    customerCode:target.customerCode,requestedResolution:resolution,
+                    reasonCode:reason,note:note,state:state
+                )
+            case .local:
+                guard let jobID=target.localJobID,let unitID=target.localUnitID else{busy=false;return}
+                ok=await core.reportRemoteIssue(
+                    targetKind:"LOCAL",targetUnitID:unitID.uuidString,targetJobID:jobID.uuidString,
+                    customerCode:target.customerCode,requestedResolution:resolution,
+                    reasonCode:reason,note:note,state:state
+                )
+            }
+            busy=false
+            if ok { dismiss() }
+        }
+    }
+
     private func submit() {
         guard !busy else{return}
         busy=true
@@ -380,6 +414,126 @@ struct V126PrintIssueSheet:View {
             }
             busy=false
             if ok { dismiss() }
+        }
+    }
+}
+
+
+struct V127RemoteIssuesPanel:View {
+    @ObservedObject var state:AppState
+    @ObservedObject var core:ProductionCore
+    @Environment(\.dismiss) private var dismiss
+    @State private var replyText:[String:String]=[:]
+
+    private var active:[V127RemoteIssue] {
+        core.remoteIssues.filter{$0.status != "RESOLVED"}.sorted{$0.created_at > $1.created_at}
+    }
+
+    var body:some View {
+        VStack(alignment:.leading,spacing:12) {
+            HStack {
+                VStack(alignment:.leading) {
+                    Text("Admin-Handy / Druckprobleme").font(.title2.bold())
+                    Text("Freigaben und kurze Rückmeldungen zwischen Administrator und dieser Printer-Station.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Schließen"){dismiss()}
+            }
+
+            if !core.remoteIssueStatus.isEmpty {
+                Label(core.remoteIssueStatus,systemImage:"checkmark.circle.fill")
+                    .font(.caption.bold()).foregroundStyle(.green)
+            }
+
+            ScrollView {
+                LazyVStack(alignment:.leading,spacing:10) {
+                    if active.isEmpty {
+                        Text("Keine offenen Admin-Vorgänge.").foregroundStyle(.secondary).padding(30)
+                    }
+                    ForEach(active) { issue in
+                        VStack(alignment:.leading,spacing:8) {
+                            HStack {
+                                Text("\(issue.target_kind) · \(issue.customer_code ?? "Druckproblem")")
+                                    .font(.headline.monospacedDigit())
+                                Spacer()
+                                Text(statusText(issue.status)).font(.caption.bold())
+                                    .foregroundStyle(statusColor(issue.status))
+                            }
+                            Text(issue.reason_code.replacingOccurrences(of:"_",with:" "))
+                                .font(.caption).foregroundStyle(.secondary)
+                            if let note=issue.admin_note,!note.isEmpty {
+                                Label("Admin: \(note)",systemImage:"person.badge.shield.checkmark.fill")
+                                    .font(.callout.bold()).foregroundStyle(FTSTheme.gold)
+                            }
+                            ForEach(issue.messages) { m in
+                                HStack(alignment:.top,spacing:7) {
+                                    Image(systemName:m.sender_kind=="ADMIN" ? "iphone" : (m.sender_kind=="SYSTEM" ? "gearshape.fill" : "person.fill"))
+                                        .foregroundStyle(m.sender_kind=="ADMIN" ? FTSTheme.gold : FTSTheme.cyan)
+                                    VStack(alignment:.leading,spacing:2) {
+                                        Text(m.sender_name ?? m.sender_kind).font(.caption.bold())
+                                        Text(m.body).font(.callout)
+                                    }
+                                }
+                                .padding(7)
+                                .background(Color.white.opacity(0.04))
+                                .clipShape(RoundedRectangle(cornerRadius:8))
+                            }
+                            if ["APPLIED","NEEDS_ATTENTION"].contains(issue.status) {
+                                TextField("Kurze Antwort an Admin",text:Binding(
+                                    get:{replyText[issue.id] ?? ""},
+                                    set:{replyText[issue.id]=$0}
+                                ))
+                                .textFieldStyle(.roundedBorder)
+                                HStack {
+                                    Button("Ist okay ✓") { send(issue,outcome:"OK",fallback:"Ist okay.") }
+                                        .buttonStyle(.borderedProminent)
+                                    Button("Problem besteht noch") { send(issue,outcome:"STILL_PROBLEM",fallback:"Problem besteht noch.") }
+                                        .buttonStyle(.bordered)
+                                    Spacer()
+                                    Button("Nachricht senden") { send(issue,outcome:nil,fallback:"") }
+                                        .disabled((replyText[issue.id] ?? "").trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
+                                }
+                            }
+                        }
+                        .padding(12)
+                        .background(Color(nsColor:.controlBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius:12))
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .task{await core.refreshRemoteIssues(state:state)}
+    }
+
+    private func send(_ issue:V127RemoteIssue,outcome:String?,fallback:String) {
+        let text=(replyText[issue.id] ?? "").trimmingCharacters(in:.whitespacesAndNewlines)
+        Task {
+            let ok=await core.sendRemoteIssueReply(
+                issueID:issue.id,message:text.isEmpty ? fallback : text,outcome:outcome,state:state
+            )
+            if ok { replyText[issue.id]="" }
+        }
+    }
+
+    private func statusText(_ status:String)->String {
+        switch status {
+        case "PENDING_ADMIN": return "Wartet auf Admin"
+        case "APPROVED": return "Admin bestätigt"
+        case "APPLIED": return "Übernommen"
+        case "NEEDS_ATTENTION": return "Problem besteht noch"
+        case "REJECTED": return "Abgelehnt"
+        default: return status
+        }
+    }
+
+    private func statusColor(_ status:String)->Color {
+        switch status {
+        case "PENDING_ADMIN","APPROVED": return .orange
+        case "APPLIED": return .green
+        case "NEEDS_ATTENTION","REJECTED": return .red
+        default: return .secondary
         }
     }
 }
@@ -1922,8 +2076,16 @@ struct V126PickupMisprintSheet:View {
                 }
                 TextField("Notiz optional",text:$note).textFieldStyle(.roundedBorder)
 
+                Button(busy ? "Wird gesendet …" : "📱 An Admin-Handy senden") {
+                    sendToRemoteAdmin()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(busy || !hasSelection)
+                Text("Der Administrator kann diesen Fehldruck unterwegs prüfen und genau 1 Ersatz freigeben.")
+                    .font(.caption2).foregroundStyle(.secondary)
+
                 Divider()
-                Text("Administrator-Freigabe").font(.headline)
+                Text("Oder Administrator direkt hier").font(.headline)
                 Picker("Administrator",selection:$selectedAdmin) {
                     ForEach(state.deviceAdmins){a in Text(a.display_name).tag(a.user_id)}
                 }
@@ -1967,6 +2129,31 @@ struct V126PickupMisprintSheet:View {
             selectedLocalUnit=localCandidates.first?.id
         }
         loading=false
+    }
+
+    private func sendToRemoteAdmin() {
+        guard !busy else{return}
+        busy=true
+        Task {
+            let ok:Bool
+            if pickup.kind.uppercased()=="SELFIE" {
+                guard let unit=selectedSelfie else{busy=false;return}
+                ok=await core.reportRemoteIssue(
+                    targetKind:"SELFIE",targetUnitID:unit.unit_id,targetJobID:unit.order_id,
+                    customerCode:pickup.customer_code,requestedResolution:"MISPRINT",
+                    reasonCode:reason,note:note,state:state
+                )
+            } else {
+                guard let jobID=UUID(uuidString:pickup.id),let unitID=selectedLocalUnit else{busy=false;return}
+                ok=await core.reportRemoteIssue(
+                    targetKind:"LOCAL",targetUnitID:unitID.uuidString,targetJobID:jobID.uuidString,
+                    customerCode:pickup.customer_code,requestedResolution:"MISPRINT",
+                    reasonCode:reason,note:note,state:state
+                )
+            }
+            busy=false
+            if ok { dismiss() }
+        }
     }
 
     private func submit() {
