@@ -864,6 +864,7 @@ struct V80PhotoPrintPreviewSheet: View {
             String(format:"%.3f",layout.cropZoom),
             String(format:"%.3f",layout.cropOffsetX),
             String(format:"%.3f",layout.cropOffsetY),
+            layout.photoEffect.rawValue,
             layout.frameMode.rawValue,
             layout.fitMode.rawValue,
             String(format:"%.2f",layout.borderMM),
@@ -892,7 +893,8 @@ struct V80PhotoPrintPreviewSheet: View {
                     event:event,
                     cropZoom:CGFloat(layout.cropZoom),
                     cropOffsetX:CGFloat(layout.cropOffsetX),
-                    cropOffsetY:CGFloat(layout.cropOffsetY)
+                    cropOffsetY:CGFloat(layout.cropOffsetY),
+                    photoEffect:layout.photoEffect
                 )
             } else {
                 let path=(item.designedPath?.isEmpty == false) ? item.designedPath! : item.importedPath
@@ -1008,6 +1010,27 @@ struct V80PhotoPrintPreviewSheet: View {
                         }
                     }
                     .padding(.vertical,3)
+                }
+
+                GroupBox("Foto-Look · nur dieses Foto") {
+                    VStack(alignment:.leading,spacing:7) {
+                        Picker("Look",selection:$layout.photoEffect) {
+                            ForEach(FTSPhotoEffect.allCases,id:\.self){effect in
+                                Text(effect.label).tag(effect)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        if layout.photoEffect == .comic {
+                            let greenActive = event.map{FTSGreenScreenStore.settings(eventToken:$0.event_token).enabled} ?? false
+                            Text(greenActive
+                                 ? "Comic: Person inklusive Gesicht, Haare und Kleidung wird gezeichnet; der aktive Green-Screen-Hintergrund wird eingesetzt."
+                                 : "Comic: Nur die erkannte Person inklusive Gesicht, Haare und Kleidung wird gezeichnet. Der echte Hintergrund bleibt normal.")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        } else {
+                            Text("Dieser Look wird nur auf dieses Foto gespeichert und nicht auf das nächste Foto übernommen.")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }.padding(.vertical,3)
                 }
 
                 Picker("Druckrand",selection:$layout.frameMode) {
@@ -1302,7 +1325,10 @@ struct ProductionMediaContent: View {
                 onConfirm:{qty,layout in
                     quantities[item.id]=qty
                     printLayouts[item.id]=layout
-                    defaultPrintLayout=layout
+                    var reusable=layout
+                    reusable.photoEffect = .normal
+                    reusable.greenScreenSnapshot = nil
+                    defaultPrintLayout=reusable
                     saveDefaultPrintLayout()
                     previewItem=nil
                     submitSelection(only:item.id)
@@ -1561,7 +1587,10 @@ struct ProductionMediaContent: View {
             defaultPrintLayout=V80PrintLayout()
             return
         }
-        defaultPrintLayout=value
+        var reusable=value
+        reusable.photoEffect = .normal
+        reusable.greenScreenSnapshot = nil
+        defaultPrintLayout=reusable
     }
 
     private func saveDefaultPrintLayout() {

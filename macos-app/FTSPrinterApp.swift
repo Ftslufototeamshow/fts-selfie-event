@@ -1233,7 +1233,7 @@ extension View {
 }
 
 enum FTSSection:Int {
-    case dashboard, events, orders, media, pickup, printers, finance, settings, help
+    case dashboard, events, orders, media, effects, pickup, printers, finance, settings, help
 }
 
 
@@ -1542,6 +1542,7 @@ struct MainView: View {
             nav("Events","calendar",.events)
             nav("Druckaufträge","printer.fill",.orders)
             nav("SD-Karte / Import","sdcard.fill",.media,disabled:!canUseMedia)
+            nav("Green Screen / Effekte","person.crop.rectangle.badge.plus",.effects)
             Button(action:{showStock=true}) {
                 Label("Materialbestand",systemImage:"shippingbox.fill")
                     .frame(maxWidth:.infinity,alignment:.leading).padding(.horizontal,12).padding(.vertical,10)
@@ -1658,6 +1659,8 @@ struct MainView: View {
         case .media:
             if canUseMedia { ProductionMediaView().environmentObject(state) }
             else { FTSHelpView(title:"SD-Karte / Import",text:"Für dieses Event ist kein lokaler Kamera-/Print-Only-Modus aktiviert.") }
+        case .effects:
+            FTSGreenScreenView(state:state,event:event)
         case .pickup:
             ProductionPickupView().environmentObject(state)
         case .printers:

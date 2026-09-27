@@ -88,9 +88,9 @@ test -s "$RES/FTSPrinter.icns"
 
 chmod +x "$MACOS/FTS Printer"
 codesign --force --deep --sign - "$APP"
-rm -f "$DIST/FTS-Printer-macOS-v0.3.41-card-material-controls.zip" "$DIST/FTS-Printer-macOS-v0.3.41-card-material-controls.dmg"
-ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/FTS-Printer-macOS-v0.3.41-card-material-controls.zip"
-DMG="$DIST/FTS-Printer-macOS-v0.3.41-card-material-controls.dmg"
+rm -f "$DIST/FTS-Printer-macOS-v0.3.42-green-screen-effects.zip" "$DIST/FTS-Printer-macOS-v0.3.42-green-screen-effects.dmg"
+ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/FTS-Printer-macOS-v0.3.42-green-screen-effects.zip"
+DMG="$DIST/FTS-Printer-macOS-v0.3.42-green-screen-effects.dmg"
 rm -f "$DMG"
 for attempt in 1 2 3; do
   if hdiutil create -volname "FTS Printer" -srcfolder "$APP" -ov -format UDZO "$DMG"; then

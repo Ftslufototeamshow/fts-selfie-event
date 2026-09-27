@@ -35,16 +35,24 @@ enum ProductionRendererV76 {
         event: EventRow,
         cropZoom: CGFloat = 1,
         cropOffsetX: CGFloat = 0,
-        cropOffsetY: CGFloat = 0
+        cropOffsetY: CGFloat = 0,
+        photoEffect: FTSPhotoEffect = .normal,
+        greenScreenSettings: FTSGreenScreenSettings? = nil
     ) async throws -> NSImage {
-        guard let source = uprightImage(contentsOf: sourceURL) else {
+        guard let originalSource = uprightImage(contentsOf: sourceURL) else {
             throw NSError(domain:"FTSPrinter",code:176,userInfo:[NSLocalizedDescriptionKey:"Lokales Foto konnte nicht geöffnet werden."])
         }
 
+        let source=FTSPhotoEffectsV132.processedImage(
+            source:originalSource,
+            event:event,
+            effect:photoEffect,
+            greenScreenSettings:greenScreenSettings
+        )
         let config = event.studio_config?.object ?? [:]
-        let faces = detectFaces(source)
+        let faces = detectFaces(originalSource)
         let plan = buildPlan(
-            source:source,config:config,faces:faces,
+            source:originalSource,config:config,faces:faces,
             cropZoom:cropZoom,cropOffsetX:cropOffsetX,cropOffsetY:cropOffsetY
         )
 

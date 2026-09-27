@@ -272,15 +272,21 @@ struct V80PrintLayout: Codable, Hashable {
     var cropZoom: Double = 1.0
     var cropOffsetX: Double = 0.0
     var cropOffsetY: Double = 0.0
+    var photoEffect: FTSPhotoEffect = .normal
+    var greenScreenSnapshot: FTSGreenScreenSettings? = nil
 
     var hasCustomCrop: Bool {
         abs(cropZoom - 1.0) > 0.001 || abs(cropOffsetX) > 0.001 || abs(cropOffsetY) > 0.001
+    }
+    var requiresFreshRender: Bool {
+        hasCustomCrop || photoEffect != .normal || greenScreenSnapshot?.enabled == true
     }
 
     init() {}
 
     private enum CodingKeys: String, CodingKey {
         case frameMode, fitMode, borderMM, borderColorHex, cropZoom, cropOffsetX, cropOffsetY
+        case photoEffect, greenScreenSnapshot
     }
 
     init(from decoder: Decoder) throws {
@@ -292,6 +298,8 @@ struct V80PrintLayout: Codable, Hashable {
         cropZoom=try c.decodeIfPresent(Double.self,forKey:.cropZoom) ?? 1.0
         cropOffsetX=try c.decodeIfPresent(Double.self,forKey:.cropOffsetX) ?? 0.0
         cropOffsetY=try c.decodeIfPresent(Double.self,forKey:.cropOffsetY) ?? 0.0
+        photoEffect=try c.decodeIfPresent(FTSPhotoEffect.self,forKey:.photoEffect) ?? .normal
+        greenScreenSnapshot=try c.decodeIfPresent(FTSGreenScreenSettings.self,forKey:.greenScreenSnapshot)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -303,6 +311,8 @@ struct V80PrintLayout: Codable, Hashable {
         try c.encode(cropZoom,forKey:.cropZoom)
         try c.encode(cropOffsetX,forKey:.cropOffsetX)
         try c.encode(cropOffsetY,forKey:.cropOffsetY)
+        try c.encode(photoEffect,forKey:.photoEffect)
+        try c.encodeIfPresent(greenScreenSnapshot,forKey:.greenScreenSnapshot)
     }
 }
 
@@ -382,6 +392,7 @@ struct V80LocalPrintUnit: Codable, Identifiable, Hashable {
     var componentSynced: Bool?
     var sourceImagePath: String? = nil
     var printLayout: V80PrintLayout? = nil
+    var processedImagePath: String? = nil
 }
 
 struct V80LocalPrintJob: Codable, Identifiable, Hashable {
@@ -1829,17 +1840,15 @@ final class ProductionCore: ObservableObject {
             let unit=localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex]
             let printLayout=unit.printLayout ?? V80PrintLayout()
             let rendered:NSImage
-            if printLayout.hasCustomCrop,let sourcePath=unit.sourceImagePath,!sourcePath.isEmpty {
-                // Only a manually changed crop requires a fresh render from the
-                // untouched original. Normal local SD/WLAN printing keeps using
-                // the already prepared design file so the proven print path reaches
-                // macOS immediately, exactly as before Build 119.
+            if printLayout.requiresFreshRender,let sourcePath=unit.sourceImagePath,!sourcePath.isEmpty {
                 rendered=try await ProductionRendererV76.renderedImage(
                     sourceURL:URL(fileURLWithPath:sourcePath),
                     event:event,
                     cropZoom:CGFloat(printLayout.cropZoom),
                     cropOffsetX:CGFloat(printLayout.cropOffsetX),
-                    cropOffsetY:CGFloat(printLayout.cropOffsetY)
+                    cropOffsetY:CGFloat(printLayout.cropOffsetY),
+                    photoEffect:printLayout.photoEffect,
+                    greenScreenSettings:printLayout.greenScreenSnapshot
                 )
             } else if preRendered {
                 guard let ready=NSImage(contentsOfFile:path) else {
@@ -1847,9 +1856,17 @@ final class ProductionCore: ObservableObject {
                 }
                 rendered=ready
             } else {
-                rendered=try await ProductionRendererV76.renderedImage(sourceURL:URL(fileURLWithPath:path),event:event)
+                rendered=try await ProductionRendererV76.renderedImage(
+                    sourceURL:URL(fileURLWithPath:path),
+                    event:event,
+                    greenScreenSettings:printLayout.greenScreenSnapshot
+                )
             }
             let finalImage=V80PrintLayoutComposer.apply(rendered,layout:printLayout)
+            if let archivedPath=saveRenderedArchiveImage(finalImage,jobID:jobID,unitID:unit.id) {
+                localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex].processedImagePath=archivedPath
+                saveLocalQueue()
+            }
             let estimate=V80MacSpooler.learnedSeconds(printerName:printerName)
             let start=Date()
             setSlot(printerName,state:"PRINTING",eta:Int(estimate),current:"LOCAL:"+jobID.uuidString,error:nil)
@@ -2072,12 +2089,16 @@ final class ProductionCore: ObservableObject {
             for (m,count) in filtered.sorted(by:{$0.key.importedAt < $1.key.importedAt}) {
                 for copy in 1...count {
                     let readyPath = (m.designedPath?.isEmpty == false) ? m.designedPath! : m.importedPath
+                    var chosenLayout=layouts[m.id] ?? V80PrintLayout()
+                    if chosenLayout.greenScreenSnapshot == nil {
+                        chosenLayout.greenScreenSnapshot=FTSGreenScreenStore.settings(eventToken:state.selectedEventToken)
+                    }
                     units.append(V80LocalPrintUnit(
                         id:UUID(),jobID:id,customerCode:code,mediaID:m.id,imagePath:readyPath,
                         preRendered:(m.designedPath?.isEmpty == false),
                         originalName:m.originalName,copyIndex:copy,status:.waiting,printerName:nil,
                         startedAt:nil,printedAt:nil,lastError:nil,componentSynced:false,
-                        sourceImagePath:m.importedPath,printLayout:layouts[m.id]
+                        sourceImagePath:m.importedPath,printLayout:chosenLayout
                     ))
                 }
             }
@@ -2313,10 +2334,28 @@ final class ProductionCore: ObservableObject {
         }
     }
 
+    private func saveRenderedArchiveImage(_ image:NSImage,jobID:UUID,unitID:UUID)->String? {
+        guard !loadedFolderPath.isEmpty,
+              let tiff=image.tiffRepresentation,
+              let rep=NSBitmapImageRep(data:tiff),
+              let jpg=rep.representation(using:.jpeg,properties:[.compressionFactor:0.96]) else{return nil}
+        let folder=URL(fileURLWithPath:loadedFolderPath,isDirectory:true)
+            .appendingPathComponent("Archiv/Rendered",isDirectory:true)
+        do {
+            try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+            let url=folder.appendingPathComponent("\(jobID.uuidString)-\(unitID.uuidString).jpg")
+            try jpg.write(to:url,options:.atomic)
+            return url.path
+        } catch {
+            return nil
+        }
+    }
+
     func localIssuePreviewPath(jobID:UUID,unitID:UUID)->String? {
         guard let job=localQueue.jobs.first(where:{$0.id==jobID}),
               let unit=job.units.first(where:{$0.id==unitID}) else{return nil}
 
+        if let processed=unit.processedImagePath,FileManager.default.fileExists(atPath:processed) { return processed }
         if let item=MediaIngestV80.archivedMediaItemSync(folderPath:loadedFolderPath,mediaID:unit.mediaID) {
             if let designed=item.designedPath,!designed.isEmpty,FileManager.default.fileExists(atPath:designed) {
                 return designed
@@ -2673,6 +2712,7 @@ final class ProductionCore: ObservableObject {
               let job=localQueue.jobs.first(where:{$0.id==jobID}),
               let unit=job.units.first else{return nil}
 
+        if let processed=unit.processedImagePath,!processed.isEmpty,FileManager.default.fileExists(atPath:processed) { return processed }
         if let item=MediaIngestV80.archivedMediaItemSync(folderPath:loadedFolderPath,mediaID:unit.mediaID) {
             if let designed=item.designedPath,!designed.isEmpty,FileManager.default.fileExists(atPath:designed) { return designed }
             if FileManager.default.fileExists(atPath:item.importedPath) { return item.importedPath }
@@ -2746,7 +2786,13 @@ final class ProductionCore: ObservableObject {
         defer{archiveReprintActionsInFlight.remove(row.id)}
         do {
             let mediaItem:V80MediaItem
+            var preservedLayout:V80PrintLayout?
             if row.kind.uppercased()=="LOCAL" {
+                if let jobID=UUID(uuidString:row.id),
+                   let job=localQueue.jobs.first(where:{$0.id==jobID}),
+                   let unit=job.units.first {
+                    preservedLayout=unit.printLayout
+                }
                 guard let local=archivedLocalMedia(for:row) else {
                     throw NSError(domain:"FTSPrinter",code:224,userInfo:[NSLocalizedDescriptionKey:"Das lokale Archivfoto wurde auf diesem Mac nicht gefunden. Eventordner/Archiv prüfen."])
                 }
@@ -2782,9 +2828,12 @@ final class ProductionCore: ObservableObject {
                 )
             }
 
+            var preservedLayouts:[String:V80PrintLayout]=[:]
+            if let preservedLayout { preservedLayouts[mediaItem.id]=preservedLayout }
             if let code=await createLocalJob(
                 state:state,
                 media:[mediaItem:requestedQuantity],
+                layouts:preservedLayouts,
                 sourceType:"LOCAL",
                 sourceLabel:"R",
                 eventDay:day

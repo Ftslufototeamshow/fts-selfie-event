@@ -530,6 +530,7 @@ final class MediaIngestV80: ObservableObject {
         add(event.event_title);add(event.subtitle);add(event.overlay_text);add(event.event_date)
         add(event.accent);add(event.photo_branding)
         addJSON(event.studio_config);addJSON(event.logo_items);addJSON(event.decoration_items)
+        add(FTSGreenScreenStore.settings(eventToken:event.event_token).signature)
         return hasher.finalize().map{String(format:"%02x",$0)}.joined()
     }
 
