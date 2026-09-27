@@ -928,7 +928,7 @@ final class AppState: ObservableObject {
         panel.canChooseDirectories=false
         panel.allowsMultipleSelection=false
         panel.allowedFileTypes=["jpg","jpeg","png","heic","heif"]
-        guard panel.runModal()==.OK,let url=panel.url,
+        guard panel.runModal() == .OK,let url=panel.url,
               let image=NSImage(contentsOf:url),
               let data=FTSImageCodec.jpegData(image,maxDimension:700,quality:0.88) else{return}
         do {
