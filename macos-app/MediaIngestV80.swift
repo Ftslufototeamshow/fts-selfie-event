@@ -943,6 +943,15 @@ final class MediaIngestV80: ObservableObject {
         return (current.items,cards,registeredLabelsAcrossEvent(eventToken:eventToken,activation:activation,registry:registry))
     }
 
+    nonisolated static func archivedMediaItemSync(folderPath:String,mediaID:String)->V80MediaItem? {
+        guard !folderPath.isEmpty,!mediaID.isEmpty else{return nil}
+        let folder=URL(fileURLWithPath:folderPath,isDirectory:true)
+        let manifestURL=folder.appendingPathComponent(".fts-media-manifest-v80.json")
+        guard let data=try? Data(contentsOf:manifestURL),
+              let manifest=try? JSONDecoder().decode(V80MediaManifest.self,from:data) else{return nil}
+        return manifest.items.first{$0.id==mediaID}
+    }
+
     nonisolated static func setWorkflowSync(folderPath:String,mediaIDs:Set<String>,status:V80MediaWorkflow,moveDesignedFile:Bool) throws {
         guard !mediaIDs.isEmpty else{return}
         let fm=FileManager.default

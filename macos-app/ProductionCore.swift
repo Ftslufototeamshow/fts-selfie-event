@@ -59,6 +59,16 @@ struct V80ArchiveRow: Codable, Identifiable, Hashable {
     let source_type: String?
 }
 
+struct V124ArchivedPhoto: Codable, Identifiable, Hashable {
+    let archive_id: String
+    let photo_id: String?
+    let designed_path: String?
+    let original_path: String?
+    let quantity: Int?
+    let archived_at: String?
+    var id:String { archive_id + "::" + (photo_id ?? designed_path ?? UUID().uuidString) }
+}
+
 struct V80Claim: Codable, Hashable {
     let ok: Bool?
     let empty: Bool?
@@ -1039,13 +1049,14 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.32-rp108-power-guard"
-    static let build = 123
+    static let version = "1.1.33-archive-recall"
+    static let build = 124
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
     @Published var pickups: [V80Pickup] = []
     @Published var archived: [V80ArchiveRow] = []
+    @Published var archivedPhotos: [V124ArchivedPhoto] = []
     @Published var consumables: [V81Consumable] = []
     @Published var localQueue = V80LocalQueueFile()
     @Published var printerSlots: [LocalPrinterSlot] = []
@@ -1058,6 +1069,8 @@ final class ProductionCore: ObservableObject {
     @Published var lastError: String?
     @Published var pickupActionsInFlight: Set<String> = []
     @Published var archiveActionsInFlight: Set<String> = []
+    @Published var archiveReprintActionsInFlight: Set<String> = []
+    @Published var archiveStatus = ""
     @Published var consumableActionsInFlight: Set<String> = []
     @Published var rp108ActionsInFlight: Set<String> = []
 
@@ -1225,13 +1238,16 @@ final class ProductionCore: ObservableObject {
                 "p_device_token":dev, "p_session_token":session, "p_event_token":state.selectedEventToken
             ])
             async let a: [V80ArchiveRow] = api.rpc("fts_printer_archived_v80", body: [
-                "p_device_token":dev, "p_session_token":session, "p_event_token":state.selectedEventToken, "p_limit":200
+                "p_device_token":dev, "p_session_token":session, "p_event_token":state.selectedEventToken, "p_limit":500
+            ])
+            async let ap: [V124ArchivedPhoto] = api.rpc("fts_printer_archived_photos_v124", body: [
+                "p_device_token":dev, "p_session_token":session, "p_event_token":state.selectedEventToken, "p_limit":1000
             ])
             async let cc: [V81Consumable] = api.rpc("fts_printer_consumables_v123", body: [
                 "p_device_token":dev, "p_session_token":session, "p_event_token":state.selectedEventToken
             ])
-            let (qq,nn,pp,aa,cons) = try await (q,n,p,a,cc)
-            workUnits = qq; printerNodes = nn; pickups = pp; archived = aa; consumables = cons
+            let (qq,nn,pp,aa,aPhotos,cons) = try await (q,n,p,a,ap,cc)
+            workUnits = qq; printerNodes = nn; pickups = pp; archived = aa; archivedPhotos = aPhotos; consumables = cons
             if let e=lastError, isTransientTransportMessage(e) { lastError=nil }
             await refreshHostPower()
             await refreshPrinterConnectivity()
@@ -1952,6 +1968,140 @@ final class ProductionCore: ObservableObject {
             }
             await refresh(state:state)
         } catch { lastError=error.localizedDescription }
+    }
+
+    func archivedServerPhoto(for row:V80ArchiveRow)->V124ArchivedPhoto? {
+        archivedPhotos.first{$0.archive_id==row.id && ($0.designed_path?.isEmpty==false)}
+    }
+
+    func localArchivedPreviewPath(for row:V80ArchiveRow)->String? {
+        guard row.kind.uppercased()=="LOCAL",
+              let jobID=UUID(uuidString:row.id),
+              let job=localQueue.jobs.first(where:{$0.id==jobID && $0.status == .archived}),
+              let unit=job.units.first else{return nil}
+
+        if let item=MediaIngestV80.archivedMediaItemSync(folderPath:loadedFolderPath,mediaID:unit.mediaID) {
+            if let designed=item.designedPath,!designed.isEmpty,FileManager.default.fileExists(atPath:designed) { return designed }
+            if FileManager.default.fileExists(atPath:item.importedPath) { return item.importedPath }
+        }
+        if let original=unit.sourceImagePath,!original.isEmpty,FileManager.default.fileExists(atPath:original) { return original }
+        if FileManager.default.fileExists(atPath:unit.imagePath) { return unit.imagePath }
+        return nil
+    }
+
+    private func archivedLocalMedia(for row:V80ArchiveRow)->V80MediaItem? {
+        guard row.kind.uppercased()=="LOCAL",
+              let jobID=UUID(uuidString:row.id),
+              let job=localQueue.jobs.first(where:{$0.id==jobID && $0.status == .archived}),
+              let unit=job.units.first else{return nil}
+
+        if let item=MediaIngestV80.archivedMediaItemSync(folderPath:loadedFolderPath,mediaID:unit.mediaID) {
+            let chosenDesigned=(item.designedPath?.isEmpty==false && FileManager.default.fileExists(atPath:item.designedPath!)) ? item.designedPath : nil
+            return V80MediaItem(
+                id:"archive-reprint-"+UUID().uuidString.lowercased(),
+                sha256:item.sha256,
+                sourcePath:item.sourcePath,
+                importedPath:item.importedPath,
+                designedPath:chosenDesigned,
+                designSignature:item.designSignature,
+                originalName:item.originalName,
+                sourceType:"LOCAL",
+                sourceLabel:"R",
+                cardUUID:nil,
+                cameraID:item.cameraID,
+                importedAt:Date(),
+                workflowStatus:.active,
+                workflowUpdatedAt:Date()
+            )
+        }
+
+        guard let source=unit.sourceImagePath,
+              !source.isEmpty,
+              FileManager.default.fileExists(atPath:source) else{return nil}
+        return V80MediaItem(
+            id:"archive-reprint-"+UUID().uuidString.lowercased(),
+            sha256:unit.mediaID,
+            sourcePath:source,
+            importedPath:source,
+            designedPath:FileManager.default.fileExists(atPath:unit.imagePath) ? unit.imagePath : nil,
+            designSignature:nil,
+            originalName:unit.originalName,
+            sourceType:"LOCAL",
+            sourceLabel:"R",
+            cardUUID:nil,
+            cameraID:nil,
+            importedAt:Date(),
+            workflowStatus:.active,
+            workflowUpdatedAt:Date()
+        )
+    }
+
+    func reprintArchived(_ row:V80ArchiveRow,state:AppState) async {
+        guard !archiveReprintActionsInFlight.contains(row.id) else{return}
+        guard !loadedFolderPath.isEmpty else {
+            lastError="Für einen Archiv-Nachdruck zuerst das lokale Tagesalbum dieses Events öffnen."
+            return
+        }
+        guard let day=(state.mediaIngest.selectedDay.isEmpty ? state.selectedEvent?.event_date : state.mediaIngest.selectedDay),
+              !day.isEmpty else {
+            lastError="Veranstaltungstag für den Nachdruck fehlt."
+            return
+        }
+
+        archiveReprintActionsInFlight.insert(row.id)
+        defer{archiveReprintActionsInFlight.remove(row.id)}
+        do {
+            let mediaItem:V80MediaItem
+            if row.kind.uppercased()=="LOCAL" {
+                guard let local=archivedLocalMedia(for:row) else {
+                    throw NSError(domain:"FTSPrinter",code:224,userInfo:[NSLocalizedDescriptionKey:"Das lokale Archivfoto wurde auf diesem Mac nicht gefunden. Eventordner/Archiv prüfen."])
+                }
+                mediaItem=local
+            } else {
+                guard let photo=archivedServerPhoto(for:row),
+                      let storagePath=photo.designed_path,!storagePath.isEmpty else {
+                    throw NSError(domain:"FTSPrinter",code:225,userInfo:[NSLocalizedDescriptionKey:"Das archivierte Selfie hat keinen gespeicherten Druckpfad mehr."])
+                }
+                let data=try await api.imageData(storagePath:storagePath)
+                let reprintDir=URL(fileURLWithPath:loadedFolderPath,isDirectory:true)
+                    .appendingPathComponent("Archiv/Nachdruck",isDirectory:true)
+                try FileManager.default.createDirectory(at:reprintDir,withIntermediateDirectories:true)
+                let ext=URL(fileURLWithPath:storagePath).pathExtension.isEmpty ? "jpg" : URL(fileURLWithPath:storagePath).pathExtension
+                let dest=reprintDir.appendingPathComponent("(row.customer_code)-(UUID().uuidString.prefix(8)).(ext)")
+                try data.write(to:dest,options:.atomic)
+                let digest=SHA256.hash(data:data).map{String(format:"%02x",$0)}.joined()
+                mediaItem=V80MediaItem(
+                    id:"archive-reprint-"+UUID().uuidString.lowercased(),
+                    sha256:digest,
+                    sourcePath:dest.path,
+                    importedPath:dest.path,
+                    designedPath:dest.path,
+                    designSignature:nil,
+                    originalName:dest.lastPathComponent,
+                    sourceType:"LOCAL",
+                    sourceLabel:"R",
+                    cardUUID:nil,
+                    cameraID:nil,
+                    importedAt:Date(),
+                    workflowStatus:.active,
+                    workflowUpdatedAt:Date()
+                )
+            }
+
+            if let code=await createLocalJob(
+                state:state,
+                media:[mediaItem:1],
+                sourceType:"LOCAL",
+                sourceLabel:"R",
+                eventDay:day
+            ) {
+                archiveStatus="Archivfoto (row.customer_code) als Nachdruck (code) angelegt."
+                lastError=nil
+                if autoDispatch { dispatchAvailable(state:state) }
+            }
+        } catch {
+            lastError=error.localizedDescription
+        }
     }
 
     func hideArchived(_ row: V80ArchiveRow, state: AppState) async {

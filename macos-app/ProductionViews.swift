@@ -1434,11 +1434,22 @@ struct ProductionPickupContent: View {
     @ObservedObject var state:AppState
     @ObservedObject var core:ProductionCore
     @Binding var search:String
+    @State private var previewArchive:V80ArchiveRow?
 
     var filtered:[V80Pickup] {
         let q=search.trimmingCharacters(in:.whitespacesAndNewlines).uppercased()
         if q.isEmpty{return core.pickups}
         return core.pickups.filter{$0.customer_code.uppercased().contains(q)}
+    }
+
+    var filteredArchive:[V80ArchiveRow] {
+        let q=search.trimmingCharacters(in:.whitespacesAndNewlines).uppercased()
+        if q.isEmpty{return core.archived}
+        return core.archived.filter{
+            $0.customer_code.uppercased().contains(q)
+            || $0.kind.uppercased().contains(q)
+            || ($0.source_type ?? "").uppercased().contains(q)
+        }
     }
 
     var body:some View {
@@ -1450,7 +1461,7 @@ struct ProductionPickupContent: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                TextField("Abholcode suchen",text:$search).textFieldStyle(.roundedBorder).frame(width:240)
+                TextField("Abholcode / Archiv suchen",text:$search).textFieldStyle(.roundedBorder).frame(width:270)
                 Button("Neu laden"){Task{await core.refresh(state:state)}}
             }
             ScrollView(.vertical,showsIndicators:true) {
@@ -1481,29 +1492,139 @@ struct ProductionPickupContent: View {
                         Text("Keine passenden Abholungen.").foregroundStyle(.secondary).padding(30)
                     }
 
-                    DisclosureGroup("Archiv · letzte \(core.archived.count)") {
-                        VStack(spacing:7) {
-                            ForEach(core.archived.prefix(100)) { a in
-                                HStack {
-                                    Text(a.customer_code).bold().monospacedDigit()
-                                    Text(a.kind).font(.caption).foregroundStyle(.secondary)
-                                    Spacer()
-                                    Text("\(a.quantity) ×").font(.caption)
-                                    if state.currentUser?.role=="printer_admin" {
-                                        Button(core.archiveActionsInFlight.contains(a.id) ? "Wird entfernt …" : "Aus Archiv entfernen",role:.destructive) {
-                                            Task{await core.hideArchived(a,state:state)}
-                                        }
-                                        .font(.caption)
-                                        .disabled(core.archiveActionsInFlight.contains(a.id))
-                                    }
-                                }.padding(7)
-                            }
+                    VStack(alignment:.leading,spacing:8) {
+                        HStack {
+                            Label("Archiv / Abgegeben",systemImage:"archivebox.fill").font(.headline)
+                            Spacer()
+                            Text("\(filteredArchive.count) sichtbar").font(.caption).foregroundStyle(.secondary)
                         }
-                    }.padding(.top,12)
+
+                        if !core.archiveStatus.isEmpty {
+                            Text(core.archiveStatus).font(.caption).foregroundStyle(.green)
+                        }
+
+                        ForEach(filteredArchive.prefix(250)) { a in
+                            HStack(spacing:10) {
+                                Group {
+                                    if let local=core.localArchivedPreviewPath(for:a),
+                                       let image=NSImage(contentsOfFile:local) {
+                                        Image(nsImage:image).resizable().scaledToFill()
+                                    } else if let path=core.archivedServerPhoto(for:a)?.designed_path,
+                                              let url=FTSAPI.shared.imageURL(storagePath:path) {
+                                        AsyncImage(url:url) { phase in
+                                            if case .success(let image)=phase { image.resizable().scaledToFill() }
+                                            else { ZStack{Color.secondary.opacity(0.08);Image(systemName:"photo")} }
+                                        }
+                                    } else {
+                                        ZStack{Color.secondary.opacity(0.08);Image(systemName:"photo")}
+                                    }
+                                }
+                                .frame(width:58,height:72)
+                                .clipped()
+                                .clipShape(RoundedRectangle(cornerRadius:7))
+
+                                VStack(alignment:.leading,spacing:3) {
+                                    Text(a.customer_code).font(.headline.monospacedDigit())
+                                    Text("\(a.kind) · \(a.quantity) ×" + (a.source_type.map{" · \($0)"} ?? ""))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                    Text("Bezahlt / gedruckt / abgegeben · im Archiv")
+                                        .font(.caption2).foregroundStyle(.green)
+                                }
+                                Spacer()
+                                Button("Foto ansehen"){previewArchive=a}.font(.caption)
+                                Button(core.archiveReprintActionsInFlight.contains(a.id) ? "Wird angelegt …" : "1× nachdrucken") {
+                                    Task{await core.reprintArchived(a,state:state)}
+                                }
+                                .font(.caption)
+                                .buttonStyle(.borderedProminent)
+                                .disabled(core.archiveReprintActionsInFlight.contains(a.id))
+                                if state.currentUser?.role=="printer_admin" {
+                                    Button(core.archiveActionsInFlight.contains(a.id) ? "Wird entfernt …" : "Aus Liste entfernen",role:.destructive) {
+                                        Task{await core.hideArchived(a,state:state)}
+                                    }
+                                    .font(.caption2)
+                                    .disabled(core.archiveActionsInFlight.contains(a.id))
+                                }
+                            }
+                            .padding(9)
+                            .background(Color(nsColor:.controlBackgroundColor))
+                            .clipShape(RoundedRectangle(cornerRadius:10))
+                        }
+
+                        if filteredArchive.isEmpty {
+                            Text("Keine passenden Archivfotos.").foregroundStyle(.secondary).padding(.vertical,14)
+                        }
+                    }
+                    .padding(.top,12)
                 }.padding(6)
             }
         }.padding(8)
         .task{await core.refresh(state:state)}
+        .sheet(item:$previewArchive) { row in
+            V124ArchivePreviewSheet(row:row,state:state,core:core)
+                .frame(minWidth:720,minHeight:620)
+        }
+    }
+}
+
+struct V124ArchivePreviewSheet:View {
+    let row:V80ArchiveRow
+    @ObservedObject var state:AppState
+    @ObservedObject var core:ProductionCore
+    @Environment(\.dismiss) private var dismiss
+
+    var body:some View {
+        VStack(alignment:.leading,spacing:12) {
+            HStack {
+                VStack(alignment:.leading,spacing:2) {
+                    Text("Archivfoto \(row.customer_code)").font(.title2.bold())
+                    Text("\(row.kind) · \(row.quantity) Ausdruck\(row.quantity==1 ? "" : "e") · bereits abgegeben")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Schließen"){dismiss()}
+            }
+
+            Group {
+                if let local=core.localArchivedPreviewPath(for:row),
+                   let image=NSImage(contentsOfFile:local) {
+                    Image(nsImage:image).resizable().scaledToFit()
+                } else if let path=core.archivedServerPhoto(for:row)?.designed_path,
+                          let url=FTSAPI.shared.imageURL(storagePath:path) {
+                    AsyncImage(url:url) { phase in
+                        switch phase {
+                        case .empty: ZStack{Color.black.opacity(0.08);ProgressView()}
+                        case .success(let image): image.resizable().scaledToFit()
+                        case .failure: ZStack{Color.black.opacity(0.08);Text("Archivbild konnte nicht geladen werden.").foregroundStyle(.orange)}
+                        @unknown default: Color.black.opacity(0.08)
+                        }
+                    }
+                } else {
+                    ZStack {
+                        Color.black.opacity(0.08)
+                        VStack(spacing:8) {
+                            Image(systemName:"archivebox").font(.system(size:40))
+                            Text("Das Foto ist archiviert, aber die Bilddatei ist im aktuell geöffneten Tagesalbum nicht verfügbar.")
+                                .multilineTextAlignment(.center).foregroundStyle(.secondary)
+                        }.padding()
+                    }
+                }
+            }
+            .frame(maxWidth:.infinity,maxHeight:.infinity)
+            .background(Color.black.opacity(0.10))
+            .clipShape(RoundedRectangle(cornerRadius:12))
+
+            HStack {
+                Text("Der Archiv-Eintrag bleibt unverändert. Ein Nachdruck wird als neuer Auftrag angelegt.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button(core.archiveReprintActionsInFlight.contains(row.id) ? "Wird angelegt …" : "1× nachdrucken") {
+                    Task{await core.reprintArchived(row,state:state)}
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(core.archiveReprintActionsInFlight.contains(row.id))
+            }
+        }.padding(16)
     }
 }
 
