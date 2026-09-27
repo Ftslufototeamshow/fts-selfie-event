@@ -1,0 +1,15 @@
+{
+  "name": "FTS Printer Admin",
+  "short_name": "FTS Printer",
+  "description": "Mobile Live-Übersicht für FTS Event-Druckstationen",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#061012",
+  "theme_color": "#071315",
+  "icons": [
+    {"src":"../icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"../icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}
