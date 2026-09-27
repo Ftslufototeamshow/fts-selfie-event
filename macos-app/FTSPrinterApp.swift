@@ -752,7 +752,7 @@ final class AppState: ObservableObject {
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
-    static let appVersion = "0.3.35-digital-status-header"
+    static let appVersion = "0.3.36-admin-misprint-staff-report"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -839,7 +839,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.35-digital-status-header"
+                "p_user_agent":"FTS Printer macOS 0.3.36-admin-misprint-staff-report"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -870,7 +870,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v125",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.35-digital-status-header"
+                "p_user_agent":"FTS Printer macOS 0.3.36-admin-misprint-staff-report"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session
@@ -1752,10 +1752,15 @@ struct FTSEventOverviewView:View {
 
 struct FTSFinanceView:View {
     @EnvironmentObject var state:AppState
+    @State private var reportDay=""
     var isAdmin:Bool { state.currentUser?.role=="printer_admin" }
     var liveRevenue:Int {
         state.orders.filter{$0.is_test != true && ["COMPLETED","COVERED"].contains(($0.payment_status ?? "").uppercased())}
             .reduce(0){$0 + ($1.total_cents ?? 0)}
+    }
+    var dayOptions:[String] {
+        guard let event=state.selectedEvent else{return []}
+        return state.mediaIngest.eventDays(event)
     }
     var body:some View {
         ScrollView {
@@ -1769,11 +1774,84 @@ struct FTSFinanceView:View {
                     }.ftsCard()
                     Text("Belege bleiben über die jeweiligen Aufträge und die Kundenabholung abrufbar. Test-/Sandbox-Aufträge werden hier nicht als Umsatz gezählt.")
                         .foregroundStyle(FTSTheme.muted).ftsCard()
+
+                    VStack(alignment:.leading,spacing:10) {
+                        HStack {
+                            Label("Mitarbeiter-Tagesleistung",systemImage:"person.3.sequence.fill")
+                                .font(.headline).foregroundStyle(FTSTheme.gold)
+                            Spacer()
+                            if !dayOptions.isEmpty {
+                                Picker("Tag",selection:$reportDay) {
+                                    ForEach(dayOptions,id:\.self){Text($0).tag($0)}
+                                }
+                                .frame(width:190)
+                            }
+                            Button("Aktualisieren"){
+                                Task{await state.production.loadStaffDaily(state:state,day:reportDay)}
+                            }
+                            .disabled(reportDay.isEmpty || state.production.staffDailyLoading)
+                        }
+
+                        Text("Nur Administratoren sehen diese Liste. Gezählt werden physisch bestätigte Selfie- und SD/WLAN-Ausdrucke, Fehldrucke sowie freigegebene Ersatzdrucke.")
+                            .font(.caption).foregroundStyle(FTSTheme.muted)
+
+                        if state.production.staffDailyLoading {
+                            ProgressView("Tagesleistung wird geladen …")
+                        } else if let error=state.production.staffDailyError {
+                            Text(error).font(.caption).foregroundStyle(.orange)
+                        } else {
+                            Grid(horizontalSpacing:12,verticalSpacing:7) {
+                                GridRow {
+                                    Text("Mitarbeiter").bold()
+                                    Text("Rolle").bold()
+                                    Text("Lokal").bold()
+                                    Text("Selfie").bold()
+                                    Text("Physisch").bold()
+                                    Text("Gut").bold()
+                                    Text("Fehldruck").bold()
+                                    Text("Ersatz").bold()
+                                    Text("Admin-Freig.").bold()
+                                }
+                                .font(.caption)
+                                .foregroundStyle(FTSTheme.muted)
+
+                                ForEach(state.production.staffDaily) { row in
+                                    GridRow {
+                                        Text(row.display_name).bold()
+                                        Text(row.role=="printer_admin" ? "Admin" : "Mitarbeiter")
+                                        Text("\(row.local_prints)").monospacedDigit()
+                                        Text("\(row.selfie_prints)").monospacedDigit()
+                                        Text("\(row.total_physical_prints)").monospacedDigit().foregroundStyle(FTSTheme.cyan)
+                                        Text("\(row.good_prints)").monospacedDigit().foregroundStyle(.green)
+                                        Text("\(row.misprints)").monospacedDigit().foregroundStyle(row.misprints>0 ? .orange : .secondary)
+                                        Text("\(row.replacements)").monospacedDigit()
+                                        Text("\(row.admin_approvals)").monospacedDigit()
+                                    }
+                                    .font(.caption)
+                                    Divider().gridCellUnsizedAxes(.horizontal)
+                                }
+                            }
+                        }
+                    }
+                    .ftsCard()
                 } else {
                     Label("Finanzen nur für Administratoren",systemImage:"lock.fill").font(.title2.bold()).foregroundStyle(FTSTheme.gold)
                     Text("Dieser Bereich ist für Mitarbeiter gesperrt.").foregroundStyle(FTSTheme.muted).ftsCard()
                 }
             }.padding(16)
+        }
+        .task(id:state.selectedEventToken) {
+            guard isAdmin else{return}
+            if reportDay.isEmpty {
+                reportDay=dayOptions.first ?? state.selectedEvent?.event_date ?? Date().formatted(.iso8601.year().month().day())
+            }
+            if !reportDay.isEmpty {
+                await state.production.loadStaffDaily(state:state,day:reportDay)
+            }
+        }
+        .onChange(of:reportDay){newDay in
+            guard isAdmin,!newDay.isEmpty else{return}
+            Task{await state.production.loadStaffDaily(state:state,day:newDay)}
         }
     }
 }

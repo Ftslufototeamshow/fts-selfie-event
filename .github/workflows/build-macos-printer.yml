@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.35-digital-status-header.zip
-            dist/FTS-Printer-macOS-v0.3.35-digital-status-header.dmg
+            dist/FTS-Printer-macOS-v0.3.36-admin-misprint-staff-report.zip
+            dist/FTS-Printer-macOS-v0.3.36-admin-misprint-staff-report.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.35-digital-status-header"
+          TAG="fts-printer-mac-v0.3.36-admin-misprint-staff-report"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.35-digital-status-header.zip dist/FTS-Printer-macOS-v0.3.35-digital-status-header.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.36-admin-misprint-staff-report.zip dist/FTS-Printer-macOS-v0.3.36-admin-misprint-staff-report.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.35-digital-status-header.zip dist/FTS-Printer-macOS-v0.3.35-digital-status-header.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.35 · Digital QR + Status Header" --notes "Build 125: Ergänzt ausschließlich die sichtbaren Event-Bedienfunktionen: In der großen Druckvorschau und großen Archivansicht wird automatisch ein geschützter QR-Code für das digitale Foto erzeugt; der QR ist reine UI und wird nie in das Druckbild gerendert. Der persönliche Download-Link ist 7 Tage gültig. Oben werden Login-Startzeit und laufende Login-Dauer angezeigt, der Mitarbeiter-Avatar kann per Klick gesetzt/geändert werden, und die kompakte Eventleiste zeigt Mac-Akku/Netzstrom, Drucker-Verbindung (USB/WLAN) sowie einen ehrlichen SELPHY-Akkuhinweis über das Canon-Display. Canon-Spooler, SELPHY-Spiegelkorrektur, Materialzähler, SD A-E, Mehrdrucker-Verteilung, Archiv-Nachdruck und Banner/Rand bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.36-admin-misprint-staff-report.zip dist/FTS-Printer-macOS-v0.3.36-admin-misprint-staff-report.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.36 · Admin Misprint + Staff Report" --notes "Build 126: Ergänzt eine administratorgeschützte Fehldruck-/Ersatzdruck-Funktion und eine nur für Administratoren sichtbare Mitarbeiter-Tagesleistung. Bei UNCERTAIN kann ein Administrator mit persönlichem Code entweder 'gar nicht gedruckt' bestätigen und sicher erneut freigeben oder einen tatsächlich unbrauchbaren physischen Druck als Fehldruck deklarieren. Für bereits produzierte Aufträge gibt es in Kundenabholung 'Fehldruck / Ersatz'. Gründe wie Farbfehler, Papierstau, Teildruck, Stromausfall und beschädigtes Papier werden protokolliert; genau ein Ersatzdruck wird freigegeben und der Kunde wird nicht erneut berechnet. Die Tagesliste zeigt lokale, Selfie- und gesamte physische Prints, gute Prints, Fehldrucke, Ersatzdrucke und Admin-Freigaben pro Mitarbeiter. Canon-Spooler, Spiegelkorrektur, Material-/RP-108-Zähler, SD A-E, QR-Download, Archiv, Banner/Rand und der bestehende Druckpfad bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.35-digital-status-header"
+          CURRENT="fts-printer-mac-v0.3.36-admin-misprint-staff-report"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

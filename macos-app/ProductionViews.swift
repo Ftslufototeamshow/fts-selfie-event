@@ -11,6 +11,7 @@ struct ProductionQueueView: View {
 struct ProductionQueueContent: View {
     @ObservedObject var state: AppState
     @ObservedObject var core: ProductionCore
+    @State private var issueTarget:V126PrintIssueTarget?
 
     var groupedOrders: [(String,[V80WorkUnit])] {
         Dictionary(grouping: core.workUnits, by: \.order_id)
@@ -123,8 +124,17 @@ struct ProductionQueueContent: View {
                                     Image(systemName:"exclamationmark.triangle.fill").foregroundStyle(.orange)
                                     Text("Druckstatus unklar · Exemplar \(unit.copy_index)").font(.caption)
                                     Spacer()
-                                    Button("Nicht gedruckt · erneut freigeben") {
-                                        Task{await core.requeueServerUnit(unit,state:state,confirmedNotPrinted:true)}
+                                    Button("Druckproblem lösen") {
+                                        issueTarget=V126PrintIssueTarget(
+                                            kind:.server,
+                                            serverUnit:unit,
+                                            localJobID:nil,
+                                            localUnitID:nil,
+                                            customerCode:unit.pickup_code,
+                                            title:"SELFIE · \(unit.pickup_code)",
+                                            previewPath:unit.designed_path,
+                                            canConfirmNotPrinted:true
+                                        )
                                     }.font(.caption)
                                 }
                                 .padding(8).background(Color.orange.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius:8))
@@ -173,10 +183,17 @@ struct ProductionQueueContent: View {
                                     Image(systemName:"exclamationmark.triangle.fill").foregroundStyle(.orange)
                                     Text("\(unit.originalName) · Status unklar").font(.caption)
                                     Spacer()
-                                    Button("Nicht gedruckt · erneut") {
-                                        Task {
-                                            await core.requeueLocalUnit(jobID:job.id,unitID:unit.id,confirmedNotPrinted:true,state:state)
-                                        }
+                                    Button("Druckproblem lösen") {
+                                        issueTarget=V126PrintIssueTarget(
+                                            kind:.local,
+                                            serverUnit:nil,
+                                            localJobID:job.id,
+                                            localUnitID:unit.id,
+                                            customerCode:job.customerCode,
+                                            title:"\(job.sourceType) · \(job.customerCode)",
+                                            previewPath:core.localIssuePreviewPath(jobID:job.id,unitID:unit.id),
+                                            canConfirmNotPrinted:true
+                                        )
                                     }.font(.caption)
                                 }
                                 .padding(8).background(Color.orange.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius:8))
@@ -197,6 +214,172 @@ struct ProductionQueueContent: View {
                 try? await Task.sleep(for:.seconds(30))
                 await core.refreshHostPower()
             }
+        }
+        .sheet(item:$issueTarget) { target in
+            V126PrintIssueSheet(target:target,state:state,core:core)
+                .frame(minWidth:720,minHeight:620)
+        }
+    }
+}
+
+struct V126PrintIssueTarget:Identifiable {
+    enum Kind { case server,local }
+    let id=UUID()
+    let kind:Kind
+    let serverUnit:V80WorkUnit?
+    let localJobID:UUID?
+    let localUnitID:UUID?
+    let customerCode:String
+    let title:String
+    let previewPath:String?
+    let canConfirmNotPrinted:Bool
+}
+
+struct V126PrintIssueSheet:View {
+    let target:V126PrintIssueTarget
+    @ObservedObject var state:AppState
+    @ObservedObject var core:ProductionCore
+    @Environment(\.dismiss) private var dismiss
+    @State private var resolution="MISPRINT"
+    @State private var reason="COLOR_ERROR"
+    @State private var note=""
+    @State private var selectedAdmin=""
+    @State private var adminCode=""
+    @State private var busy=false
+
+    private let reasons:[(String,String)]=[
+        ("COLOR_ERROR","Farben / Streifen fehlerhaft"),
+        ("PAPER_JAM","Papierstau / hängen geblieben"),
+        ("PARTIAL_PRINT","Foto nur teilweise gedruckt"),
+        ("POWER_LOSS","Stromunterbrechung"),
+        ("DAMAGED_PAPER","Papier / Foto beschädigt"),
+        ("OTHER","Sonstiger Druckfehler")
+    ]
+
+    private var preview:some View {
+        Group {
+            if target.kind == .server,
+               let path=target.previewPath,
+               let url=FTSAPI.shared.imageURL(storagePath:path) {
+                AsyncImage(url:url) { phase in
+                    if case .success(let image)=phase { image.resizable().scaledToFit() }
+                    else { ZStack{Color.black.opacity(0.08);ProgressView()} }
+                }
+            } else if let path=target.previewPath,
+                      let image=NSImage(contentsOfFile:path) {
+                Image(nsImage:image).resizable().scaledToFit()
+            } else {
+                ZStack {
+                    Color.black.opacity(0.08)
+                    Image(systemName:"photo").font(.system(size:42)).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    var body:some View {
+        HStack(spacing:16) {
+            preview
+                .frame(maxWidth:.infinity,maxHeight:.infinity)
+                .background(Color.black.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius:12))
+
+            VStack(alignment:.leading,spacing:12) {
+                Text("Druckproblem · \(target.customerCode)").font(.title2.bold())
+                Text("Der Originalauftrag bleibt dokumentiert. Ein Fehldruck wird als nicht berechenbarer Materialverlust protokolliert und genau einmal ersetzt.")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                if target.canConfirmNotPrinted {
+                    Picker("Was ist passiert?",selection:$resolution) {
+                        Text("Foto unbrauchbar · Ersatzdruck").tag("MISPRINT")
+                        Text("Gar nicht gedruckt · erneut freigeben").tag("NOT_PRINTED")
+                    }
+                    .pickerStyle(.radioGroup)
+                } else {
+                    Label("Foto unbrauchbar · Ersatzdruck",systemImage:"arrow.triangle.2.circlepath")
+                        .font(.headline).foregroundStyle(.orange)
+                }
+
+                Picker("Grund",selection:$reason) {
+                    ForEach(reasons,id:\.0){Text($0.1).tag($0.0)}
+                }
+
+                TextField("Notiz optional",text:$note)
+                    .textFieldStyle(.roundedBorder)
+
+                Divider()
+                Text("Administrator-Freigabe").font(.headline)
+                Picker("Administrator",selection:$selectedAdmin) {
+                    ForEach(state.deviceAdmins){a in Text(a.display_name).tag(a.user_id)}
+                }
+                SecureField("Administrator-Code",text:$adminCode)
+                    .textFieldStyle(.roundedBorder)
+
+                if !core.printIssueStatus.isEmpty {
+                    Text(core.printIssueStatus).font(.caption).foregroundStyle(.green)
+                }
+
+                Spacer()
+                HStack {
+                    Button("Abbrechen",role:.cancel){dismiss()}
+                    Spacer()
+                    Button(busy ? "Wird geprüft …" : (resolution=="MISPRINT" ? "Fehldruck bestätigen · Ersatz" : "Nicht gedruckt bestätigen")) {
+                        submit()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(busy || selectedAdmin.isEmpty || adminCode.isEmpty)
+                }
+            }
+            .frame(width:330)
+        }
+        .padding(16)
+        .task {
+            if state.deviceAdmins.isEmpty { await state.loadDeviceAdmins() }
+            if selectedAdmin.isEmpty {
+                if state.currentUser?.role=="printer_admin",
+                   let own=state.currentUser?.user_id,
+                   state.deviceAdmins.contains(where:{$0.user_id==own}) {
+                    selectedAdmin=own
+                } else {
+                    selectedAdmin=state.deviceAdmins.first?.user_id ?? ""
+                }
+            }
+        }
+    }
+
+    private func submit() {
+        guard !busy else{return}
+        busy=true
+        Task {
+            let ok:Bool
+            switch target.kind {
+            case .server:
+                guard let unit=target.serverUnit else{busy=false;return}
+                ok=await core.adminResolveServerIssue(
+                    unitID:unit.unit_id,
+                    resolution:resolution,
+                    reasonCode:reason,
+                    note:note,
+                    adminUserID:selectedAdmin,
+                    adminCode:adminCode,
+                    state:state
+                )
+            case .local:
+                guard let jobID=target.localJobID,let unitID=target.localUnitID else{busy=false;return}
+                if resolution=="NOT_PRINTED" {
+                    ok=await core.adminResolveLocalNotPrinted(
+                        jobID:jobID,unitID:unitID,reasonCode:reason,note:note,
+                        adminUserID:selectedAdmin,adminCode:adminCode,state:state
+                    )
+                } else {
+                    ok=await core.adminResolveLocalMisprint(
+                        jobID:jobID,unitID:unitID,reasonCode:reason,note:note,
+                        adminUserID:selectedAdmin,adminCode:adminCode,state:state
+                    )
+                }
+            }
+            busy=false
+            if ok { dismiss() }
         }
     }
 }
@@ -1500,6 +1683,7 @@ struct ProductionPickupContent: View {
     @ObservedObject var core:ProductionCore
     @Binding var search:String
     @State private var previewArchive:V80ArchiveRow?
+    @State private var issuePickup:V80Pickup?
 
     var filtered:[V80Pickup] {
         let q=search.trimmingCharacters(in:.whitespacesAndNewlines).uppercased()
@@ -1545,6 +1729,10 @@ struct ProductionPickupContent: View {
                                order.receipt_number != nil {
                                 Button("Beleg für Kunden"){Task{await state.showReceipt(order)}}
                             }
+                            Button("Fehldruck / Ersatz") {
+                                issuePickup=p
+                            }
+                            .font(.caption)
                             Button(core.pickupActionsInFlight.contains(p.id) ? "Wird archiviert …" : "Foto abgeholt") {
                                 Task{await core.markPickedUp(p,state:state)}
                             }
@@ -1628,6 +1816,179 @@ struct ProductionPickupContent: View {
         .sheet(item:$previewArchive) { row in
             V124ArchivePreviewSheet(row:row,state:state,core:core)
                 .frame(minWidth:720,minHeight:620)
+        }
+        .sheet(item:$issuePickup) { pickup in
+            V126PickupMisprintSheet(pickup:pickup,state:state,core:core)
+                .frame(minWidth:760,minHeight:650)
+        }
+    }
+}
+
+struct V126PickupMisprintSheet:View {
+    let pickup:V80Pickup
+    @ObservedObject var state:AppState
+    @ObservedObject var core:ProductionCore
+    @Environment(\.dismiss) private var dismiss
+    @State private var selfieCandidates:[V126SelfieMisprintCandidate]=[]
+    @State private var selectedServerUnit=""
+    @State private var selectedLocalUnit:UUID?
+    @State private var selectedAdmin=""
+    @State private var adminCode=""
+    @State private var reason="COLOR_ERROR"
+    @State private var note=""
+    @State private var loading=true
+    @State private var busy=false
+
+    private let reasons:[(String,String)]=[
+        ("COLOR_ERROR","Farben / Streifen fehlerhaft"),
+        ("PAPER_JAM","Papierstau / hängen geblieben"),
+        ("PARTIAL_PRINT","Foto nur teilweise gedruckt"),
+        ("POWER_LOSS","Stromunterbrechung"),
+        ("DAMAGED_PAPER","Papier / Foto beschädigt"),
+        ("OTHER","Sonstiger Druckfehler")
+    ]
+
+    private var localJob:V80LocalPrintJob? {
+        guard let id=UUID(uuidString:pickup.id) else{return nil}
+        return core.localQueue.jobs.first(where:{$0.id==id})
+    }
+
+    private var localCandidates:[V80LocalPrintUnit] {
+        localJob?.units.filter{$0.status == .printed} ?? []
+    }
+
+    private var selectedSelfie:V126SelfieMisprintCandidate? {
+        selfieCandidates.first{$0.unit_id==selectedServerUnit}
+    }
+
+    private var selectedLocal:V80LocalPrintUnit? {
+        localCandidates.first{$0.id==selectedLocalUnit}
+    }
+
+    @ViewBuilder private var preview:some View {
+        if pickup.kind.uppercased()=="SELFIE",
+           let path=selectedSelfie?.designed_path,
+           let url=FTSAPI.shared.imageURL(storagePath:path) {
+            AsyncImage(url:url) { phase in
+                if case .success(let image)=phase { image.resizable().scaledToFit() }
+                else { ZStack{Color.black.opacity(0.08);ProgressView()} }
+            }
+        } else if let jobID=UUID(uuidString:pickup.id),
+                  let unitID=selectedLocalUnit,
+                  let path=core.localIssuePreviewPath(jobID:jobID,unitID:unitID),
+                  let image=NSImage(contentsOfFile:path) {
+            Image(nsImage:image).resizable().scaledToFit()
+        } else {
+            ZStack {
+                Color.black.opacity(0.08)
+                Image(systemName:"photo").font(.system(size:42)).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    var body:some View {
+        HStack(spacing:16) {
+            preview
+                .frame(maxWidth:.infinity,maxHeight:.infinity)
+                .background(Color.black.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius:12))
+
+            VStack(alignment:.leading,spacing:12) {
+                Text("Fehldruck / Ersatz · \(pickup.customer_code)").font(.title2.bold())
+                Text("Nur verwenden, wenn ein physischer Ausdruck wirklich unbrauchbar ist. Der Kunde wird nicht erneut berechnet.")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                if loading {
+                    ProgressView("Ausdrucke werden geladen …")
+                } else if pickup.kind.uppercased()=="SELFIE" {
+                    Picker("Betroffenes Exemplar",selection:$selectedServerUnit) {
+                        ForEach(selfieCandidates){c in
+                            Text("Exemplar \(c.copy_index)" + (c.operator_name.map{" · \($0)"} ?? "")).tag(c.unit_id)
+                        }
+                    }
+                } else {
+                    Picker("Betroffenes Exemplar",selection:Binding(
+                        get:{selectedLocalUnit},
+                        set:{selectedLocalUnit=$0}
+                    )) {
+                        ForEach(localCandidates){u in
+                            Text("Exemplar \(u.copyIndex) · \(u.originalName)").tag(Optional(u.id))
+                        }
+                    }
+                }
+
+                Picker("Grund",selection:$reason) {
+                    ForEach(reasons,id:\.0){Text($0.1).tag($0.0)}
+                }
+                TextField("Notiz optional",text:$note).textFieldStyle(.roundedBorder)
+
+                Divider()
+                Text("Administrator-Freigabe").font(.headline)
+                Picker("Administrator",selection:$selectedAdmin) {
+                    ForEach(state.deviceAdmins){a in Text(a.display_name).tag(a.user_id)}
+                }
+                SecureField("Administrator-Code",text:$adminCode).textFieldStyle(.roundedBorder)
+
+                Spacer()
+                HStack {
+                    Button("Abbrechen",role:.cancel){dismiss()}
+                    Spacer()
+                    Button(busy ? "Wird angelegt …" : "Fehldruck bestätigen · 1× Ersatz") { submit() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(busy || selectedAdmin.isEmpty || adminCode.isEmpty || !hasSelection)
+                }
+            }
+            .frame(width:350)
+        }
+        .padding(16)
+        .task { await load() }
+    }
+
+    private var hasSelection:Bool {
+        pickup.kind.uppercased()=="SELFIE" ? !selectedServerUnit.isEmpty : selectedLocalUnit != nil
+    }
+
+    private func load() async {
+        if state.deviceAdmins.isEmpty { await state.loadDeviceAdmins() }
+        if selectedAdmin.isEmpty {
+            if state.currentUser?.role=="printer_admin",
+               let own=state.currentUser?.user_id,
+               state.deviceAdmins.contains(where:{$0.user_id==own}) {
+                selectedAdmin=own
+            } else {
+                selectedAdmin=state.deviceAdmins.first?.user_id ?? ""
+            }
+        }
+
+        if pickup.kind.uppercased()=="SELFIE" {
+            selfieCandidates=await core.selfieMisprintCandidates(orderID:pickup.id,state:state)
+            selectedServerUnit=selfieCandidates.first?.unit_id ?? ""
+        } else {
+            selectedLocalUnit=localCandidates.first?.id
+        }
+        loading=false
+    }
+
+    private func submit() {
+        guard !busy else{return}
+        busy=true
+        Task {
+            let ok:Bool
+            if pickup.kind.uppercased()=="SELFIE" {
+                guard let unit=selectedSelfie else{busy=false;return}
+                ok=await core.adminResolveServerIssue(
+                    unitID:unit.unit_id,resolution:"MISPRINT",reasonCode:reason,note:note,
+                    adminUserID:selectedAdmin,adminCode:adminCode,state:state
+                )
+            } else {
+                guard let jobID=UUID(uuidString:pickup.id),let unitID=selectedLocalUnit else{busy=false;return}
+                ok=await core.adminResolveLocalMisprint(
+                    jobID:jobID,unitID:unitID,reasonCode:reason,note:note,
+                    adminUserID:selectedAdmin,adminCode:adminCode,state:state
+                )
+            }
+            busy=false
+            if ok { dismiss() }
         }
     }
 }
