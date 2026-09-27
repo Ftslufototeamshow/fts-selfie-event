@@ -1472,7 +1472,8 @@ final class ProductionCore: ObservableObject {
                     ] as [String:Any]
                 }
             ]
-        ]
+        }
+        }
 
         let _:Bool? = try? await api.rpc("fts_printer_station_heartbeat_v127",body:[
             "p_device_token":dev,
