@@ -1093,22 +1093,22 @@ final class MediaIngestV80: ObservableObject {
               !baseline.knownSourceKeys.isEmpty else{return false}
 
         let current=mediaFiles(on:volume)
-        if current.isEmpty { return true }
+        guard !current.isEmpty else{return false}
 
         let knownFast=Set(baseline.knownSourceKeys.map{fastKeyFromStoredKey($0)})
         let knownHashes=Set((baseline.knownFingerprints ?? [:]).values.filter{!$0.isEmpty})
 
-        for file in current.prefix(12) {
+        for file in current.prefix(20) {
             if let key=fastSourceKey(file,root:volume),knownFast.contains(key) { return false }
             if !knownHashes.isEmpty,
                let hash=try? sha256(file),
                knownHashes.contains(hash) { return false }
         }
 
-        guard baseline.knownSourceKeys.count>=2 else{return false}
-        let cutoff=marker.registeredAt.addingTimeInterval(5)
+        guard baseline.knownSourceKeys.count>=3,current.count>=3 else{return false}
+        let cutoff=marker.registeredAt.addingTimeInterval(10)
         let sample=current.prefix(12).map{quickMediaDate($0)}
-        return !sample.isEmpty && sample.allSatisfy{$0>cutoff}
+        return sample.count>=3 && sample.allSatisfy{$0>cutoff}
     }
 
     nonisolated private static func retireCardMarker(
@@ -1249,10 +1249,14 @@ final class MediaIngestV80: ObservableObject {
             .sorted{mediaChronologyDate($0)<mediaChronologyDate($1)}
         guard !current.isEmpty else{return nil}
 
+        var baselineFastKeys:[String:Set<String>]=[:]
+        for (uuid,baseline) in baselines {
+            baselineFastKeys[uuid]=Set(baseline.knownSourceKeys.map{fastKeyFromStoredKey($0)})
+        }
         var keyScores:[String:Int]=[:]
         for file in current.prefix(20) {
-            guard let key=sourceKey(file,root:volume) else{continue}
-            for (uuid,baseline) in baselines where baseline.knownSourceKeys.contains(key) {
+            guard let key=fastSourceKey(file,root:volume) else{continue}
+            for (uuid,knownKeys) in baselineFastKeys where knownKeys.contains(key) {
                 keyScores[uuid,default:0]+=1
             }
         }
@@ -1287,24 +1291,15 @@ final class MediaIngestV80: ObservableObject {
     }
 
     nonisolated private static func cardSignature(_ volume:URL) -> String? {
-        let fm=FileManager.default
-        let dcim=volume.appendingPathComponent("DCIM",isDirectory:true)
-        let root=fm.fileExists(atPath:dcim.path) ? dcim : volume
-        guard let en=fm.enumerator(
-            at:root,
-            includingPropertiesForKeys:[.isRegularFileKey,.contentModificationDateKey,.fileSizeKey],
-            options:[.skipsHiddenFiles,.skipsPackageDescendants]
-        ) else{return nil}
+        let files=mediaFiles(on:volume)
+        guard !files.isEmpty else{return nil}
         var seeds:[String]=[]
-        for case let file as URL in en {
-            guard supported(file),
-                  (try? file.resourceValues(forKeys:[.isRegularFileKey]).isRegularFile)==true,
-                  let key=sourceKey(file,root:volume) else{continue}
-            seeds.append(key)
-            if seeds.count>=8{break}
+        for file in files.prefix(4) {
+            guard let hash=try? sha256(file) else{continue}
+            seeds.append(hash)
         }
         guard !seeds.isEmpty else{return nil}
-        let raw=seeds.sorted().prefix(4).joined(separator:"\n")
+        let raw=seeds.joined(separator:"\n")
         let digest=SHA256.hash(data:Data(raw.utf8))
         return digest.map{String(format:"%02x",$0)}.joined()
     }

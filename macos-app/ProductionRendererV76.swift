@@ -27,6 +27,11 @@ enum ProductionRendererV76 {
         let unresolved: Bool
     }
 
+    private struct RenderAssets {
+        let bannerImage:NSImage?
+        let logoGroups:[String:[([String:JSONValue],NSImage)]]
+    }
+
     private static let api = FTSAPI.shared
     private static let ciContext = CIContext(options: [.cacheIntermediates: true])
 
@@ -56,6 +61,8 @@ enum ProductionRendererV76 {
             cropZoom:cropZoom,cropOffsetX:cropOffsetX,cropOffsetY:cropOffsetY
         )
 
+        let assets = await loadRenderAssets(event:event,config:config)
+
         let out = NSImage(size: plan.canvas)
         out.lockFocus()
         defer { out.unlockFocus() }
@@ -80,8 +87,8 @@ enum ProductionRendererV76 {
             banner["enabled"]?.bool == false
 
         if !fullPhoto {
-            try await drawOverlay(event:event,config:config,plan:plan)
-            try await drawEventLogos(event:event,canvas:plan.canvas)
+            drawOverlay(event:event,config:config,plan:plan,finishedBannerImage:assets.bannerImage)
+            drawEventLogos(groups:assets.logoGroups,canvas:plan.canvas)
             drawEventDecorations(event:event,canvas:plan.canvas)
         }
 
@@ -328,20 +335,40 @@ enum ProductionRendererV76 {
 
     // MARK: - Overlay
 
-    private static func drawOverlay(event:EventRow,config:[String:JSONValue],plan:Plan) async throws {
+    private static func loadRenderAssets(event:EventRow,config:[String:JSONValue]) async -> RenderAssets {
+        let ov=config["overlay"]?.object ?? [:]
+        let banner=ov["banner"]?.object ?? [:]
+        let bannerImage:NSImage?
+        if let path=nonEmpty(banner["image_path"]?.string) {
+            bannerImage=try? await remoteImage(path)
+        } else {
+            bannerImage=nil
+        }
+
+        let logoItems=(event.logo_items?.array ?? []).compactMap{$0.object}.filter {
+            nonEmpty($0["path"]?.string) != nil && $0["show_photo"]?.bool != false
+        }
+        var groups:[String:[([String:JSONValue],NSImage)]] = [:]
+        for item in logoItems {
+            guard let path=nonEmpty(item["path"]?.string),
+                  let img=try? await remoteImage(path) else{continue}
+            groups[item["position"]?.string ?? "top-right",default:[]].append((item,img))
+        }
+        return RenderAssets(bannerImage:bannerImage,logoGroups:groups)
+    }
+
+    private static func drawOverlay(
+        event:EventRow,
+        config:[String:JSONValue],
+        plan:Plan,
+        finishedBannerImage:NSImage?
+    ) {
         let ov=config["overlay"]?.object ?? [:]
         let banner=ov["banner"]?.object ?? [:]
         let w=plan.canvas.width,h=plan.canvas.height
         let heightPct=plan.bannerPct
         let bh=h*heightPct/100
         let visualTextScale=plan.textScale
-
-        let finishedBannerImage:NSImage?
-        if let path=nonEmpty(banner["image_path"]?.string) {
-            finishedBannerImage=try? await remoteImage(path)
-        } else {
-            finishedBannerImage=nil
-        }
 
         if let img=finishedBannerImage {
             // Uploaded FTS banners are finished 148×15 mm artwork. Keep the
@@ -540,17 +567,11 @@ enum ProductionRendererV76 {
 
     // MARK: - Logos and decorations
 
-    private static func drawEventLogos(event:EventRow,canvas:NSSize) async throws {
-        let items=(event.logo_items?.array ?? []).compactMap{$0.object}.filter {
-            nonEmpty($0["path"]?.string) != nil && $0["show_photo"]?.bool != false
-        }
-        guard !items.isEmpty else{return}
-
-        var groups:[String:[([String:JSONValue],NSImage)]] = [:]
-        for item in items {
-            guard let path=nonEmpty(item["path"]?.string),let img=try? await remoteImage(path) else{continue}
-            groups[item["position"]?.string ?? "top-right",default:[]].append((item,img))
-        }
+    private static func drawEventLogos(
+        groups:[String:[([String:JSONValue],NSImage)]],
+        canvas:NSSize
+    ) {
+        guard !groups.isEmpty else{return}
 
         let w=canvas.width,h=canvas.height,pad=max(22,max(w*0.035,min(w,h)*0.025)),gap=max(10,w*0.012)
         for (position,arr) in groups {

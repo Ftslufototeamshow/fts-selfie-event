@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.42-green-screen-effects.zip
-            dist/FTS-Printer-macOS-v0.3.42-green-screen-effects.dmg
+            dist/FTS-Printer-macOS-v0.3.43-card-render-fix.zip
+            dist/FTS-Printer-macOS-v0.3.43-card-render-fix.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.42-green-screen-effects"
+          TAG="fts-printer-mac-v0.3.43-card-render-fix"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.42-green-screen-effects.zip dist/FTS-Printer-macOS-v0.3.42-green-screen-effects.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.43-card-render-fix.zip dist/FTS-Printer-macOS-v0.3.43-card-render-fix.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.42-green-screen-effects.zip dist/FTS-Printer-macOS-v0.3.42-green-screen-effects.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.42 · Green Screen + Photo Effects" --notes "Build 132: Green Screen und Einzelfoto-Effekte als Zusatzfunktion. Neuer Bereich Green Screen / Effekte mit Ein/Aus pro Event, Farbe, Bild, Comic-Burst, Feuerwerk und Kantenweichheit. Green Screen aus lässt den bestehenden Fotoweg unverändert. In der großen Fotoansicht sind Normal, Schwarz-Weiß, Oldschool, Film-Look, Warm, Kräftig, Kühl, Soft, S/W warm, S/W kühl, Sepia und Comic pro Foto wählbar. Comic bearbeitet Person, Gesicht, Haare und Kleidung; ohne Green Screen bleibt der Originalhintergrund normal, mit Green Screen wird der gewählte Hintergrund eingesetzt. Der gerenderte Stand wird für QR/Archiv/Nachdruck erhalten. Canon-Spooler, Spiegelkorrektur, Materiallogik, A-Z-Kartenlogik, Banner und Druckübertragung bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.43-card-render-fix.zip dist/FTS-Printer-macOS-v0.3.43-card-render-fix.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.43 · SD Card + Render Fix" --notes "Build 133: Repariert zwei Produktionsfehler ohne Änderung am Canon-Druckpfad. SD-Karten A-Z werden bei Leser-/Metadatenwechsel wieder über dieselben normalisierten Fast-Keys und zusätzlich über stabile Inhalts-Signaturen erkannt; leere oder transiente Mounts lösen keine automatische Freigabe mehr aus und die Format-Erkennung ist konservativer. Der Foto-Renderer lädt Banner und Logos vollständig vor dem AppKit-Grafikkontext, sodass parallele Vorschau-/Import-Renderings keine zwei Fotos mehr ineinander zeichnen können. Green Screen, Einzelfoto-Filter/Comic, Materiallogik, Spiegelkorrektur, Archiv, QR, 148x15-mm-Banner und Druckübertragung bleiben bestehen."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.42-green-screen-effects"
+          CURRENT="fts-printer-mac-v0.3.43-card-render-fix"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
