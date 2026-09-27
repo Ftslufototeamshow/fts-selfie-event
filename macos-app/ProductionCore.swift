@@ -1145,8 +1145,15 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.39-card-material-controls"
-    static let build = 131
+    static let version: String = {
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.45"
+        let value=raw.trimmingCharacters(in:.whitespacesAndNewlines)
+        return value.isEmpty ? "0.3.45" : value
+    }()
+    static let build: Int = {
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "135"
+        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 135
+    }()
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []

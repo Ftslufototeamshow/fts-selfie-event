@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.44-card-render-refresh.zip
-            dist/FTS-Printer-macOS-v0.3.44-card-render-refresh.dmg
+            dist/FTS-Printer-macOS-v0.3.45-updater-version-fix.zip
+            dist/FTS-Printer-macOS-v0.3.45-updater-version-fix.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.44-card-render-refresh"
+          TAG="fts-printer-mac-v0.3.45-updater-version-fix"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.44-card-render-refresh.zip dist/FTS-Printer-macOS-v0.3.44-card-render-refresh.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.45-updater-version-fix.zip dist/FTS-Printer-macOS-v0.3.45-updater-version-fix.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.44-card-render-refresh.zip dist/FTS-Printer-macOS-v0.3.44-card-render-refresh.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.44 · Card + Render Refresh" --notes "Build 134: Enthält den SD-Karten- und Render-Fix aus Build 133 und erzwingt zusätzlich einmalig die Neuerstellung aller aktiven/queued Druckdesigns mit dem sicheren Renderer. Dadurch werden bereits unter dem alten parallelen Grafikkontext falsch zusammengesetzte Vorschaudateien nicht weiterverwendet. SD-Karten A-Z bleiben bei Leser-/Metadatenwechsel stabil zugeordnet; leere/transiente Mounts lösen keine Freigabe aus. Canon-Spooler, Spiegelkorrektur, Materiallogik, Green Screen, Einzelfoto-Filter/Comic, Archiv, QR, 148x15-mm-Banner und Druckübertragung bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.45-updater-version-fix.zip dist/FTS-Printer-macOS-v0.3.45-updater-version-fix.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.45 · Updater Version Fix" --notes "Build 135: Repariert die Versions- und Build-Erkennung des Auto-Updaters. Die App liest Version und Build jetzt direkt aus Info.plist statt aus alten fest codierten Werten 0.3.41 / Build 131. Dadurch zeigt die Oberfläche nach dem Update die tatsächlich installierte Version und bietet ein bereits installiertes Update nicht erneut an. Alle Funktionen aus Build 134 bleiben unverändert: SD-Karten A-Z Fix, sicherer Foto-Renderer mit Neurendering aktiver Designs, Green Screen, Filter/Comic, Canon-Spooler, Spiegelkorrektur, Materiallogik, Archiv, QR und 148x15-mm-Banner."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.44-card-render-refresh"
+          CURRENT="fts-printer-mac-v0.3.45-updater-version-fix"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

@@ -752,7 +752,11 @@ final class AppState: ObservableObject {
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
-    static let appVersion = "0.3.41-card-material-controls"
+    static let appVersion: String = {
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.45"
+        let value=raw.trimmingCharacters(in:.whitespacesAndNewlines)
+        return value.isEmpty ? "0.3.45" : value
+    }()
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
