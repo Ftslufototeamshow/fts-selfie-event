@@ -1134,8 +1134,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.37-dynamic-fleet-media"
-    static let build = 128
+    static let version = "1.1.38-archive-local-reconcile"
+    static let build = 129
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -1339,6 +1339,7 @@ final class ProductionCore: ObservableObject {
             ])
             let (qq,nn,pp,aa,aPhotos,cons) = try await (q,n,p,a,ap,cc)
             workUnits = qq; printerNodes = nn; pickups = pp; archived = aa; archivedPhotos = aPhotos; consumables = cons
+            reconcileLocalArchiveState(serverArchive:aa)
             if let e=lastError, isTransientTransportMessage(e) { lastError=nil }
             await refreshHostPower()
             await refreshPrinterConnectivity()
@@ -2563,6 +2564,38 @@ final class ProductionCore: ObservableObject {
         } catch { lastError=error.localizedDescription }
     }
 
+
+    private func reconcileLocalArchiveState(serverArchive:[V80ArchiveRow]) {
+        let archivedLocalIDs=Set(
+            serverArchive
+                .filter{$0.kind.uppercased()=="LOCAL"}
+                .compactMap{UUID(uuidString:$0.id)}
+        )
+        guard !archivedLocalIDs.isEmpty else{return}
+
+        var changed=false
+        for index in localQueue.jobs.indices {
+            guard archivedLocalIDs.contains(localQueue.jobs[index].id),
+                  localQueue.jobs[index].status != .archived else{continue}
+
+            let jobID=localQueue.jobs[index].id
+            localQueue.jobs[index].status = .archived
+            changed=true
+
+            let stillNeeded=mediaIDsNeededByOtherActiveJobs(excluding:jobID)
+            let deliveredIDs=mediaIDs(in:localQueue.jobs[index]).subtracting(stillNeeded)
+            if !deliveredIDs.isEmpty {
+                try? MediaIngestV80.setWorkflowSync(
+                    folderPath:loadedFolderPath,
+                    mediaIDs:deliveredIDs,
+                    status:.delivered,
+                    moveDesignedFile:true
+                )
+            }
+        }
+        if changed { saveLocalQueue() }
+    }
+
     func markPickedUp(_ pickup:V80Pickup,state:AppState) async {
         guard !pickupActionsInFlight.contains(pickup.id) else { return }
         guard let dev=state.deviceToken,let session=state.sessionToken else{return}
@@ -2574,7 +2607,9 @@ final class ProductionCore: ObservableObject {
                 ? ["p_device_token":dev,"p_session_token":session,"p_local_job_id":pickup.id]
                 : ["p_device_token":dev,"p_session_token":session,"p_order_id":pickup.id]
             let ok:Bool=try await api.rpc(name,body:body)
-            if ok, pickup.kind.uppercased()=="LOCAL", let ji=localQueue.jobs.firstIndex(where:{$0.id.uuidString==pickup.id}) {
+            if ok, pickup.kind.uppercased()=="LOCAL",
+               let pickupUUID=UUID(uuidString:pickup.id),
+               let ji=localQueue.jobs.firstIndex(where:{$0.id==pickupUUID}) {
                 let jobID=localQueue.jobs[ji].id
                 localQueue.jobs[ji].status = .archived
                 saveLocalQueue()
@@ -2593,7 +2628,7 @@ final class ProductionCore: ObservableObject {
     func localArchivedPreviewPath(for row:V80ArchiveRow)->String? {
         guard row.kind.uppercased()=="LOCAL",
               let jobID=UUID(uuidString:row.id),
-              let job=localQueue.jobs.first(where:{$0.id==jobID && $0.status == .archived}),
+              let job=localQueue.jobs.first(where:{$0.id==jobID}),
               let unit=job.units.first else{return nil}
 
         if let item=MediaIngestV80.archivedMediaItemSync(folderPath:loadedFolderPath,mediaID:unit.mediaID) {
@@ -2608,7 +2643,7 @@ final class ProductionCore: ObservableObject {
     private func archivedLocalMedia(for row:V80ArchiveRow)->V80MediaItem? {
         guard row.kind.uppercased()=="LOCAL",
               let jobID=UUID(uuidString:row.id),
-              let job=localQueue.jobs.first(where:{$0.id==jobID && $0.status == .archived}),
+              let job=localQueue.jobs.first(where:{$0.id==jobID}),
               let unit=job.units.first else{return nil}
 
         if let item=MediaIngestV80.archivedMediaItemSync(folderPath:loadedFolderPath,mediaID:unit.mediaID) {

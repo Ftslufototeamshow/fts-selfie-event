@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.zip
-            dist/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.dmg
+            dist/FTS-Printer-macOS-v0.3.39-archive-local-reconcile.zip
+            dist/FTS-Printer-macOS-v0.3.39-archive-local-reconcile.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.38-dynamic-fleet-media"
+          TAG="fts-printer-mac-v0.3.39-archive-local-reconcile"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.zip dist/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.39-archive-local-reconcile.zip dist/FTS-Printer-macOS-v0.3.39-archive-local-reconcile.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.zip dist/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.38 · Dynamic Fleet + Media" --notes "Build 128: Finalisiert die dynamische Event-Arbeitsoberfläche ohne Änderung des bewährten Canon-Druckpfads. Oben und in SD/WLAN werden beliebig viele aktuell erreichbare Canon-Drucker dynamisch angezeigt, jeweils mit USB/WLAN-Verbindung sowie eigenem RP-108-, Papier- und Filmstand. Aktive SD-/WLAN-Quellen erscheinen als horizontale Reihe; Fotos der gewählten Quelle sind horizontal scrollbar. Fotos bleiben während Warteschlange/Druck und nach erfolgreichem Druck noch 30 Minuten als fertig sichtbar und verschwinden danach automatisch aus der Arbeitsansicht; die bestehende Archivdatei bleibt erhalten. Außerhalb der Druckauftrags-/Printer-Seiten erscheinen pro aktivem Drucker kleine Live-Druckfenster mit Foto, Restzeit und Warteschlange. Archiv-Nachdruck unterstützt 1–20 Exemplare. Canon-Spooler, Spiegelkorrektur, Druckrendering, RP-108-Verbrauch, QR, Remote-Admin, Archivdateien und SD-Importlogik bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.39-archive-local-reconcile.zip dist/FTS-Printer-macOS-v0.3.39-archive-local-reconcile.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.39 · Archive Local Reconcile" --notes "Build 129: Kleiner gezielter Archiv-Fix. Lokale Job-IDs werden bei Abholung als UUID statt als case-sensitive Text verglichen. Bereits serverseitig archivierte LOCAL-Aufträge werden beim Refresh automatisch in der lokalen Queue auf ARCHIVED nachgezogen und vorhandene Mediendateien nach Archiv/Abgegeben synchronisiert. Archivvorschau und Nachdruck dürfen bei einem serverseitig bestätigten Archiv-Eintrag zusätzlich auf die vorhandene lokale Jobdatei zurückfallen, auch wenn ein alter lokaler Status noch nicht synchron war. Canon-Spooler, Druckpfad, Spiegelkorrektur, SD/WLAN, Material, QR, Remote-Admin und sonstige Build-128-Funktionen bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.38-dynamic-fleet-media"
+          CURRENT="fts-printer-mac-v0.3.39-archive-local-reconcile"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
