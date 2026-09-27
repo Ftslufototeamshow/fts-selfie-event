@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1117">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>FTS Selfie Event · Digitalfoto</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#fff;background:#0b1117}
+*{box-sizing:border-box}
+body{margin:0;min-height:100svh;display:flex;align-items:center;justify-content:center;padding:18px;background:radial-gradient(circle at top,#213240 0,#0b1117 52%)}
+main{width:min(94vw,760px);text-align:center}
+.brand{color:#d8b25c;font-weight:900;letter-spacing:.1em;font-size:.9rem}
+h1{font-size:clamp(1.5rem,5vw,2.3rem);margin:.45rem 0 1rem}
+.card{background:#121c25;border:1px solid #2b3a46;border-radius:18px;padding:14px;box-shadow:0 18px 60px #0008}
+.photo{width:100%;display:block;max-height:68svh;object-fit:contain;border-radius:12px;background:#05080a}
+.btn{display:block;margin:14px auto 0;background:#18c6e3;color:#00151b;padding:14px 18px;border-radius:12px;text-decoration:none;font-weight:900;font-size:1.05rem}
+.note{color:#b8c6d1;font-size:.86rem;line-height:1.45;margin:.8rem .4rem 0}
+.error{padding:28px 16px;color:#ffb4ab;font-weight:700}
+</style>
+</head>
+<body>
+<main>
+<div class="brand">FTS SELFIE EVENT</div>
+<h1>Dein digitales Foto</h1>
+<div class="card" id="card">
+  <div id="loading">Foto wird geladen …</div>
+</div>
+</main>
+<script>
+(()=>{
+  const q=new URLSearchParams(location.search);
+  const token=q.get("token")||"";
+  const card=document.getElementById("card");
+  if(token.length<40){
+    card.innerHTML='<div class="error">Dieser Fotolink ist ungültig.</div>';
+    return;
+  }
+  const api='https://hivmiqktbaatghuaxfvg.supabase.co/functions/v1/fts-printer-digital-v125?token='+encodeURIComponent(token);
+  const img=document.createElement('img');
+  img.className='photo';
+  img.alt='FTS Foto';
+  img.src=api+'&raw=1';
+  img.onload=()=>{
+    card.innerHTML='';
+    card.appendChild(img);
+    const a=document.createElement('a');
+    a.className='btn';
+    a.href=api+'&download=1';
+    a.textContent='Foto herunterladen';
+    card.appendChild(a);
+    const p=document.createElement('p');
+    p.className='note';
+    p.textContent='Tippe auf „Foto herunterladen“. Danach kannst du das JPEG auf deinem Handy speichern bzw. in die Galerie übernehmen. Der persönliche Link ist 7 Tage gültig.';
+    card.appendChild(p);
+  };
+  img.onerror=()=>{
+    card.innerHTML='<div class="error">Das Foto konnte nicht geladen werden. Der Link ist möglicherweise abgelaufen.</div>';
+  };
+})();
+</script>
+</body>
+</html>
