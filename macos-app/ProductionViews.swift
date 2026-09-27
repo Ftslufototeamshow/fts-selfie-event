@@ -1697,7 +1697,7 @@ struct V80ManualCardPhotoBrowser: View {
                 }
 
                 if let card=selectedCard,card.marker == nil {
-                    Label("Diese Karte zuerst A/B/C/D/E zuordnen. Danach kann ein altes Foto zurückgeholt werden.",systemImage:"exclamationmark.triangle.fill")
+                    Label("Diese Karte zuerst A–Z zuordnen. Danach kann ein altes Foto zurückgeholt werden.",systemImage:"exclamationmark.triangle.fill")
                         .font(.callout)
                         .foregroundStyle(.orange)
                         .padding(8)
