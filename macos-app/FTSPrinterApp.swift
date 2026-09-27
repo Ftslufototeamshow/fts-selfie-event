@@ -752,7 +752,7 @@ final class AppState: ObservableObject {
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
-    static let appVersion = "0.3.37-mobile-admin-remote-control"
+    static let appVersion = "0.3.38-dynamic-fleet-media"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -839,7 +839,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.37-mobile-admin-remote-control"
+                "p_user_agent":"FTS Printer macOS 0.3.38-dynamic-fleet-media"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -870,7 +870,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v125",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.37-mobile-admin-remote-control"
+                "p_user_agent":"FTS Printer macOS 0.3.38-dynamic-fleet-media"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session
@@ -1411,6 +1411,13 @@ struct MainView: View {
             V127RemoteIssuesPanel(state:state,core:state.production)
                 .frame(minWidth:760,minHeight:620)
         }
+        .overlay(alignment:.bottomLeading) {
+            if section != .orders && section != .printers {
+                FTSBackgroundPrintOverlay(state:state,core:state.production)
+                    .padding(.leading,236)
+                    .padding(.bottom,34)
+            }
+        }
         .overlay(alignment:.bottomTrailing) {
             let openCount=state.production.remoteIssues.filter{$0.status != "RESOLVED"}.count
             if openCount>0 {
@@ -1948,8 +1955,8 @@ struct FTSStaffAvatarView:View {
 struct FTSTopOperationalStatus:View {
     @ObservedObject var core:ProductionCore
 
-    private var printer:LocalPrinterSlot? {
-        core.printerSlots.first(where:{$0.enabled}) ?? core.printerSlots.first
+    private var connectedPrinters:[LocalPrinterSlot] {
+        core.printerSlots.filter{$0.isConnectedForUI}
     }
 
     private var laptopText:String {
@@ -1966,49 +1973,153 @@ struct FTSTopOperationalStatus:View {
         return .green
     }
 
-    private var printerText:String {
-        guard let p=printer else{return "Drucker · —"}
-        let c=p.connection.lowercased()
-        let link=c.contains("airprint") || c.contains("wlan") ? "WLAN" : (c.contains("usb") ? "USB" : "Link")
-        let state=["IDLE","READY"].contains(p.state) ? "bereit" : p.state.lowercased()
-        return "\(link) · \(state)"
-    }
-
-    private var printerColor:Color {
-        guard let p=printer else{return .secondary}
+    private func printerColor(_ p:LocalPrinterSlot)->Color {
         if p.state=="ERROR"{return .red}
-        if p.state=="OFFLINE"{return .orange}
+        if ["PREPARING","TRANSFER","PRINTING"].contains(p.state){return .orange}
         return .green
     }
 
-    private var hasSelphy:Bool {
-        core.printerSlots.contains{
-            let n=$0.name.lowercased()
-            return n.contains("selphy") || n.contains("cp1500")
+    private func printerState(_ p:LocalPrinterSlot)->String {
+        switch p.state {
+        case "IDLE": return "bereit"
+        case "PREPARING","TRANSFER": return "überträgt"
+        case "PRINTING": return p.eta>0 ? "druckt · \(p.eta)s" : "druckt"
+        case "ERROR": return "Fehler"
+        default: return p.state.lowercased()
         }
     }
 
-    @ViewBuilder
-    private func chip(_ text:String,icon:String,color:Color)->some View {
+    @ViewBuilder private func laptopChip()->some View {
         HStack(spacing:4){
-            Image(systemName:icon)
-            Text(text).lineLimit(1)
+            Image(systemName:core.hostPower.onACPower ? "powerplug.fill" : "battery.50")
+            Text(laptopText).lineLimit(1)
         }
         .font(.caption2.bold())
         .padding(.horizontal,7)
-        .padding(.vertical,5)
-        .background(color.opacity(0.13))
-        .foregroundStyle(color)
+        .padding(.vertical,6)
+        .background(laptopColor.opacity(0.13))
+        .foregroundStyle(laptopColor)
         .clipShape(Capsule())
     }
 
-    var body:some View {
-        HStack(spacing:5) {
-            chip(laptopText,icon:core.hostPower.onACPower ? "powerplug.fill" : "battery.50",color:laptopColor)
-            chip(printerText,icon:"wifi",color:printerColor)
-            if hasSelphy {
-                chip("SELPHY Akku · Display",icon:"battery.50",color:.orange)
+    @ViewBuilder private func printerChip(_ p:LocalPrinterSlot)->some View {
+        let c=core.consumable(for:p.name)
+        VStack(alignment:.leading,spacing:2) {
+            HStack(spacing:4) {
+                Circle().fill(printerColor(p)).frame(width:6,height:6)
+                Text(p.shortDisplayName).bold().lineLimit(1)
+                Text("· \(p.transportLabel)").foregroundStyle(.secondary)
+                Text("· \(printerState(p))").foregroundStyle(printerColor(p))
             }
+            HStack(spacing:6) {
+                Text("RP \(c?.rp108_remaining.map(String.init) ?? "—")/108")
+                Text("P \(c?.paper_remaining.map(String.init) ?? "—")/18")
+                Text("F \(c?.film_remaining.map(String.init) ?? "—")/54")
+            }
+            .font(.system(size:9,weight:.semibold,design:.monospaced))
+            .foregroundStyle(.secondary)
+        }
+        .font(.caption2)
+        .padding(.horizontal,8)
+        .padding(.vertical,5)
+        .background(printerColor(p).opacity(0.10))
+        .overlay(RoundedRectangle(cornerRadius:9).stroke(printerColor(p).opacity(0.28),lineWidth:1))
+        .clipShape(RoundedRectangle(cornerRadius:9))
+        .help(p.name+" · "+p.connection.replacingOccurrences(of:"\n",with:" · "))
+    }
+
+    var body:some View {
+        ScrollView(.horizontal,showsIndicators:false) {
+            HStack(spacing:5) {
+                laptopChip()
+                ForEach(connectedPrinters) { p in printerChip(p) }
+            }
+            .padding(.vertical,1)
+        }
+        .frame(minWidth:180,maxWidth:650)
+    }
+}
+
+struct FTSBackgroundPrintOverlay:View {
+    @ObservedObject var state:AppState
+    @ObservedObject var core:ProductionCore
+
+    private var active:[LocalPrinterSlot] {
+        core.printerSlots.filter{
+            ($0.currentUnit != nil && ["PREPARING","TRANSFER","PRINTING","ERROR"].contains($0.state))
+            || ($0.state=="ERROR" && $0.lastError != nil)
+        }
+    }
+
+    private var waiting:Int {
+        core.localWaitingCount + core.workUnits.filter{$0.unit_status=="READY"}.count
+    }
+
+    @ViewBuilder private func preview(_ slot:LocalPrinterSlot)->some View {
+        if let ref=slot.currentUnit,ref.hasPrefix("LOCAL:"),
+           let jobID=UUID(uuidString:String(ref.dropFirst(6))),
+           let job=core.localQueue.jobs.first(where:{$0.id==jobID}),
+           let unit=job.units.first(where:{$0.printerName==slot.name && $0.status == .printing}),
+           let image=NSImage(contentsOfFile:unit.imagePath) {
+            Image(nsImage:image).resizable().scaledToFill()
+        } else if let ref=slot.currentUnit,
+                  let unit=core.workUnits.first(where:{$0.unit_id==ref}),
+                  let url=FTSAPI.shared.imageURL(storagePath:unit.designed_path) {
+            AsyncImage(url:url) { phase in
+                if case .success(let image)=phase { image.resizable().scaledToFill() }
+                else { Color.black.opacity(0.15) }
+            }
+        } else {
+            ZStack{Color.black.opacity(0.15);Image(systemName:"printer.fill").foregroundStyle(.secondary)}
+        }
+    }
+
+    private func title(_ slot:LocalPrinterSlot)->String {
+        if let ref=slot.currentUnit,ref.hasPrefix("LOCAL:"),
+           let jobID=UUID(uuidString:String(ref.dropFirst(6))),
+           let job=core.localQueue.jobs.first(where:{$0.id==jobID}) {
+            return job.customerCode
+        }
+        if let ref=slot.currentUnit,
+           let unit=core.workUnits.first(where:{$0.unit_id==ref}) {
+            return unit.pickup_code
+        }
+        return slot.state=="ERROR" ? "Druckproblem" : "Druck läuft"
+    }
+
+    var body:some View {
+        if !active.isEmpty {
+            ScrollView(.horizontal,showsIndicators:false) {
+                HStack(spacing:8) {
+                    ForEach(active) { slot in
+                        HStack(spacing:8) {
+                            preview(slot)
+                                .frame(width:58,height:72)
+                                .clipped()
+                                .clipShape(RoundedRectangle(cornerRadius:7))
+                            VStack(alignment:.leading,spacing:3) {
+                                Text(slot.shortDisplayName).font(.caption.bold()).lineLimit(1)
+                                Text(title(slot)).font(.headline.monospacedDigit()).lineLimit(1)
+                                if slot.state=="ERROR" {
+                                    Text(slot.lastError ?? "Druckproblem")
+                                        .font(.caption2).foregroundStyle(.red).lineLimit(2)
+                                } else {
+                                    Text(slot.eta>0 ? "Druckt · noch ca. \(slot.eta) Sek." : "Druckt …")
+                                        .font(.caption2).foregroundStyle(.orange)
+                                    Text("Warteschlange: \(waiting)")
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .padding(8)
+                        .frame(width:235,height:90,alignment:.leading)
+                        .background(.ultraThinMaterial)
+                        .overlay(RoundedRectangle(cornerRadius:12).stroke(Color.white.opacity(0.15),lineWidth:1))
+                        .clipShape(RoundedRectangle(cornerRadius:12))
+                    }
+                }
+            }
+            .frame(maxWidth:760)
         }
     }
 }

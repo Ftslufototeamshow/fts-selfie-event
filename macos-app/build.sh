@@ -88,9 +88,9 @@ test -s "$RES/FTSPrinter.icns"
 
 chmod +x "$MACOS/FTS Printer"
 codesign --force --deep --sign - "$APP"
-rm -f "$DIST/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.zip" "$DIST/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.dmg"
-ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.zip"
-DMG="$DIST/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.dmg"
+rm -f "$DIST/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.zip" "$DIST/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.dmg"
+ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.zip"
+DMG="$DIST/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.dmg"
 rm -f "$DMG"
 for attempt in 1 2 3; do
   if hdiutil create -volname "FTS Printer" -srcfolder "$APP" -ov -format UDZO "$DMG"; then

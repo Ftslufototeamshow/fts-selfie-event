@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.zip
-            dist/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.dmg
+            dist/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.zip
+            dist/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.37-mobile-admin-remote-control"
+          TAG="fts-printer-mac-v0.3.38-dynamic-fleet-media"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.zip dist/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.zip dist/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.zip dist/FTS-Printer-macOS-v0.3.37-mobile-admin-remote-control.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.37 · Mobile Admin Remote Control" --notes "Build 127: Ergänzt ausschließlich Fernübersicht und Admin-Kommunikation. Jede Printer-Station sendet einen Live-Heartbeat pro ausgewähltem Event mit angemeldetem Mitarbeiter, Login-Zeit, Mac-Strom/Akku, Netzwerk, Druckerstatus, lokalem SD/WLAN-Status, Foto-Dateinamen/Workflow und lokaler Queue. Druckprobleme können ohne Admin vor Ort an die installierbare FTS Printer Admin Web-App gesendet werden; der Administrator kann remote 1× Ersatz, 'gar nicht gedruckt' oder Ablehnung freigeben und eine kurze Nachricht schreiben. Der Mac übernimmt bestätigte Freigaben sicher und zeigt sie über einen runden Chat-Button; Mitarbeiter kann 'Ist okay', 'Problem besteht noch' oder kurzen Text zurückmelden. Mehrere Events/Computer bleiben getrennt über Event- und Geräte-IDs. Canon-Spooler, SELPHY-Spiegelkorrektur, Druckrendering, Material/RP-108, SD A-E, QR-Download, Archiv, Banner/Rand und bestehender Druckpfad bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.zip dist/FTS-Printer-macOS-v0.3.38-dynamic-fleet-media.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.38 · Dynamic Fleet + Media" --notes "Build 128: Finalisiert die dynamische Event-Arbeitsoberfläche ohne Änderung des bewährten Canon-Druckpfads. Oben und in SD/WLAN werden beliebig viele aktuell erreichbare Canon-Drucker dynamisch angezeigt, jeweils mit USB/WLAN-Verbindung sowie eigenem RP-108-, Papier- und Filmstand. Aktive SD-/WLAN-Quellen erscheinen als horizontale Reihe; Fotos der gewählten Quelle sind horizontal scrollbar. Fotos bleiben während Warteschlange/Druck und nach erfolgreichem Druck noch 30 Minuten als fertig sichtbar und verschwinden danach automatisch aus der Arbeitsansicht; die bestehende Archivdatei bleibt erhalten. Außerhalb der Druckauftrags-/Printer-Seiten erscheinen pro aktivem Drucker kleine Live-Druckfenster mit Foto, Restzeit und Warteschlange. Archiv-Nachdruck unterstützt 1–20 Exemplare. Canon-Spooler, Spiegelkorrektur, Druckrendering, RP-108-Verbrauch, QR, Remote-Admin, Archivdateien und SD-Importlogik bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.37-mobile-admin-remote-control"
+          CURRENT="fts-printer-mac-v0.3.38-dynamic-fleet-media"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

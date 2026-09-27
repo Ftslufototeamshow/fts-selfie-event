@@ -647,6 +647,7 @@ private struct FTSSelphyBadge: View {
 
 private struct FTSPrinterLiveTile: View {
     let slot:LocalPrinterSlot
+    var consumable:V81Consumable? = nil
 
     var stateColor:Color {
         switch slot.state {
@@ -694,6 +695,13 @@ private struct FTSPrinterLiveTile: View {
                     .font(.system(size:9))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                HStack(spacing:6) {
+                    Text("RP \(consumable?.rp108_remaining.map(String.init) ?? "—")/108")
+                    Text("P \(consumable?.paper_remaining.map(String.init) ?? "—")/18")
+                    Text("F \(consumable?.film_remaining.map(String.init) ?? "—")/54")
+                }
+                .font(.system(size:9,weight:.semibold,design:.monospaced))
+                .foregroundStyle(.secondary)
                 if let error=slot.lastError,!error.isEmpty {
                     HStack(spacing:4) {
                         Image(systemName:"exclamationmark.triangle.fill")
@@ -705,7 +713,7 @@ private struct FTSPrinterLiveTile: View {
             }
         }
         .padding(8)
-        .frame(width:260,height:(slot.lastError?.isEmpty == false ? 112 : 92),alignment:.leading)
+        .frame(width:300,height:(slot.lastError?.isEmpty == false ? 128 : 108),alignment:.leading)
         .background(Color(nsColor:.controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius:12))
     }
@@ -748,6 +756,56 @@ private struct FTSCameraLiveTile: View {
     }
 }
 
+
+private struct V128ActiveSourceTile:View {
+    let source:String
+    let selected:Bool
+    let openCount:Int
+    let printingCount:Int
+    let recentDone:Int
+    let errorCount:Int
+    let onSelect:()->Void
+
+    private var title:String { source=="W" ? "WLAN-Kamera" : "SD-Karte \(source)" }
+    private var icon:String { source=="W" ? "camera.fill" : "sdcard.fill" }
+
+    var body:some View {
+        Button(action:onSelect) {
+            HStack(spacing:9) {
+                ZStack {
+                    RoundedRectangle(cornerRadius:10)
+                        .fill(selected ? FTSTheme.cyan.opacity(0.20) : Color.black.opacity(0.28))
+                    Image(systemName:icon)
+                        .font(.system(size:24,weight:.semibold))
+                        .foregroundStyle(selected ? FTSTheme.cyan : FTSTheme.gold)
+                }
+                .frame(width:48,height:58)
+                VStack(alignment:.leading,spacing:4) {
+                    Text(title).font(.caption.bold()).lineLimit(1)
+                    HStack(spacing:6) {
+                        if openCount>0 { Text("\(openCount) neu").foregroundStyle(.green) }
+                        if printingCount>0 { Text("\(printingCount) im Druck").foregroundStyle(.orange) }
+                        if recentDone>0 { Text("\(recentDone) fertig").foregroundStyle(FTSTheme.cyan) }
+                        if errorCount>0 { Text("\(errorCount) Fehler").foregroundStyle(.red) }
+                    }
+                    .font(.system(size:9,weight:.semibold))
+                    Text("Antippen · Fotos unten")
+                        .font(.system(size:9)).foregroundStyle(.secondary)
+                }
+            }
+            .padding(8)
+            .frame(width:205,height:76,alignment:.leading)
+            .background(Color(nsColor:.controlBackgroundColor))
+            .overlay(
+                RoundedRectangle(cornerRadius:11)
+                    .stroke(selected ? FTSTheme.cyan : Color.white.opacity(0.08),lineWidth:selected ? 1.5:1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius:11))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct V80PhotoPrintPreviewSheet: View {
     @ObservedObject var state:AppState
     let item:V80MediaItem
@@ -756,6 +814,7 @@ struct V80PhotoPrintPreviewSheet: View {
     let sourceTitle:String
     let initialLayout:V80PrintLayout
     let initialQuantity:Int
+    let allowPrint:Bool
     let onCancel:()->Void
     let onConfirm:(Int,V80PrintLayout)->Void
 
@@ -778,6 +837,7 @@ struct V80PhotoPrintPreviewSheet: View {
         sourceTitle:String,
         initialLayout:V80PrintLayout,
         initialQuantity:Int,
+        allowPrint:Bool=true,
         onCancel:@escaping()->Void,
         onConfirm:@escaping(Int,V80PrintLayout)->Void
     ) {
@@ -788,6 +848,7 @@ struct V80PhotoPrintPreviewSheet: View {
         self.sourceTitle=sourceTitle
         self.initialLayout=initialLayout
         self.initialQuantity=initialQuantity
+        self.allowPrint=allowPrint
         self.onCancel=onCancel
         self.onConfirm=onConfirm
         _quantity=State(initialValue:max(1,initialQuantity))
@@ -1014,8 +1075,11 @@ struct V80PhotoPrintPreviewSheet: View {
                         Text("\(quantity) ×").font(.title3.bold()).monospacedDigit()
                     }
                 }
+                .disabled(!allowPrint)
 
-                Text("Der Auftrag wird erst nach „OK · Zum Druck“ angelegt. Die Mengenwahl allein startet keinen Druck.")
+                Text(allowPrint
+                     ? "Der Auftrag wird erst nach „OK · Zum Druck“ angelegt. Die Mengenwahl allein startet keinen Druck."
+                     : "Dieses Foto ist bereits in Bearbeitung oder fertig. Es bleibt hier nur zur Kontrolle sichtbar.")
                     .font(.caption).foregroundStyle(.secondary)
 
                 GroupBox("Digitalfoto per QR · nur große Ansicht") {
@@ -1051,12 +1115,14 @@ struct V80PhotoPrintPreviewSheet: View {
                 Spacer()
 
                 HStack {
-                    Button("Abbrechen"){onCancel()}
+                    Button(allowPrint ? "Abbrechen" : "Schließen"){onCancel()}
                     Spacer()
-                    Button("OK · Zum Druck"){
-                        onConfirm(quantity,layout)
+                    if allowPrint {
+                        Button("OK · Zum Druck"){
+                            onConfirm(quantity,layout)
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
                 }
 
                 Text("Aktuell: \(frameLabel)")
@@ -1095,13 +1161,26 @@ struct ProductionMediaContent: View {
     @State private var previewItem:V80MediaItem?
     @State private var printLayouts:[String:V80PrintLayout]=[:]
     @State private var defaultPrintLayout=V80PrintLayout()
+    @State private var displayClock=Date()
+
+    private let recentFinishedWindow:TimeInterval=30*60
 
     var event:EventRow? { state.selectedEvent }
 
+    func visibleInActiveWorkArea(_ item:V80MediaItem)->Bool {
+        switch item.effectiveWorkflow {
+        case .active,.queued,.error:
+            return true
+        case .produced:
+            guard let updated=item.workflowUpdatedAt else{return false}
+            return displayClock.timeIntervalSince(updated) < recentFinishedWindow
+        case .delivered,.hidden:
+            return false
+        }
+    }
+
     var sourceChoices:[String] {
-        // A source belongs in the photo picker only when it really has at least one
-        // active/draggable photo. Connected cards are shown separately in Live-Geräte.
-        let result=Set(ingest.items.filter{$0.visibleInPrinter}.map{$0.sourceLabel})
+        let result=Set(ingest.items.filter{visibleInActiveWorkArea($0)}.map{$0.sourceLabel})
         return result.sorted {
             if $0=="W" { return false }
             if $1=="W" { return true }
@@ -1112,10 +1191,45 @@ struct ProductionMediaContent: View {
     var visibleItems:[V80MediaItem] {
         Array(
             ingest.items
-                .filter{$0.sourceLabel==sourceLabel && $0.visibleInPrinter}
+                .filter{$0.sourceLabel==sourceLabel && visibleInActiveWorkArea($0)}
                 .sorted{$0.importedAt>$1.importedAt}
                 .prefix(120)
         )
+    }
+
+    func sourceCounts(_ source:String)->(open:Int,printing:Int,recentDone:Int,error:Int) {
+        let sourceItems=ingest.items.filter{$0.sourceLabel==source && visibleInActiveWorkArea($0)}
+        return (
+            sourceItems.filter{$0.effectiveWorkflow == .active}.count,
+            sourceItems.filter{$0.effectiveWorkflow == .queued}.count,
+            sourceItems.filter{$0.effectiveWorkflow == .produced}.count,
+            sourceItems.filter{$0.effectiveWorkflow == .error}.count
+        )
+    }
+
+    func statusText(for item:V80MediaItem)->String {
+        switch item.effectiveWorkflow {
+        case .active: return "Neu"
+        case .queued: return "Im Druck / Warteschlange"
+        case .error: return "Druckproblem"
+        case .produced:
+            guard let updated=item.workflowUpdatedAt else{return "Fertig"}
+            let seconds=max(0,recentFinishedWindow-displayClock.timeIntervalSince(updated))
+            let left=max(1,Int((seconds/60.0).rounded(.up)))
+            return "Fertig · noch \(left) Min sichtbar"
+        case .delivered: return "Archiv"
+        case .hidden: return "Ausgeblendet"
+        }
+    }
+
+    func statusColor(for item:V80MediaItem)->Color {
+        switch item.effectiveWorkflow {
+        case .active: return .green
+        case .queued: return .orange
+        case .produced: return FTSTheme.cyan
+        case .error: return .red
+        case .delivered,.hidden: return .secondary
+        }
     }
 
     func stablePhotoNumber(_ item:V80MediaItem)->Int {
@@ -1183,6 +1297,7 @@ struct ProductionMediaContent: View {
                 sourceTitle:mediaSourceTitle(item),
                 initialLayout:printLayouts[item.id] ?? defaultPrintLayout,
                 initialQuantity:quantities[item.id] ?? 0,
+                allowPrint:item.effectiveWorkflow == .active,
                 onCancel:{previewItem=nil},
                 onConfirm:{qty,layout in
                     quantities[item.id]=qty
@@ -1255,44 +1370,61 @@ struct ProductionMediaContent: View {
     }
 
     @ViewBuilder private var liveDevicesView: some View {
-        let hasDevices = !core.printerSlots.isEmpty || ingest.wlanCameraActive || !ingest.detectedCards.isEmpty
-        if hasDevices {
-            VStack(alignment:.leading,spacing:5) {
-                Text("Live-Geräte").font(.caption.bold()).foregroundStyle(.secondary)
-                ScrollView(.horizontal,showsIndicators:false) {
-                    HStack(spacing:8) {
-                        ForEach(core.printerSlots) { printer in
-                            FTSPrinterLiveTile(slot:printer)
+        let connectedPrinters=core.printerSlots.filter{$0.isConnectedForUI}
+        let unregisteredCards=ingest.detectedCards.filter{!$0.registered}
+        if !connectedPrinters.isEmpty || !sourceChoices.isEmpty || !unregisteredCards.isEmpty {
+            VStack(alignment:.leading,spacing:8) {
+                if !connectedPrinters.isEmpty {
+                    Text("Canon-Drucker · aktuell angeschlossen").font(.caption.bold()).foregroundStyle(.secondary)
+                    ScrollView(.horizontal,showsIndicators:true) {
+                        HStack(spacing:8) {
+                            ForEach(connectedPrinters) { printer in
+                                FTSPrinterLiveTile(slot:printer,consumable:core.consumable(for:printer.name))
+                            }
                         }
-                        if ingest.wlanCameraActive {
-                            FTSCameraLiveTile(
-                                name:ingest.wlanCameraName.isEmpty ? "WLAN-Kamera" : ingest.wlanCameraName,
-                                bars:ingest.wlanCameraBars,
-                                quality:ingest.wlanCameraQuality,
-                                detail:ingest.wlanCameraDetail
-                            )
+                        .padding(.bottom,2)
+                    }
+                }
+
+                if !sourceChoices.isEmpty || !unregisteredCards.isEmpty {
+                    Text("Aktive SD-/WLAN-Quellen").font(.caption.bold()).foregroundStyle(.secondary)
+                    ScrollView(.horizontal,showsIndicators:true) {
+                        HStack(spacing:8) {
+                            ForEach(sourceChoices,id:\.self) { source in
+                                let counts=sourceCounts(source)
+                                V128ActiveSourceTile(
+                                    source:source,
+                                    selected:sourceLabel==source,
+                                    openCount:counts.open,
+                                    printingCount:counts.printing,
+                                    recentDone:counts.recentDone,
+                                    errorCount:counts.error,
+                                    onSelect:{sourceLabel=source}
+                                )
+                            }
+                            ForEach(unregisteredCards) { card in
+                                V80CardRegistrationRow(
+                                    card:card,
+                                    usedLabels:usedCardLabels,
+                                    isScanning:ingest.scanning,
+                                    onReveal:{ ingest.reveal(card:card) },
+                                    onRelease:{
+                                        guard let e=event else{return}
+                                        Task{await ingest.release(card:card,event:e)}
+                                    },
+                                    onRegister:{ label in
+                                        guard let e=event else{return}
+                                        Task{await ingest.register(card:card,label:label,event:e)}
+                                    },
+                                    onReplace:{ label in
+                                        guard let e=event else{return}
+                                        Task{await ingest.register(card:card,label:label,event:e,replaceExisting:true)}
+                                    }
+                                )
+                                .disabled(ingest.scanning)
+                            }
                         }
-                        ForEach(ingest.detectedCards) { card in
-                            V80CardRegistrationRow(
-                                card:card,
-                                usedLabels:usedCardLabels,
-                                isScanning:ingest.scanning,
-                                onReveal:{ ingest.reveal(card:card) },
-                                onRelease:{
-                                    guard let e=event else{return}
-                                    Task{await ingest.release(card:card,event:e)}
-                                },
-                                onRegister:{ label in
-                                    guard let e=event else{return}
-                                    Task{await ingest.register(card:card,label:label,event:e)}
-                                },
-                                onReplace:{ label in
-                                    guard let e=event else{return}
-                                    Task{await ingest.register(card:card,label:label,event:e,replaceExisting:true)}
-                                }
-                            )
-                            .disabled(ingest.scanning)
-                        }
+                        .padding(.bottom,2)
                     }
                 }
             }
@@ -1302,15 +1434,13 @@ struct ProductionMediaContent: View {
     private var sourceToolbar: some View {
         HStack {
             if sourceChoices.isEmpty {
-                Text("Noch keine neuen Fotos verfügbar.")
+                Text("Keine aktive Karte / WLAN-Quelle. Erledigte Fotos verschwinden nach 30 Minuten aus dieser Arbeitsansicht.")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
-                Picker("Quelle",selection:$sourceLabel) {
-                    ForEach(sourceChoices,id:\.self) { source in
-                        Text(source=="W" ? "WLAN-Kamera" : "Karte \(source)").tag(source)
-                    }
-                }
-                .frame(width:220)
+                Text(sourceLabel=="W" ? "WLAN-Kamera" : "Karte \(sourceLabel)")
+                    .font(.headline)
+                Text("· \(visibleItems.count) Foto\(visibleItems.count==1 ? "" : "s")")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             if total>0 {
@@ -1330,8 +1460,8 @@ struct ProductionMediaContent: View {
     }
 
     private var mediaGrid: some View {
-        ScrollView(.vertical,showsIndicators:true) {
-            LazyVGrid(columns:[GridItem(.adaptive(minimum:145),spacing:8)],spacing:8) {
+        ScrollView(.horizontal,showsIndicators:true) {
+            LazyHStack(alignment:.top,spacing:8) {
                 ForEach(visibleItems) { item in
                     V80MediaItemCell(
                         item:item,
@@ -1340,6 +1470,9 @@ struct ProductionMediaContent: View {
                             get:{quantities[item.id] ?? 0},
                             set:{newValue in quantities[item.id]=newValue}
                         ),
+                        statusText:statusText(for:item),
+                        statusColor:statusColor(for:item),
+                        canSelect:item.effectiveWorkflow == .active,
                         onPreview:{previewItem=item},
                         onHide:{
                             quantities.removeValue(forKey:item.id)
@@ -1347,10 +1480,12 @@ struct ProductionMediaContent: View {
                             ingest.hideFromProgram(item)
                         }
                     )
+                    .frame(width:180)
                 }
             }
             .padding(4)
         }
+        .frame(minHeight:215,maxHeight:235)
     }
 
     private func activateAlbum() {
@@ -1463,7 +1598,7 @@ struct ProductionMediaContent: View {
 
     private func normalizeSource(preferNewest:Bool=false) {
         let active=ingest.items
-            .filter{$0.visibleInPrinter}
+            .filter{visibleInActiveWorkArea($0)}
             .sorted{$0.importedAt>$1.importedAt}
         guard let newest=active.first else {
             sourceLabel=""
@@ -1480,6 +1615,8 @@ struct ProductionMediaContent: View {
         core.loadLocalQueue(folderPath:ingest.activation?.folderPath)
         var designRefreshTicks=5
         while !Task.isCancelled {
+            displayClock=Date()
+            normalizeSource()
             if designRefreshTicks>=5 {
                 _=await state.refreshSelectedEventDefinition()
                 designRefreshTicks=0
@@ -1743,6 +1880,9 @@ struct V80MediaItemCell: View {
     let item:V80MediaItem
     let photoNumber:Int
     @Binding var quantity:Int
+    let statusText:String
+    let statusColor:Color
+    let canSelect:Bool
     let onPreview:()->Void
     let onHide:()->Void
     @State private var showHide=false
@@ -1786,32 +1926,39 @@ struct V80MediaItemCell: View {
                 .font(.caption.bold())
                 .lineLimit(1)
             HStack(spacing:5) {
-                Circle().fill(Color.green).frame(width:6,height:6)
-                Text("Neu").font(.caption2.bold()).foregroundStyle(.green)
+                Circle().fill(statusColor).frame(width:6,height:6)
+                Text(statusText).font(.caption2.bold()).foregroundStyle(statusColor).lineLimit(1)
                 Spacer()
                 Text(item.originalName).font(.system(size:9)).foregroundStyle(.secondary).lineLimit(1)
             }
             HStack(spacing:6) {
-                Button {
-                    quantity=max(0,quantity-1)
-                } label: {
-                    Image(systemName:"minus")
+                if canSelect {
+                    Button {
+                        quantity=max(0,quantity-1)
+                    } label: {
+                        Image(systemName:"minus")
+                    }
+                    .controlSize(.small)
+                    .disabled(quantity==0)
+                    Text("\(quantity)").font(.caption.bold().monospacedDigit()).frame(minWidth:18)
+                    Button {
+                        quantity=min(20,quantity+1)
+                    } label: {
+                        Image(systemName:"plus")
+                    }
+                    .controlSize(.small)
+                } else {
+                    Label("Nur Status",systemImage:"clock.arrow.circlepath")
+                        .font(.caption2).foregroundStyle(.secondary)
                 }
-                .controlSize(.small)
-                .disabled(quantity==0)
-                Text("\(quantity)").font(.caption.bold().monospacedDigit()).frame(minWidth:18)
-                Button {
-                    quantity=min(20,quantity+1)
-                } label: {
-                    Image(systemName:"plus")
-                }
-                .controlSize(.small)
                 Spacer()
-                Button(role:.destructive){showHide=true} label:{
-                    Image(systemName:"eye.slash")
+                if canSelect {
+                    Button(role:.destructive){showHide=true} label:{
+                        Image(systemName:"eye.slash")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Aus Programm entfernen")
                 }
-                .buttonStyle(.borderless)
-                .help("Aus Programm entfernen")
             }
         }
         .padding(7)
@@ -1838,6 +1985,7 @@ struct ProductionPickupContent: View {
     @Binding var search:String
     @State private var previewArchive:V80ArchiveRow?
     @State private var issuePickup:V80Pickup?
+    @State private var archiveQuantities:[String:Int]=[:]
 
     var filtered:[V80Pickup] {
         let q=search.trimmingCharacters(in:.whitespacesAndNewlines).uppercased()
@@ -1939,8 +2087,16 @@ struct ProductionPickupContent: View {
                                 }
                                 Spacer()
                                 Button("Foto ansehen"){previewArchive=a}.font(.caption)
-                                Button(core.archiveReprintActionsInFlight.contains(a.id) ? "Wird angelegt …" : "1× nachdrucken") {
-                                    Task{await core.reprintArchived(a,state:state)}
+                                Picker("",selection:Binding(
+                                    get:{archiveQuantities[a.id] ?? 1},
+                                    set:{archiveQuantities[a.id]=max(1,min(20,$0))}
+                                )) {
+                                    ForEach(1...20,id:\.self){n in Text("\(n)×").tag(n)}
+                                }
+                                .labelsHidden()
+                                .frame(width:64)
+                                Button(core.archiveReprintActionsInFlight.contains(a.id) ? "Wird angelegt …" : "\(archiveQuantities[a.id] ?? 1)× nachdrucken") {
+                                    Task{await core.reprintArchived(a,quantity:archiveQuantities[a.id] ?? 1,state:state)}
                                 }
                                 .font(.caption)
                                 .buttonStyle(.borderedProminent)
@@ -2188,6 +2344,7 @@ struct V124ArchivePreviewSheet:View {
     @State private var qrImage:NSImage?
     @State private var digitalStatus="Digitalfoto wird vorbereitet …"
     @State private var digitalURL:URL?
+    @State private var reprintQuantity=1
 
     private func prepareDigitalQR() async {
         do {
@@ -2283,8 +2440,12 @@ struct V124ArchivePreviewSheet:View {
                 Text("Der Archiv-Eintrag bleibt unverändert. Ein Nachdruck wird als neuer Auftrag angelegt.")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button(core.archiveReprintActionsInFlight.contains(row.id) ? "Wird angelegt …" : "1× nachdrucken") {
-                    Task{await core.reprintArchived(row,state:state)}
+                Stepper(value:$reprintQuantity,in:1...20) {
+                    Text("\(reprintQuantity)×").font(.headline.monospacedDigit())
+                }
+                .frame(width:120)
+                Button(core.archiveReprintActionsInFlight.contains(row.id) ? "Wird angelegt …" : "\(reprintQuantity)× nachdrucken") {
+                    Task{await core.reprintArchived(row,quantity:reprintQuantity,state:state)}
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(core.archiveReprintActionsInFlight.contains(row.id))

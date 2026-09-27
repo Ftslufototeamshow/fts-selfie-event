@@ -210,6 +210,27 @@ struct LocalPrinterSlot: Identifiable, Hashable {
     var lastError: String?
     var connection: String
     var id: String { name }
+
+    var isConnectedForUI:Bool {
+        let c=connection.lowercased()
+        if state=="OFFLINE" { return false }
+        if c.contains("nicht") && (c.contains("erreichbar") || c.contains("angeschlossen")) { return false }
+        if c.contains("offline") { return false }
+        return !connection.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty
+    }
+
+    var transportLabel:String {
+        let c=connection.lowercased()
+        if c.contains("usb") || c.contains("ippusb") || c.contains("ipp-usb") { return "USB" }
+        if c.contains("airprint") || c.contains("wlan") || c.contains("dnssd") { return "WLAN" }
+        return "Drucker"
+    }
+
+    var shortDisplayName:String {
+        let bits=name.split(separator:" ")
+        if bits.count>=2 { return bits.suffix(2).joined(separator:" ") }
+        return name
+    }
 }
 
 struct V80HostPowerStatus: Hashable {
@@ -1113,8 +1134,8 @@ enum V80MacSpooler {
 
 @MainActor
 final class ProductionCore: ObservableObject {
-    static let version = "1.1.36-mobile-admin-remote-control"
-    static let build = 127
+    static let version = "1.1.37-dynamic-fleet-media"
+    static let build = 128
 
     @Published var workUnits: [V80WorkUnit] = []
     @Published var printerNodes: [V80PrinterNode] = []
@@ -2631,8 +2652,9 @@ final class ProductionCore: ObservableObject {
         )
     }
 
-    func reprintArchived(_ row:V80ArchiveRow,state:AppState) async {
+    func reprintArchived(_ row:V80ArchiveRow,quantity:Int=1,state:AppState) async {
         guard !archiveReprintActionsInFlight.contains(row.id) else{return}
+        let requestedQuantity=max(1,min(20,quantity))
         guard !loadedFolderPath.isEmpty else {
             lastError="Für einen Archiv-Nachdruck zuerst das lokale Tagesalbum dieses Events öffnen."
             return
@@ -2662,7 +2684,7 @@ final class ProductionCore: ObservableObject {
                     .appendingPathComponent("Archiv/Nachdruck",isDirectory:true)
                 try FileManager.default.createDirectory(at:reprintDir,withIntermediateDirectories:true)
                 let ext=URL(fileURLWithPath:storagePath).pathExtension.isEmpty ? "jpg" : URL(fileURLWithPath:storagePath).pathExtension
-                let dest=reprintDir.appendingPathComponent("(row.customer_code)-(UUID().uuidString.prefix(8)).(ext)")
+                let dest=reprintDir.appendingPathComponent("\(row.customer_code)-\(UUID().uuidString.prefix(8)).\(ext)")
                 try data.write(to:dest,options:.atomic)
                 let digest=SHA256.hash(data:data).map{String(format:"%02x",$0)}.joined()
                 mediaItem=V80MediaItem(
@@ -2685,12 +2707,12 @@ final class ProductionCore: ObservableObject {
 
             if let code=await createLocalJob(
                 state:state,
-                media:[mediaItem:1],
+                media:[mediaItem:requestedQuantity],
                 sourceType:"LOCAL",
                 sourceLabel:"R",
                 eventDay:day
             ) {
-                archiveStatus="Archivfoto (row.customer_code) als Nachdruck (code) angelegt."
+                archiveStatus="Archivfoto \(row.customer_code) als \(requestedQuantity)× Nachdruck \(code) angelegt."
                 lastError=nil
                 if autoDispatch { dispatchAvailable(state:state) }
             }
