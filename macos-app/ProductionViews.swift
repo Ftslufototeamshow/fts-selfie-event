@@ -412,6 +412,7 @@ private struct FTSCameraLiveTile: View {
 }
 
 struct V80PhotoPrintPreviewSheet: View {
+    @ObservedObject var state:AppState
     let item:V80MediaItem
     let event:EventRow?
     let photoNumber:Int
@@ -427,8 +428,13 @@ struct V80PhotoPrintPreviewSheet: View {
     @State private var renderingPreview=false
     @State private var dragStartX:Double?
     @State private var dragStartY:Double?
+    @State private var qrImage:NSImage?
+    @State private var digitalStatus="Digitalfoto wird vorbereitet …"
+    @State private var digitalURL:URL?
+    @State private var digitalKey=""
 
     init(
+        state:AppState,
         item:V80MediaItem,
         event:EventRow?,
         photoNumber:Int,
@@ -438,6 +444,7 @@ struct V80PhotoPrintPreviewSheet: View {
         onCancel:@escaping()->Void,
         onConfirm:@escaping(Int,V80PrintLayout)->Void
     ) {
+        self.state=state
         self.item=item
         self.event=event
         self.photoNumber=photoNumber
@@ -503,6 +510,30 @@ struct V80PhotoPrintPreviewSheet: View {
             if let fallback=NSImage(contentsOfFile:path) {
                 previewImage=V80PrintLayoutComposer.apply(fallback,layout:layout)
             }
+        }
+    }
+
+    private func refreshDigitalQR(key:String) async {
+        do {
+            try await Task.sleep(for:.milliseconds(650))
+            try Task.checkCancellation()
+            guard digitalKey != key,let image=previewImage else{return}
+            digitalStatus="Digitalfoto wird vorbereitet …"
+            let url=try await state.createDigitalLink(
+                image:image,
+                fileName:"FTS-\(sourceTitle.replacingOccurrences(of:" ",with:"-"))-\(String(format:"%03d",photoNumber)).jpg"
+            )
+            try Task.checkCancellation()
+            digitalURL=url
+            qrImage=FTSQRCodeRenderer.image(for:url.absoluteString)
+            digitalKey=key
+            digitalStatus="Scannen und digitales Foto herunterladen · Link 7 Tage gültig."
+        } catch is CancellationError {
+            return
+        } catch {
+            qrImage=nil
+            digitalURL=nil
+            digitalStatus="QR derzeit nicht verfügbar: \(error.localizedDescription)"
         }
     }
 
@@ -650,6 +681,36 @@ struct V80PhotoPrintPreviewSheet: View {
                 Text("Der Auftrag wird erst nach „OK · Zum Druck“ angelegt. Die Mengenwahl allein startet keinen Druck.")
                     .font(.caption).foregroundStyle(.secondary)
 
+                GroupBox("Digitalfoto per QR · nur große Ansicht") {
+                    HStack(alignment:.center,spacing:10) {
+                        if let qrImage {
+                            Image(nsImage:qrImage)
+                                .resizable()
+                                .interpolation(.none)
+                                .frame(width:104,height:104)
+                                .background(.white)
+                                .padding(4)
+                                .background(.white)
+                                .clipShape(RoundedRectangle(cornerRadius:8))
+                        } else {
+                            ZStack{
+                                RoundedRectangle(cornerRadius:8).fill(Color.secondary.opacity(0.08))
+                                ProgressView().controlSize(.small)
+                            }.frame(width:112,height:112)
+                        }
+                        VStack(alignment:.leading,spacing:5) {
+                            Text("Digital mitnehmen").font(.caption.bold())
+                            Text(digitalStatus).font(.caption2).foregroundStyle(.secondary)
+                            if digitalURL != nil {
+                                Label("QR ist nicht Bestandteil des Druckfotos.",systemImage:"checkmark.shield.fill")
+                                    .font(.caption2).foregroundStyle(.green)
+                            }
+                            Text("Nur für den bezahlten Kunden zeigen.")
+                                .font(.caption2.bold()).foregroundStyle(.orange)
+                        }
+                    }
+                }
+
                 Spacer()
 
                 HStack {
@@ -668,7 +729,10 @@ struct V80PhotoPrintPreviewSheet: View {
         }
         .padding(16)
         .frame(minWidth:940,minHeight:680)
-        .task(id:previewKey){await refreshPreview()}
+        .task(id:previewKey){
+            await refreshPreview()
+            if !Task.isCancelled { await refreshDigitalQR(key:previewKey) }
+        }
     }
 }
 
@@ -775,6 +839,7 @@ struct ProductionMediaContent: View {
         }
         .sheet(item:$previewItem) { item in
             V80PhotoPrintPreviewSheet(
+                state:state,
                 item:item,
                 event:event,
                 photoNumber:stablePhotoNumber(item),
@@ -1572,6 +1637,32 @@ struct V124ArchivePreviewSheet:View {
     @ObservedObject var state:AppState
     @ObservedObject var core:ProductionCore
     @Environment(\.dismiss) private var dismiss
+    @State private var qrImage:NSImage?
+    @State private var digitalStatus="Digitalfoto wird vorbereitet …"
+    @State private var digitalURL:URL?
+
+    private func prepareDigitalQR() async {
+        do {
+            let url:URL
+            let name="FTS-Archiv-\(row.customer_code).jpg"
+            if let local=core.localArchivedPreviewPath(for:row),
+               let image=NSImage(contentsOfFile:local) {
+                url=try await state.createDigitalLink(image:image,fileName:name)
+            } else if let path=core.archivedServerPhoto(for:row)?.designed_path {
+                let data=try await FTSAPI.shared.imageData(storagePath:path)
+                url=try await state.createDigitalLink(jpegData:data,fileName:name)
+            } else {
+                throw NSError(domain:"FTSPrinter",code:254,userInfo:[NSLocalizedDescriptionKey:"Archivfoto ist nicht als Datei verfügbar."])
+            }
+            digitalURL=url
+            qrImage=FTSQRCodeRenderer.image(for:url.absoluteString)
+            digitalStatus="Scannen und digitales Foto herunterladen · Link 7 Tage gültig."
+        } catch {
+            qrImage=nil
+            digitalURL=nil
+            digitalStatus="QR derzeit nicht verfügbar: \(error.localizedDescription)"
+        }
+    }
 
     var body:some View {
         VStack(alignment:.leading,spacing:12) {
@@ -1614,6 +1705,32 @@ struct V124ArchivePreviewSheet:View {
             .background(Color.black.opacity(0.10))
             .clipShape(RoundedRectangle(cornerRadius:12))
 
+            GroupBox("Digitalfoto per QR") {
+                HStack(spacing:12) {
+                    if let qrImage {
+                        Image(nsImage:qrImage)
+                            .resizable()
+                            .interpolation(.none)
+                            .frame(width:112,height:112)
+                            .padding(5)
+                            .background(.white)
+                            .clipShape(RoundedRectangle(cornerRadius:8))
+                    } else {
+                        ZStack{RoundedRectangle(cornerRadius:8).fill(Color.secondary.opacity(0.08));ProgressView()}
+                            .frame(width:122,height:122)
+                    }
+                    VStack(alignment:.leading,spacing:5) {
+                        Text("Digital mitnehmen").font(.headline)
+                        Text(digitalStatus).font(.caption).foregroundStyle(.secondary)
+                        if digitalURL != nil {
+                            Text("QR ist nur in dieser großen Ansicht sichtbar und niemals auf dem Ausdruck.")
+                                .font(.caption2).foregroundStyle(.green)
+                        }
+                    }
+                    Spacer()
+                }
+            }
+
             HStack {
                 Text("Der Archiv-Eintrag bleibt unverändert. Ein Nachdruck wird als neuer Auftrag angelegt.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -1625,6 +1742,7 @@ struct V124ArchivePreviewSheet:View {
                 .disabled(core.archiveReprintActionsInFlight.contains(row.id))
             }
         }.padding(16)
+        .task(id:row.id){await prepareDigitalQR()}
     }
 }
 

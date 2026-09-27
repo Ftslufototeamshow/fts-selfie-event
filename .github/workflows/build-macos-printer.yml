@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.34-archive-recall.zip
-            dist/FTS-Printer-macOS-v0.3.34-archive-recall.dmg
+            dist/FTS-Printer-macOS-v0.3.35-digital-status-header.zip
+            dist/FTS-Printer-macOS-v0.3.35-digital-status-header.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.34-archive-recall"
+          TAG="fts-printer-mac-v0.3.35-digital-status-header"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.34-archive-recall.zip dist/FTS-Printer-macOS-v0.3.34-archive-recall.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.35-digital-status-header.zip dist/FTS-Printer-macOS-v0.3.35-digital-status-header.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.34-archive-recall.zip dist/FTS-Printer-macOS-v0.3.34-archive-recall.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.34 · Archive Recall" --notes "Build 124: Macht abgeholte/archivierte Fotos direkt in Kundenabholung sichtbar und durchsuchbar. Archivierte Selfies laden ihre gespeicherte Druckdatei aus Supabase; lokale SD/WLAN-Aufträge verwenden die unveränderten Dateien aus Archiv/Abgegeben bzw. Kamera Original. Ein Archivfoto kann groß angesehen und mit '1× nachdrucken' als neuer, normal gezählter lokaler Auftrag angelegt werden; der alte Archiv-Eintrag und das Original bleiben unverändert. Die Archivliste wurde auf 500 Einträge erweitert. Canon-Druckpfad, SELPHY-Spiegelkorrektur, Materialzähler, SD A–E, Mehrdrucker-Verteilung und Banner/Rand bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.35-digital-status-header.zip dist/FTS-Printer-macOS-v0.3.35-digital-status-header.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.35 · Digital QR + Status Header" --notes "Build 125: Ergänzt ausschließlich die sichtbaren Event-Bedienfunktionen: In der großen Druckvorschau und großen Archivansicht wird automatisch ein geschützter QR-Code für das digitale Foto erzeugt; der QR ist reine UI und wird nie in das Druckbild gerendert. Der persönliche Download-Link ist 7 Tage gültig. Oben werden Login-Startzeit und laufende Login-Dauer angezeigt, der Mitarbeiter-Avatar kann per Klick gesetzt/geändert werden, und die kompakte Eventleiste zeigt Mac-Akku/Netzstrom, Drucker-Verbindung (USB/WLAN) sowie einen ehrlichen SELPHY-Akkuhinweis über das Canon-Display. Canon-Spooler, SELPHY-Spiegelkorrektur, Materialzähler, SD A-E, Mehrdrucker-Verteilung, Archiv-Nachdruck und Banner/Rand bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.34-archive-recall"
+          CURRENT="fts-printer-mac-v0.3.35-digital-status-header"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

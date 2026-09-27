@@ -4,6 +4,8 @@ import Foundation
 import Security
 import CryptoKit
 import ImageIO
+import CoreImage
+import CoreImage.CIFilterBuiltins
 
 // MARK: - Configuration
 
@@ -71,8 +73,18 @@ struct SessionInfo: Codable, Hashable {
     let display_name: String?
     let role: String?
     let expires_at: String?
+    let logged_in_at: String?
+    let avatar_path: String?
     let valid: Bool?
     var roleLabel: String { role == "printer_admin" ? "Printer-Administrator" : "Mitarbeiter" }
+}
+
+struct V125DigitalResponse: Codable, Hashable {
+    let ok: Bool?
+    let url: String?
+    let expires_at: String?
+    let avatar_path: String?
+    let error: String?
 }
 
 struct EventRow: Codable, Identifiable, Hashable {
@@ -269,6 +281,28 @@ final class FTSAPI {
         throw lastError ?? NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"FTS-Server vorübergehend nicht erreichbar."])
     }
 
+    func edge<T:Decodable>(_ name:String,body:[String:Any],as type:T.Type=T.self) async throws -> T {
+        let payload=try JSONSerialization.data(withJSONObject:body)
+        var req=URLRequest(url:FTSConfig.supabaseURL.appendingPathComponent("functions/v1/\(name)"))
+        req.httpMethod="POST"
+        req.timeoutInterval=25
+        req.setValue(FTSConfig.publishableKey,forHTTPHeaderField:"apikey")
+        req.setValue("Bearer \(FTSConfig.publishableKey)",forHTTPHeaderField:"Authorization")
+        req.setValue("application/json",forHTTPHeaderField:"Content-Type")
+        req.httpBody=payload
+        let (data,response)=try await URLSession.shared.data(for:req)
+        guard let http=response as? HTTPURLResponse else {
+            throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine gültige Serverantwort."])
+        }
+        if (200..<300).contains(http.statusCode) {
+            return try decoder.decode(T.self,from:data)
+        }
+        let edge=(try? decoder.decode(V125DigitalResponse.self,from:data))
+        throw NSError(domain:"FTSPrinter",code:http.statusCode,userInfo:[
+            NSLocalizedDescriptionKey:edge?.error ?? String(data:data,encoding:.utf8) ?? "Digitaldienst nicht erreichbar."
+        ])
+    }
+
     func imageData(storagePath: String) async throws -> Data {
         let encoded = storagePath.split(separator: "/").map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }.joined(separator: "/")
         let url = FTSConfig.supabaseURL.appendingPathComponent("storage/v1/object/public/\(FTSConfig.liveBucket)/\(encoded)")
@@ -284,6 +318,47 @@ final class FTSAPI {
     func imageURL(storagePath: String) -> URL? {
         let encoded = storagePath.split(separator: "/").map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }.joined(separator: "/")
         return URL(string: "\(FTSConfig.supabaseURL.absoluteString)/storage/v1/object/public/\(FTSConfig.liveBucket)/\(encoded)")
+    }
+}
+
+enum FTSDateTools {
+    static func parseISO(_ text:String?)->Date? {
+        guard let text,!text.isEmpty else{return nil}
+        let fractional=ISO8601DateFormatter()
+        fractional.formatOptions=[.withInternetDateTime,.withFractionalSeconds]
+        if let d=fractional.date(from:text){return d}
+        let plain=ISO8601DateFormatter()
+        plain.formatOptions=[.withInternetDateTime]
+        return plain.date(from:text)
+    }
+}
+
+enum FTSImageCodec {
+    static func jpegData(_ image:NSImage,maxDimension:CGFloat=1800,quality:CGFloat=0.90)->Data? {
+        let w=max(1,image.size.width),h=max(1,image.size.height)
+        let scale=min(1,maxDimension/max(w,h))
+        let target=NSSize(width:max(1,round(w*scale)),height:max(1,round(h*scale)))
+        let rendered=NSImage(size:target)
+        rendered.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        image.draw(in:NSRect(origin:.zero,size:target),from:.zero,operation:.copy,fraction:1)
+        rendered.unlockFocus()
+        guard let tiff=rendered.tiffRepresentation,
+              let rep=NSBitmapImageRep(data:tiff) else{return nil}
+        return rep.representation(using:.jpeg,properties:[.compressionFactor:quality])
+    }
+}
+
+enum FTSQRCodeRenderer {
+    static func image(for text:String)->NSImage? {
+        let filter=CIFilter.qrCodeGenerator()
+        filter.message=Data(text.utf8)
+        filter.correctionLevel="M"
+        guard let output=filter.outputImage?.transformed(by:CGAffineTransform(scaleX:8,y:8)) else{return nil}
+        let rep=NSCIImageRep(ciImage:output)
+        let image=NSImage(size:rep.size)
+        image.addRepresentation(rep)
+        return image
     }
 }
 
@@ -677,7 +752,7 @@ final class AppState: ObservableObject {
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
-    static let appVersion = "0.3.34-archive-recall"
+    static let appVersion = "0.3.35-digital-status-header"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -719,7 +794,7 @@ final class AppState: ObservableObject {
         }
         if let session = sessionToken, !session.isEmpty {
             do {
-                let info: SessionInfo = try await api.rpc("fts_printer_validate_session_v72", body: ["p_device_token":dev,"p_session_token":session])
+                let info: SessionInfo = try await api.rpc("fts_printer_validate_session_v125", body: ["p_device_token":dev,"p_session_token":session])
                 if info.valid == true {
                     currentUser = info
                     if await loadEvents() {
@@ -764,7 +839,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.34-archive-recall"
+                "p_user_agent":"FTS Printer macOS 0.3.35-digital-status-header"
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -792,10 +867,10 @@ final class AppState: ObservableObject {
         guard let dev=deviceToken else{return}
         busy=true;defer{busy=false}
         do {
-            let info:SessionInfo = try await api.rpc("fts_printer_login_v72",body:[
+            let info:SessionInfo = try await api.rpc("fts_printer_login_v125",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.34-archive-recall"
+                "p_user_agent":"FTS Printer macOS 0.3.35-digital-status-header"
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session
@@ -807,6 +882,72 @@ final class AppState: ObservableObject {
                 phase = .staffLogin
             }
         } catch { errorMessage=error.localizedDescription }
+    }
+
+    func loginSummary(at now:Date)->String {
+        guard let started=FTSDateTools.parseISO(currentUser?.logged_in_at) else{return "Login aktiv"}
+        let seconds=max(0,Int(now.timeIntervalSince(started)))
+        let hours=seconds/3600
+        let minutes=(seconds%3600)/60
+        let secs=seconds%60
+        let startText=started.formatted(date:.omitted,time:.shortened)
+        return "Login \(startText) · \(String(format:"%02d:%02d:%02d",hours,minutes,secs))"
+    }
+
+    func createDigitalLink(jpegData:Data,fileName:String) async throws -> URL {
+        guard let dev=deviceToken,let session=sessionToken,!selectedEventToken.isEmpty else {
+            throw NSError(domain:"FTSPrinter",code:250,userInfo:[NSLocalizedDescriptionKey:"Printer-Anmeldung oder Event fehlt."])
+        }
+        let response:V125DigitalResponse = try await api.edge("fts-printer-digital-v125",body:[
+            "action":"create",
+            "device_token":dev,
+            "session_token":session,
+            "event_token":selectedEventToken,
+            "file_name":fileName,
+            "image_base64":jpegData.base64EncodedString()
+        ])
+        guard response.ok==true,let text=response.url,let url=URL(string:text) else {
+            throw NSError(domain:"FTSPrinter",code:251,userInfo:[NSLocalizedDescriptionKey:response.error ?? "Digital-Link konnte nicht erstellt werden."])
+        }
+        return url
+    }
+
+    func createDigitalLink(image:NSImage,fileName:String) async throws -> URL {
+        guard let data=FTSImageCodec.jpegData(image,maxDimension:1800,quality:0.92) else {
+            throw NSError(domain:"FTSPrinter",code:252,userInfo:[NSLocalizedDescriptionKey:"Digitalfoto konnte nicht vorbereitet werden."])
+        }
+        return try await createDigitalLink(jpegData:data,fileName:fileName)
+    }
+
+    func chooseStaffAvatar() async {
+        guard let dev=deviceToken,let session=sessionToken else{return}
+        let panel=NSOpenPanel()
+        panel.title="Mitarbeiterfoto auswählen"
+        panel.message="Wähle ein Foto für den Mitarbeiter-Avatar."
+        panel.canChooseFiles=true
+        panel.canChooseDirectories=false
+        panel.allowsMultipleSelection=false
+        panel.allowedFileTypes=["jpg","jpeg","png","heic","heif"]
+        guard panel.runModal()==.OK,let url=panel.url,
+              let image=NSImage(contentsOf:url),
+              let data=FTSImageCodec.jpegData(image,maxDimension:700,quality:0.88) else{return}
+        do {
+            let response:V125DigitalResponse = try await api.edge("fts-printer-digital-v125",body:[
+                "action":"avatar",
+                "device_token":dev,
+                "session_token":session,
+                "image_base64":data.base64EncodedString()
+            ])
+            guard response.ok==true else {
+                throw NSError(domain:"FTSPrinter",code:253,userInfo:[NSLocalizedDescriptionKey:response.error ?? "Avatar konnte nicht gespeichert werden."])
+            }
+            let info:SessionInfo = try await api.rpc("fts_printer_validate_session_v125",body:[
+                "p_device_token":dev,"p_session_token":session
+            ])
+            if info.valid==true { currentUser=info }
+        } catch {
+            errorMessage=error.localizedDescription
+        }
     }
 
     func switchStaff() async {
@@ -1406,21 +1547,28 @@ struct MainView: View {
                     Text("Professionelle Event-Druckstation").font(.caption).foregroundStyle(.white.opacity(0.8))
                 }
                 Spacer()
-                HStack(spacing:14){
+                HStack(spacing:12){
                     TimelineView(.periodic(from:.now,by:1)) { context in
-                        HStack(spacing:6){
-                            Image(systemName:"clock.fill")
-                                .font(.caption)
-                                .foregroundStyle(FTSTheme.gold)
-                            Text(context.date,format:.dateTime.hour().minute().second())
-                                .font(.system(size:17,weight:.bold,design:.monospaced))
-                                .foregroundStyle(.white)
+                        VStack(alignment:.trailing,spacing:2){
+                            HStack(spacing:6){
+                                Image(systemName:"clock.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(FTSTheme.gold)
+                                Text(context.date,format:.dateTime.hour().minute().second())
+                                    .font(.system(size:17,weight:.bold,design:.monospaced))
+                                    .foregroundStyle(.white)
+                                    .monospacedDigit()
+                            }
+                            Text(state.loginSummary(at:context.date))
+                                .font(.system(size:10,weight:.medium,design:.monospaced))
+                                .foregroundStyle(.white.opacity(0.72))
                                 .monospacedDigit()
                         }
                     }
                     Rectangle()
                         .fill(Color.white.opacity(0.18))
-                        .frame(width:1,height:30)
+                        .frame(width:1,height:38)
+                    FTSStaffAvatarView(state:state)
                     VStack(alignment:.trailing,spacing:2){
                         Text(state.currentUser?.display_name ?? "").font(.headline)
                         Text(state.currentUser?.roleLabel ?? "").font(.caption).foregroundStyle(FTSTheme.muted)
@@ -1431,23 +1579,28 @@ struct MainView: View {
     }
 
     func eventBar(_ event:EventRow)->some View {
-        HStack(spacing:12){
-            VStack(alignment:.leading,spacing:3){
-                Text("Event auswählen").font(.caption.bold()).foregroundStyle(FTSTheme.gold)
+        HStack(spacing:8){
+            VStack(alignment:.leading,spacing:2){
+                Text("Event").font(.caption.bold()).foregroundStyle(FTSTheme.gold)
                 Picker("",selection:Binding(get:{state.selectedEventToken},set:{v in Task{await state.selectEvent(v)}})){
                     ForEach(state.events){e in Text(e.event_title).tag(e.event_token)}
-                }.labelsHidden().frame(minWidth:300)
+                }
+                .labelsHidden()
+                .frame(width:255)
                 Text([event.location,event.event_date].compactMap{$0}.joined(separator:" · "))
                     .font(.caption2).foregroundStyle(FTSTheme.muted).lineLimit(1)
+                    .frame(width:255,alignment:.leading)
             }
-            Spacer()
+            Spacer(minLength:6)
+            FTSTopOperationalStatus(core:state.production)
             StockPill(stock:state.stock)
-            Button{Task{_ = await state.loadEvents()}} label:{Label("Events neu laden",systemImage:"arrow.clockwise")}
+            Button{Task{_ = await state.loadEvents()}} label:{Label("Neu laden",systemImage:"arrow.clockwise")}
                 .buttonStyle(.borderedProminent)
-            Button{Task{await state.switchStaff()}} label:{Label("Mitarbeiter wechseln",systemImage:"person.2.fill")}
+            Button{Task{await state.switchStaff()}} label:{Label("Mitarbeiter",systemImage:"person.2.fill")}
                 .buttonStyle(.borderedProminent)
         }
-        .padding(12)
+        .padding(.horizontal,10)
+        .padding(.vertical,7)
         .background(FTSTheme.panelRaised)
         .overlay(Rectangle().frame(height:1).foregroundStyle(FTSTheme.gold.opacity(0.22)),alignment:.bottom)
     }
@@ -1640,6 +1793,119 @@ struct FTSHelpView:View {
     }
 }
 
+
+struct FTSStaffAvatarView:View {
+    @ObservedObject var state:AppState
+
+    private var initials:String {
+        let parts=(state.currentUser?.display_name ?? "?").split(separator:" ")
+        let letters=parts.prefix(2).compactMap{$0.first}.map(String.init).joined()
+        return letters.isEmpty ? "?" : letters.uppercased()
+    }
+
+    var body:some View {
+        Button {
+            Task{await state.chooseStaffAvatar()}
+        } label: {
+            Group {
+                if let path=state.currentUser?.avatar_path,
+                   !path.isEmpty,
+                   let url=FTSAPI.shared.imageURL(storagePath:path) {
+                    AsyncImage(url:url) { phase in
+                        if case .success(let image)=phase {
+                            image.resizable().scaledToFill()
+                        } else {
+                            ZStack{Color.white.opacity(0.12);Text(initials).font(.caption.bold()).foregroundStyle(.white)}
+                        }
+                    }
+                } else {
+                    ZStack{Color.white.opacity(0.12);Text(initials).font(.caption.bold()).foregroundStyle(.white)}
+                }
+            }
+            .frame(width:40,height:40)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(FTSTheme.gold.opacity(0.8),lineWidth:1))
+            .overlay(alignment:.bottomTrailing){
+                Image(systemName:"camera.fill")
+                    .font(.system(size:8))
+                    .padding(3)
+                    .background(FTSTheme.cyan)
+                    .foregroundStyle(.black)
+                    .clipShape(Circle())
+            }
+        }
+        .buttonStyle(.plain)
+        .help("Mitarbeiterfoto auswählen oder ändern")
+    }
+}
+
+struct FTSTopOperationalStatus:View {
+    @ObservedObject var core:ProductionCore
+
+    private var printer:LocalPrinterSlot? {
+        core.printerSlots.first(where:{$0.enabled}) ?? core.printerSlots.first
+    }
+
+    private var laptopText:String {
+        if core.hostPower.hasBattery {
+            let p=core.hostPower.percentage.map{"\($0)%"} ?? "—"
+            return core.hostPower.onACPower ? "Mac \(p) · Netz" : "Mac \(p)"
+        }
+        return core.hostPower.onACPower ? "Mac · Netz" : "Mac · —"
+    }
+
+    private var laptopColor:Color {
+        if core.hostPower.critical{return .red}
+        if core.hostPower.warning{return .orange}
+        return .green
+    }
+
+    private var printerText:String {
+        guard let p=printer else{return "Drucker · —"}
+        let c=p.connection.lowercased()
+        let link=c.contains("airprint") || c.contains("wlan") ? "WLAN" : (c.contains("usb") ? "USB" : "Link")
+        let state=["IDLE","READY"].contains(p.state) ? "bereit" : p.state.lowercased()
+        return "\(link) · \(state)"
+    }
+
+    private var printerColor:Color {
+        guard let p=printer else{return .secondary}
+        if p.state=="ERROR"{return .red}
+        if p.state=="OFFLINE"{return .orange}
+        return .green
+    }
+
+    private var hasSelphy:Bool {
+        core.printerSlots.contains{
+            let n=$0.name.lowercased()
+            return n.contains("selphy") || n.contains("cp1500")
+        }
+    }
+
+    @ViewBuilder
+    private func chip(_ text:String,icon:String,color:Color)->some View {
+        HStack(spacing:4){
+            Image(systemName:icon)
+            Text(text).lineLimit(1)
+        }
+        .font(.caption2.bold())
+        .padding(.horizontal,7)
+        .padding(.vertical,5)
+        .background(color.opacity(0.13))
+        .foregroundStyle(color)
+        .clipShape(Capsule())
+    }
+
+    var body:some View {
+        HStack(spacing:5) {
+            chip(laptopText,icon:core.hostPower.onACPower ? "powerplug.fill" : "battery.50",color:laptopColor)
+            chip(printerText,icon:"wifi",color:printerColor)
+            if hasSelphy {
+                chip("SELPHY Akku · Display",icon:"battery.50",color:.orange)
+            }
+        }
+    }
+}
 
 struct StockPill:View{
     let stock:StockSnapshot?
