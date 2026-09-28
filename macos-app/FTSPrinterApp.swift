@@ -232,6 +232,14 @@ struct APIErrorPayload: Codable { let message: String?; let hint: String?; let d
 final class FTSAPI {
     static let shared = FTSAPI()
     private let decoder = JSONDecoder()
+    // Event banners/logos are reused for many camera photos. Keep their bytes in
+    // memory so every preview/print does not wait on Supabase again.
+    private let imageCache = NSCache<NSString,NSData>()
+
+    init() {
+        imageCache.countLimit=80
+        imageCache.totalCostLimit=96*1024*1024
+    }
 
     func rpc<T: Decodable>(_ name: String, body: [String: Any], as type: T.Type = T.self) async throws -> T {
         let payload=try JSONSerialization.data(withJSONObject: body)
@@ -304,6 +312,10 @@ final class FTSAPI {
     }
 
     func imageData(storagePath: String) async throws -> Data {
+        let cacheKey=storagePath as NSString
+        if let cached=imageCache.object(forKey:cacheKey) {
+            return cached as Data
+        }
         let encoded = storagePath.split(separator: "/").map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }.joined(separator: "/")
         let url = FTSConfig.supabaseURL.appendingPathComponent("storage/v1/object/public/\(FTSConfig.liveBucket)/\(encoded)")
         var req=URLRequest(url:url)
@@ -312,6 +324,7 @@ final class FTSAPI {
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             throw NSError(domain: "FTSPrinter", code: -1, userInfo: [NSLocalizedDescriptionKey: "Foto konnte nicht geladen werden."])
         }
+        imageCache.setObject(data as NSData,forKey:cacheKey,cost:data.count)
         return data
     }
 
@@ -753,10 +766,15 @@ final class AppState: ObservableObject {
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
     static let appVersion: String = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.45"
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.46"
         let value=raw.trimmingCharacters(in:.whitespacesAndNewlines)
-        return value.isEmpty ? "0.3.45" : value
+        return value.isEmpty ? "0.3.46" : value
     }()
+    static let appBuild: Int = {
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "136"
+        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 136
+    }()
+    static var userAgent:String { "FTS Printer macOS \(appVersion) Build \(appBuild)" }
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -843,7 +861,7 @@ final class AppState: ObservableObject {
                 "p_user_id":admin.user_id,
                 "p_code":code,
                 "p_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.41-card-material-controls"
+                "p_user_agent":Self.userAgent
             ])
             liveDeviceToken=token
             _ = Keychain.set(token,key:"deviceToken")
@@ -874,7 +892,7 @@ final class AppState: ObservableObject {
             let info:SessionInfo = try await api.rpc("fts_printer_login_v125",body:[
                 "p_device_token":dev,"p_user_id":user.user_id,"p_code":code,
                 "p_device_label":"FTS Printer · \(Host.current().localizedName ?? "Mac")",
-                "p_user_agent":"FTS Printer macOS 0.3.41-card-material-controls"
+                "p_user_agent":Self.userAgent
             ])
             guard let session=info.session_token else{throw NSError(domain:"FTSPrinter",code:-1,userInfo:[NSLocalizedDescriptionKey:"Keine Printer-Sitzung erhalten."])}
             liveSessionToken=session

@@ -111,12 +111,14 @@ enum FTSGreenScreenStore {
 @MainActor
 enum FTSPhotoEffectsV132 {
     private static let ciContext=CIContext(options:[.cacheIntermediates:true])
+    private static let personMaskCache=NSCache<NSString,CIImage>()
 
     static func processedImage(
         source:NSImage,
         event:EventRow,
         effect:FTSPhotoEffect,
-        greenScreenSettings:FTSGreenScreenSettings?=nil
+        greenScreenSettings:FTSGreenScreenSettings?=nil,
+        cacheKey:String?=nil
     )->NSImage {
         let green=greenScreenSettings ?? FTSGreenScreenStore.settings(eventToken:event.event_token)
         if effect == .normal && !green.enabled { return source }
@@ -126,7 +128,9 @@ enum FTSPhotoEffectsV132 {
         let extent=original.extent
         var result=original
         let needsPersonMask = green.enabled || effect == .comic
-        let mask = needsPersonMask ? personMask(cgImage:cg,extent:extent,softness:green.edgeSoftness) : nil
+        let mask = needsPersonMask
+            ? personMask(cgImage:cg,extent:extent,softness:green.edgeSoftness,cacheKey:cacheKey)
+            : nil
 
         if effect == .comic {
             let comic=comicImage(original)
@@ -148,7 +152,12 @@ enum FTSPhotoEffectsV132 {
         return NSImage(cgImage:out,size:source.size)
     }
 
-    private static func personMask(cgImage:CGImage,extent:CGRect,softness:Double)->CIImage? {
+    private static func personMask(cgImage:CGImage,extent:CGRect,softness:Double,cacheKey:String?)->CIImage? {
+        let key=cacheKey.map{
+            "\($0)|\(cgImage.width)x\(cgImage.height)|\(String(format:"%.2f",softness))" as NSString
+        }
+        if let key,let cached=personMaskCache.object(forKey:key) { return cached }
+
         let request=VNGeneratePersonSegmentationRequest()
         request.qualityLevel = .accurate
         request.outputPixelFormat = kCVPixelFormatType_OneComponent8
@@ -165,6 +174,9 @@ enum FTSPhotoEffectsV132 {
                     kCIInputRadiusKey:max(0,min(18,softness))
                ])?.outputImage {
                 mask=blur.cropped(to:extent)
+            }
+            if let key {
+                personMaskCache.setObject(mask,forKey:key,cost:max(1,cgImage.width*cgImage.height/8))
             }
             return mask
         } catch {

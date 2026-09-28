@@ -274,6 +274,8 @@ struct V80PrintLayout: Codable, Hashable {
     var cropOffsetY: Double = 0.0
     var photoEffect: FTSPhotoEffect = .normal
     var greenScreenSnapshot: FTSGreenScreenSettings? = nil
+    // Separate fully composed print variant. Never overwrites Kamera Original.
+    var preparedImagePath: String? = nil
 
     var hasCustomCrop: Bool {
         abs(cropZoom - 1.0) > 0.001 || abs(cropOffsetX) > 0.001 || abs(cropOffsetY) > 0.001
@@ -286,7 +288,7 @@ struct V80PrintLayout: Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case frameMode, fitMode, borderMM, borderColorHex, cropZoom, cropOffsetX, cropOffsetY
-        case photoEffect, greenScreenSnapshot
+        case photoEffect, greenScreenSnapshot, preparedImagePath
     }
 
     init(from decoder: Decoder) throws {
@@ -300,6 +302,7 @@ struct V80PrintLayout: Codable, Hashable {
         cropOffsetY=try c.decodeIfPresent(Double.self,forKey:.cropOffsetY) ?? 0.0
         photoEffect=try c.decodeIfPresent(FTSPhotoEffect.self,forKey:.photoEffect) ?? .normal
         greenScreenSnapshot=try c.decodeIfPresent(FTSGreenScreenSettings.self,forKey:.greenScreenSnapshot)
+        preparedImagePath=try c.decodeIfPresent(String.self,forKey:.preparedImagePath)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -313,6 +316,7 @@ struct V80PrintLayout: Codable, Hashable {
         try c.encode(cropOffsetY,forKey:.cropOffsetY)
         try c.encode(photoEffect,forKey:.photoEffect)
         try c.encodeIfPresent(greenScreenSnapshot,forKey:.greenScreenSnapshot)
+        try c.encodeIfPresent(preparedImagePath,forKey:.preparedImagePath)
     }
 }
 
@@ -1146,13 +1150,13 @@ enum V80MacSpooler {
 @MainActor
 final class ProductionCore: ObservableObject {
     static let version: String = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.45"
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.46"
         let value=raw.trimmingCharacters(in:.whitespacesAndNewlines)
-        return value.isEmpty ? "0.3.45" : value
+        return value.isEmpty ? "0.3.46" : value
     }()
     static let build: Int = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "135"
-        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 135
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "136"
+        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 136
     }()
 
     @Published var workUnits: [V80WorkUnit] = []
@@ -1846,38 +1850,50 @@ final class ProductionCore: ObservableObject {
             guard let event=state.selectedEvent else{throw NSError(domain:"FTSPrinter",code:85,userInfo:[NSLocalizedDescriptionKey:"Event nicht mehr ausgewählt."])}
             let unit=localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex]
             let printLayout=unit.printLayout ?? V80PrintLayout()
-            let rendered:NSImage
-            if printLayout.requiresFreshRender,let sourcePath=unit.sourceImagePath,!sourcePath.isEmpty {
-                rendered=try await ProductionRendererV76.renderedImage(
-                    sourceURL:URL(fileURLWithPath:sourcePath),
-                    event:event,
-                    cropZoom:CGFloat(printLayout.cropZoom),
-                    cropOffsetX:CGFloat(printLayout.cropOffsetX),
-                    cropOffsetY:CGFloat(printLayout.cropOffsetY),
-                    photoEffect:printLayout.photoEffect,
-                    greenScreenSettings:printLayout.greenScreenSnapshot
-                )
-            } else if preRendered {
-                guard let ready=NSImage(contentsOfFile:path) else {
-                    throw NSError(domain:"FTSPrinter",code:189,userInfo:[NSLocalizedDescriptionKey:"Druckbereite Design-Datei konnte nicht geöffnet werden."])
-                }
-                rendered=ready
+            let finalImage:NSImage
+
+            if let prepared=printLayout.preparedImagePath,
+               !prepared.isEmpty,
+               FileManager.default.fileExists(atPath:prepared),
+               let ready=NSImage(contentsOfFile:prepared) {
+                finalImage=ready
             } else {
-                rendered=try await ProductionRendererV76.renderedImage(
-                    sourceURL:URL(fileURLWithPath:path),
-                    event:event,
-                    greenScreenSettings:printLayout.greenScreenSnapshot
-                )
+                let rendered:NSImage
+                if printLayout.requiresFreshRender,let sourcePath=unit.sourceImagePath,!sourcePath.isEmpty {
+                    rendered=try await ProductionRendererV76.renderedImage(
+                        sourceURL:URL(fileURLWithPath:sourcePath),
+                        event:event,
+                        cropZoom:CGFloat(printLayout.cropZoom),
+                        cropOffsetX:CGFloat(printLayout.cropOffsetX),
+                        cropOffsetY:CGFloat(printLayout.cropOffsetY),
+                        photoEffect:printLayout.photoEffect,
+                        greenScreenSettings:printLayout.greenScreenSnapshot
+                    )
+                } else if preRendered {
+                    guard let ready=NSImage(contentsOfFile:path) else {
+                        throw NSError(domain:"FTSPrinter",code:189,userInfo:[NSLocalizedDescriptionKey:"Druckbereite Design-Datei konnte nicht geöffnet werden."])
+                    }
+                    rendered=ready
+                } else {
+                    rendered=try await ProductionRendererV76.renderedImage(
+                        sourceURL:URL(fileURLWithPath:path),
+                        event:event,
+                        greenScreenSettings:printLayout.greenScreenSnapshot
+                    )
+                }
+                finalImage=V80PrintLayoutComposer.apply(rendered,layout:printLayout)
             }
-            let finalImage=V80PrintLayoutComposer.apply(rendered,layout:printLayout)
-            if let archivedPath=saveRenderedArchiveImage(finalImage,jobID:jobID,unitID:unit.id) {
-                localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex].processedImagePath=archivedPath
-                saveLocalQueue()
-            }
+
             let estimate=V80MacSpooler.learnedSeconds(printerName:printerName)
             let start=Date()
             setSlot(printerName,state:"PRINTING",eta:Int(estimate),current:"LOCAL:"+jobID.uuidString,error:nil)
             let cupsRequestID = try V80MacSpooler.submit(image:finalImage,printerName:printerName,title:"FTS Kamera · \(customer) · \(original)")
+
+            // Archive encoding must not delay CUPS receiving the print.
+            if let archivedPath=saveRenderedArchiveImage(finalImage,jobID:jobID,unitID:unit.id) {
+                localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex].processedImagePath=archivedPath
+                saveLocalQueue()
+            }
             let ticker=Task { [weak self] in
                 while !Task.isCancelled {
                     try? await Task.sleep(for:.seconds(1))

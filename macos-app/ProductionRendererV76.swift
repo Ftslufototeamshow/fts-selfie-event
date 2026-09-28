@@ -34,6 +34,8 @@ enum ProductionRendererV76 {
 
     private static let api = FTSAPI.shared
     private static let ciContext = CIContext(options: [.cacheIntermediates: true])
+    private static var faceCache:[String:[FaceBox]] = [:]
+    private static let remoteImageCache=NSCache<NSString,NSImage>()
 
     static func renderedImage(
         sourceURL: URL,
@@ -52,10 +54,19 @@ enum ProductionRendererV76 {
             source:originalSource,
             event:event,
             effect:photoEffect,
-            greenScreenSettings:greenScreenSettings
+            greenScreenSettings:greenScreenSettings,
+            cacheKey:sourceURL.path
         )
         let config = event.studio_config?.object ?? [:]
-        let faces = detectFaces(originalSource)
+        let faces:[FaceBox]
+        if let cached=faceCache[sourceURL.path] {
+            faces=cached
+        } else {
+            let detected=detectFaces(originalSource)
+            if faceCache.count>300 { faceCache.removeAll(keepingCapacity:true) }
+            faceCache[sourceURL.path]=detected
+            faces=detected
+        }
         let plan = buildPlan(
             source:originalSource,config:config,faces:faces,
             cropZoom:cropZoom,cropOffsetX:cropOffsetX,cropOffsetY:cropOffsetY
@@ -253,7 +264,7 @@ enum ProductionRendererV76 {
     }
 
     private static func drawPhoto(_ image:NSImage,plan:Plan) {
-        let sw=max(image.size.width,1),sh=max(image.size.height,1)
+        let sh=max(image.size.height,1)
         let c=plan.cropTopLeft
         // NSImage source coordinates are bottom-left; v76 crop math is top-left.
         let from=NSRect(x:c.minX,y:sh-c.minY-c.height,width:c.width,height:c.height)
@@ -641,10 +652,13 @@ enum ProductionRendererV76 {
     }
 
     private static func remoteImage(_ storagePath:String) async throws -> NSImage {
+        let key=storagePath as NSString
+        if let cached=remoteImageCache.object(forKey:key) { return cached }
         let data=try await api.imageData(storagePath:storagePath)
         guard let image=NSImage(data:data) else {
             throw NSError(domain:"FTSPrinter",code:177,userInfo:[NSLocalizedDescriptionKey:"Design-Grafik konnte nicht geladen werden."])
         }
+        remoteImageCache.setObject(image,forKey:key)
         return image
     }
 

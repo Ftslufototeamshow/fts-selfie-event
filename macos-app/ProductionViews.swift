@@ -853,14 +853,21 @@ struct V80PhotoPrintPreviewSheet: View {
         self.onConfirm=onConfirm
         _quantity=State(initialValue:max(1,initialQuantity))
         _layout=State(initialValue:initialLayout)
-        let seedPath=(item.designedPath?.isEmpty == false) ? item.designedPath! : item.importedPath
-        let seed=NSImage(contentsOfFile:seedPath).map{V80PrintLayoutComposer.apply($0,layout:initialLayout)}
+        // Start with the untouched camera original. The separate print preview
+        // replaces it after rendering; the original file itself is never changed.
+        let seed=NSImage(contentsOfFile:item.importedPath)
         _previewImage=State(initialValue:seed)
+    }
+
+    private var liveGreenSettings:FTSGreenScreenSettings {
+        guard let event else{return FTSGreenScreenSettings()}
+        return FTSGreenScreenStore.settings(eventToken:event.event_token)
     }
 
     private var previewKey:String {
         [
             item.id,
+            liveGreenSettings.signature,
             String(format:"%.3f",layout.cropZoom),
             String(format:"%.3f",layout.cropOffsetX),
             String(format:"%.3f",layout.cropOffsetY),
@@ -894,7 +901,8 @@ struct V80PhotoPrintPreviewSheet: View {
                     cropZoom:CGFloat(layout.cropZoom),
                     cropOffsetX:CGFloat(layout.cropOffsetX),
                     cropOffsetY:CGFloat(layout.cropOffsetY),
-                    photoEffect:layout.photoEffect
+                    photoEffect:layout.photoEffect,
+                    greenScreenSettings:liveGreenSettings
                 )
             } else {
                 let path=(item.designedPath?.isEmpty == false) ? item.designedPath! : item.importedPath
@@ -910,6 +918,25 @@ struct V80PhotoPrintPreviewSheet: View {
             if let fallback=NSImage(contentsOfFile:path) {
                 previewImage=V80PrintLayoutComposer.apply(fallback,layout:layout)
             }
+        }
+    }
+
+    private func savePreparedPreview() -> String? {
+        guard let image=previewImage,
+              let activation=state.mediaIngest.activation,
+              let tiff=image.tiffRepresentation,
+              let rep=NSBitmapImageRep(data:tiff),
+              let jpg=rep.representation(using:.jpeg,properties:[.compressionFactor:0.96]) else{return nil}
+        let folder=URL(fileURLWithPath:activation.folderPath,isDirectory:true)
+            .appendingPathComponent("Druckbereit/Varianten",isDirectory:true)
+        do {
+            try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+            let safeID=String(item.id.prefix(20))
+            let url=folder.appendingPathComponent("variant-\(safeID).jpg")
+            try jpg.write(to:url,options:.atomic)
+            return url.path
+        } catch {
+            return nil
         }
     }
 
@@ -1142,9 +1169,13 @@ struct V80PhotoPrintPreviewSheet: View {
                     Spacer()
                     if allowPrint {
                         Button("OK · Zum Druck"){
-                            onConfirm(quantity,layout)
+                            var confirmed=layout
+                            confirmed.greenScreenSnapshot=liveGreenSettings
+                            confirmed.preparedImagePath=savePreparedPreview()
+                            onConfirm(quantity,confirmed)
                         }
                         .buttonStyle(.borderedProminent)
+                        .disabled(renderingPreview)
                     }
                 }
 
@@ -1328,6 +1359,7 @@ struct ProductionMediaContent: View {
                     var reusable=layout
                     reusable.photoEffect = .normal
                     reusable.greenScreenSnapshot = nil
+                    reusable.preparedImagePath = nil
                     defaultPrintLayout=reusable
                     saveDefaultPrintLayout()
                     previewItem=nil
@@ -1590,6 +1622,7 @@ struct ProductionMediaContent: View {
         var reusable=value
         reusable.photoEffect = .normal
         reusable.greenScreenSnapshot = nil
+        reusable.preparedImagePath = nil
         defaultPrintLayout=reusable
     }
 
@@ -1942,8 +1975,8 @@ struct V80MediaItemCell: View {
 
     var body: some View {
         VStack(alignment:.leading,spacing:5) {
-            let previewPath=(item.designedPath?.isEmpty == false) ? item.designedPath! : item.importedPath
-            if let image=NSImage(contentsOfFile:previewPath) {
+            // The normal work-area tile always shows the immutable camera original.
+            if let image=NSImage(contentsOfFile:item.importedPath) {
                 Button(action:onPreview) {
                     ZStack(alignment:.bottomTrailing) {
                         Image(nsImage:image)

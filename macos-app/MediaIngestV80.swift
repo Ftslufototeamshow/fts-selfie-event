@@ -400,15 +400,24 @@ final class MediaIngestV80: ObservableObject {
             let r=try await Task.detached(priority:.utility) {
                 try Self.scanSync(eventToken:event.event_token,activation:a)
             }.value
+
+            // Show untouched camera originals immediately. The separate print
+            // design may finish a moment later without hiding the new photo.
+            items=r.items.sorted{$0.importedAt>$1.importedAt}
+            detectedCards=r.cards
+            registeredCardLabels=r.labels
+            lastImportedCount=r.newCount
+            if r.newCount>0 {
+                status="\(r.newCount) neue Foto\(r.newCount==1 ? "" : "s") übernommen · Original sofort verfügbar · Druckdesign wird vorbereitet …"
+                await Task.yield()
+            }
+
             let designed=await ensureDesignedCopies(event:event,activation:a,items:r.items)
             let wifiSignal=await Task.detached(priority:.utility) {
                 V80MacSpooler.wifiSignalStatus()
             }.value
             items=designed.items.sorted{$0.importedAt>$1.importedAt}
             updateWLANCameraStatus(items:designed.items,signal:wifiSignal)
-            detectedCards=r.cards
-            registeredCardLabels=r.labels
-            lastImportedCount=r.newCount
             if designed.failed>0 {
                 status="\(r.newCount) neue Fotos übernommen · \(designed.failed) Design-Datei(en) konnten nicht erstellt werden."
             } else if r.newCount>0 || designed.created>0 {
@@ -774,23 +783,42 @@ final class MediaIngestV80: ObservableObject {
         manifest.importedHashes=localLedger
         hashes.formUnion(localLedger)
         var newCount=0
+        // Known cards are fully enumerated only once per scan. Reformat detection
+        // reuses the same currentFiles list instead of walking DCIM a second time.
+        var cards=detectCardsSync(eventToken:eventToken,activation:activation,checkReformatted:false)
         var registry=loadCardRegistry(activation)
-        let cards=detectCardsSync(eventToken:eventToken,activation:activation)
 
-        for card in cards {
+        for cardIndex in cards.indices {
+            let card=cards[cardIndex]
             guard let marker=card.marker,marker.eventToken==eventToken else{continue}
+            let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
+            let currentFiles=mediaFiles(on:volume)
+
+            if cardLooksReformatted(currentFiles:currentFiles,marker:marker,activation:activation) {
+                retireCardMarker(
+                    marker:marker,
+                    currentTechnicalID:card.technicalID,
+                    volume:volume,
+                    registry:&registry
+                )
+                cards[cardIndex]=V80DetectedCard(
+                    id:card.id,volumePath:card.volumePath,volumeName:card.volumeName,
+                    technicalID:card.technicalID,marker:nil,writable:card.writable
+                )
+                try? saveCardRegistry(registry,activation)
+                continue
+            }
+
             if registry.cards[card.technicalID] == nil {
                 registry.cards[card.technicalID]=marker
-                if let signature=cardSignature(URL(fileURLWithPath:card.volumePath,isDirectory:true)) {
+                if let signature=cardSignature(volume) {
                     var signatures=registry.signatures ?? [:]
                     signatures[signature]=marker
                     registry.signatures=signatures
                 }
                 try? saveCardRegistry(registry,activation)
             }
-            let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
             let recoveringBaseline = manifest.baselines[marker.cardUUID] == nil
-            let currentFiles=mediaFiles(on:volume)
             let recoveryNewest=Set(
                 currentFiles
                     .sorted{quickMediaDate($0)>quickMediaDate($1)}
@@ -994,7 +1022,11 @@ final class MediaIngestV80: ObservableObject {
         try JSONEncoder().encode(manifest).write(to:manifestURL,options:.atomic)
     }
 
-    nonisolated private static func detectCardsSync(eventToken:String,activation:V80MediaActivation) -> [V80DetectedCard] {
+    nonisolated private static func detectCardsSync(
+        eventToken:String,
+        activation:V80MediaActivation,
+        checkReformatted:Bool=true
+    ) -> [V80DetectedCard] {
         let fm=FileManager.default
         var registry=loadCardRegistry(activation)
         var registryChanged=false
@@ -1021,9 +1053,9 @@ final class MediaIngestV80: ObservableObject {
             if !cameraMedia{continue}
 
             let name=rv?.volumeName ?? v.lastPathComponent
-            let tid=(rv?.volumeUUIDString?.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty == false)
-                ? rv!.volumeUUIDString!
-                : (rv?.volumeIdentifier.map{String(describing:$0)} ?? v.path)
+            let cleanUUID=rv?.volumeUUIDString?.trimmingCharacters(in:.whitespacesAndNewlines)
+            let tid=(cleanUUID?.isEmpty == false ? cleanUUID : nil)
+                ?? (rv?.volumeIdentifier.map{String(describing:$0)} ?? v.path)
             let markerURL=v.appendingPathComponent(".fts-printer-card-v80.json")
             let technicalReleased=registry.releasedTechnicalIDs?.contains(tid) == true
             var marker=technicalReleased ? nil : registry.cards[tid]
@@ -1035,7 +1067,8 @@ final class MediaIngestV80: ObservableObject {
             // Same card identity, but no trace of its old baseline anymore:
             // treat it as a fresh camera generation (typically after Format).
             // FTS still writes nothing to the camera SD card.
-            if let currentMarker=marker,
+            if checkReformatted,
+               let currentMarker=marker,
                cardLooksReformatted(volume:v,marker:currentMarker,activation:activation) {
                 retireCardMarker(
                     marker:currentMarker,
@@ -1092,10 +1125,21 @@ final class MediaIngestV80: ObservableObject {
         marker:V80CardMarker,
         activation:V80MediaActivation
     )->Bool {
+        cardLooksReformatted(
+            currentFiles:mediaFiles(on:volume),
+            marker:marker,
+            activation:activation
+        )
+    }
+
+    nonisolated private static func cardLooksReformatted(
+        currentFiles current:[URL],
+        marker:V80CardMarker,
+        activation:V80MediaActivation
+    )->Bool {
         guard let baseline=eventBaselines(activation)[marker.cardUUID],
               !baseline.knownSourceKeys.isEmpty else{return false}
 
-        let current=mediaFiles(on:volume)
         guard !current.isEmpty else{return false}
 
         let knownFast=Set(baseline.knownSourceKeys.map{fastKeyFromStoredKey($0)})
