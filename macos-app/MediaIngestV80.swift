@@ -794,7 +794,7 @@ final class MediaIngestV80: ObservableObject {
             let volume=URL(fileURLWithPath:card.volumePath,isDirectory:true)
             let currentFiles=mediaFiles(on:volume)
 
-            if cardLooksReformatted(currentFiles:currentFiles,marker:marker,activation:activation) {
+            if cardLooksReformatted(currentFiles:currentFiles,volume:volume,marker:marker,activation:activation) {
                 retireCardMarker(
                     marker:marker,
                     currentTechnicalID:card.technicalID,
@@ -1127,6 +1127,7 @@ final class MediaIngestV80: ObservableObject {
     )->Bool {
         cardLooksReformatted(
             currentFiles:mediaFiles(on:volume),
+            volume:volume,
             marker:marker,
             activation:activation
         )
@@ -1134,6 +1135,7 @@ final class MediaIngestV80: ObservableObject {
 
     nonisolated private static func cardLooksReformatted(
         currentFiles current:[URL],
+        volume:URL,
         marker:V80CardMarker,
         activation:V80MediaActivation
     )->Bool {
