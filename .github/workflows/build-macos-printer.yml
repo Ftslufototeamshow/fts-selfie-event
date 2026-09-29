@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.46-fast-sd-original-safe.zip
-            dist/FTS-Printer-macOS-v0.3.46-fast-sd-original-safe.dmg
+            dist/FTS-Printer-macOS-v0.3.47-green-ui-stable.zip
+            dist/FTS-Printer-macOS-v0.3.47-green-ui-stable.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.46-fast-sd-original-safe"
+          TAG="fts-printer-mac-v0.3.47-green-ui-stable"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.46-fast-sd-original-safe.zip dist/FTS-Printer-macOS-v0.3.46-fast-sd-original-safe.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.47-green-ui-stable.zip dist/FTS-Printer-macOS-v0.3.47-green-ui-stable.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.46-fast-sd-original-safe.zip dist/FTS-Printer-macOS-v0.3.46-fast-sd-original-safe.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.46 · Fast SD + Original Safe" --notes "Build 136: Beschleunigt den Produktionsweg ohne das Kameraoriginal anzutasten. SD-Karten werden bei normalen Scans nur einmal vollständig enumeriert; neue Originale erscheinen sofort in der Arbeitsansicht und Druckdesigns werden separat vorbereitet. Kleine Fotoansichten zeigen immer Kamera Original. Comic/Green-Screen-Personenmasken, Gesichtserkennung sowie Banner/Logo-Dateien werden für das unveränderte Original gecacht. Die große Vorschau speichert beim OK eine separate fertige Druckvariante, die direkt an CUPS/Canon gesendet wird; Archiv-JPEG wird erst nach CUPS-Übergabe erzeugt. Der alte 0.3.41-User-Agent ist entfernt und wird aus der installierten Version/Build erzeugt. Canon-Spooler, Spiegelkorrektur, Materiallogik, A-Z-Zuordnung, QR, Archiv und 148x15-mm-Banner bleiben bestehen."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.47-green-ui-stable.zip dist/FTS-Printer-macOS-v0.3.47-green-ui-stable.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.47 · Green UI Stable" --notes "Build 137: Repariert das Hängen der Green-Screen-Oberfläche. Green Screen Ein/Aus, Hintergrund entfernen/wechseln, Farbe, Comic-Burst, Feuerwerk und Kantenregler speichern jetzt sofort und lösen keine vollständige Neuberechnung aller aktiven Fotos mehr aus. Druckbereit-Dateien werden dauerhaft ohne eingebrannten Green-Screen-Hintergrund aus Kamera Original erzeugt; Green Screen/Comic bleibt ausschließlich eine separate Vorschau-/Druckebene mit Snapshot beim Auftrag. Alte v136-Druckdesigns werden einmalig neutral neu aufgebaut. Der Green-Screen-Personenmasken-Cache ist begrenzt und wird bei relevanten Änderungen geleert; ersetzte/entfernte lokale Hintergrundkopien werden sicher entfernt. Kamera Original bleibt unverändert. SD-A-Z, schneller Import, Canon-Spooler, Spiegelkorrektur, Materiallogik, QR, Archiv und 148x15-mm-Banner bleiben bestehen."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.46-fast-sd-original-safe"
+          CURRENT="fts-printer-mac-v0.3.47-green-ui-stable"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

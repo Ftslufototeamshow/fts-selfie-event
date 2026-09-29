@@ -487,7 +487,11 @@ final class MediaIngestV80: ObservableObject {
             }
 
             do {
-                let rendered=try await ProductionRendererV76.renderedImage(sourceURL:URL(fileURLWithPath:out[i].importedPath),event:event)
+                let rendered=try await ProductionRendererV76.renderedImage(
+                    sourceURL:URL(fileURLWithPath:out[i].importedPath),
+                    event:event,
+                    greenScreenSettings:FTSGreenScreenSettings()
+                )
                 let stem=URL(fileURLWithPath:out[i].originalName).deletingPathExtension().lastPathComponent
                 let safeStem=sanitize(stem)
                 let fileName="\(out[i].sourceLabel)-\(safeStem)-\(String(out[i].sha256.prefix(10))).jpg"
@@ -539,10 +543,10 @@ final class MediaIngestV80: ObservableObject {
         add(event.event_title);add(event.subtitle);add(event.overlay_text);add(event.event_date)
         add(event.accent);add(event.photo_branding)
         addJSON(event.studio_config);addJSON(event.logo_items);addJSON(event.decoration_items)
-        add(FTSGreenScreenStore.settings(eventToken:event.event_token).signature)
-        // Renderer salt forces active/queued photos made by the old concurrent
-        // renderer to be rebuilt once after the v134 repair.
-        add("renderer-v134-safe-context")
+        // Green Screen is deliberately NOT part of the reusable Druckbereit cache.
+        // It is applied only to the separate preview/print variant from the
+        // immutable camera original. This prevents stale backgrounds after toggle.
+        add("renderer-v137-green-independent")
         return hasher.finalize().map{String(format:"%02x",$0)}.joined()
     }
 

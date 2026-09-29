@@ -106,12 +106,32 @@ enum FTSGreenScreenStore {
         try fm.copyItem(at:source,to:dest)
         return dest
     }
+
+    static func removeBackgroundCopy(_ path:String?,activation:V80MediaActivation) {
+        guard let path,!path.isEmpty else{return}
+        let fm=FileManager.default
+        let eventRoot=URL(fileURLWithPath:activation.folderPath,isDirectory:true).deletingLastPathComponent()
+        let folder=eventRoot.appendingPathComponent("Green Screen Hintergründe",isDirectory:true).standardizedFileURL
+        let file=URL(fileURLWithPath:path).standardizedFileURL
+        let prefix=folder.path.hasSuffix("/") ? folder.path : folder.path+"/"
+        guard file.path.hasPrefix(prefix) else{return}
+        try? fm.removeItem(at:file)
+    }
 }
 
 @MainActor
 enum FTSPhotoEffectsV132 {
     private static let ciContext=CIContext(options:[.cacheIntermediates:true])
-    private static let personMaskCache=NSCache<NSString,CIImage>()
+    private static let personMaskCache:NSCache<NSString,CIImage> = {
+        let cache=NSCache<NSString,CIImage>()
+        cache.countLimit=80
+        cache.totalCostLimit=128*1024*1024
+        return cache
+    }()
+
+    static func clearTransientCache() {
+        personMaskCache.removeAllObjects()
+    }
 
     static func processedImage(
         source:NSImage,
@@ -376,7 +396,7 @@ struct FTSGreenScreenView: View {
                     VStack(alignment:.leading,spacing:10) {
                         Toggle("Grüne Wand ist aufgebaut · Green Screen verwenden",isOn:$settings.enabled)
                             .toggleStyle(.switch)
-                            .onChange(of:settings.enabled){_ in saveAndRefresh()}
+                            .onChange(of:settings.enabled){_ in saveSettings(clearEffectCache:true)}
                         Text(settings.enabled
                              ? "Neue und aktive Kamerafotos erhalten den hier gewählten Hintergrund. Originale bleiben unverändert."
                              : "Keine Freistellung und kein Hintergrundersatz. Fotos werden exakt wie bisher verarbeitet.")
@@ -392,7 +412,7 @@ struct FTSGreenScreenView: View {
                             }
                         }
                         .pickerStyle(.segmented)
-                        .onChange(of:settings.backgroundMode){_ in saveAndRefresh()}
+                        .onChange(of:settings.backgroundMode){_ in saveSettings()}
 
                         if settings.backgroundMode == .color || settings.backgroundMode == .comicBurst {
                             Text("Farbe").font(.caption.bold())
@@ -400,7 +420,7 @@ struct FTSGreenScreenView: View {
                                 ForEach(colors,id:\.self){hex in
                                     Button {
                                         settings.backgroundColorHex=hex
-                                        saveAndRefresh()
+                                        saveSettings()
                                     } label:{
                                         Circle()
                                             .fill(Color(nsColor:NSColor(hex:hex)))
@@ -413,7 +433,7 @@ struct FTSGreenScreenView: View {
                                 }
                                 TextField("#RRGGBB",text:$settings.backgroundColorHex)
                                     .textFieldStyle(.roundedBorder).frame(width:120)
-                                    .onSubmit{saveAndRefresh()}
+                                    .onSubmit{saveSettings()}
                             }
                         }
 
@@ -425,8 +445,13 @@ struct FTSGreenScreenView: View {
                                     Text(URL(fileURLWithPath:p).lastPathComponent)
                                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                                     Button("Entfernen") {
+                                        let oldPath=settings.backgroundImagePath
                                         settings.backgroundImagePath=nil
-                                        saveAndRefresh()
+                                        saveSettings(clearEffectCache:true)
+                                        if let activation=state.mediaIngest.activation {
+                                            FTSGreenScreenStore.removeBackgroundCopy(oldPath,activation:activation)
+                                        }
+                                        message="Hintergrundbild entfernt. Kamera-Originale bleiben unverändert."
                                     }
                                 }
                             }
@@ -449,7 +474,7 @@ struct FTSGreenScreenView: View {
                             Text(String(format:"%.0f",settings.edgeSoftness)).monospacedDigit()
                         }.font(.caption)
                         Slider(value:$settings.edgeSoftness,in:0...18,step:1,onEditingChanged:{editing in
-                            if !editing { saveAndRefresh() }
+                            if !editing { saveSettings(clearEffectCache:true) }
                         })
                         Text("Hilft besonders bei Haaren und feinen Kanten. Die Personenerkennung umfasst Gesicht, Haare, Kleidung und sichtbaren Körper.")
                             .font(.caption2).foregroundStyle(.secondary)
@@ -510,11 +535,15 @@ struct FTSGreenScreenView: View {
         }
     }
 
-    private func saveAndRefresh() {
+    private func saveSettings(clearEffectCache:Bool=false) {
+        // Settings are lightweight and must react immediately. Never re-render the
+        // whole active photo set from this control; the large print preview and
+        // the print job read this current snapshot directly.
         FTSGreenScreenStore.save(settings,eventToken:event.event_token)
-        message=settings.enabled ? "Green-Screen-Einstellung gespeichert. Aktive Druckdesigns werden aktualisiert.":"Green Screen ausgeschaltet. Normaler Fotoweg aktiv."
-        guard state.mediaIngest.activation != nil else{return}
-        Task { await state.mediaIngest.refreshDesign(event:event) }
+        if clearEffectCache { FTSPhotoEffectsV132.clearTransientCache() }
+        message=settings.enabled
+            ? "Green-Screen-Einstellung gespeichert · Vorschau und nächster Druck verwenden sie sofort."
+            : "Green Screen ausgeschaltet · normaler Fotoweg aktiv."
     }
 
     private func chooseBackground() {
@@ -529,10 +558,14 @@ struct FTSGreenScreenView: View {
         panel.allowedFileTypes=["jpg","jpeg","png","heic","tif","tiff"]
         guard panel.runModal() == .OK,let url=panel.url else{return}
         do {
+            let oldPath=settings.backgroundImagePath
             let dest=try FTSGreenScreenStore.copyBackground(url,activation:activation)
             settings.backgroundImagePath=dest.path
             settings.backgroundMode = .image
-            saveAndRefresh()
+            saveSettings(clearEffectCache:true)
+            if oldPath != dest.path {
+                FTSGreenScreenStore.removeBackgroundCopy(oldPath,activation:activation)
+            }
             message="Hintergrund gespeichert: \(dest.lastPathComponent)"
         } catch {
             message="Hintergrund konnte nicht gespeichert werden: \(error.localizedDescription)"
