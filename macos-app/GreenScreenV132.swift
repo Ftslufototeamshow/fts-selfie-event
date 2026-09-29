@@ -744,7 +744,7 @@ enum FTSPhotoEffectsV132 {
         let soft=CIFilter(name:"CIGaussianBlur",parameters:[
             kCIInputImageKey:blurredBase,
             kCIInputRadiusKey:24.0
-        ])?.outputImage.cropped(to:extent) ?? blurredBase
+        ])?.outputImage?.cropped(to:extent) ?? blurredBase
 
         let iw=max(image.extent.width,1),ih=max(image.extent.height,1)
         let scale=min(extent.width/iw,extent.height/ih)
