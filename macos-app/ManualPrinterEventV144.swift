@@ -770,7 +770,7 @@ struct FTSManualPrinterEventEditor:View {
         panel.canChooseDirectories=false
         panel.allowsMultipleSelection=false
         panel.allowedFileTypes=["png","jpg","jpeg","heic","tif","tiff"]
-        guard panel.runModal()==.OK,let url=panel.url else{return}
+        guard panel.runModal() == .OK,let url=panel.url else{return}
         do {
             draft.logoPath=try FTSManualPrinterAssets.copyLogo(url,eventToken:event.event_token)
         } catch {
