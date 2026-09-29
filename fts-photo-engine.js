@@ -76,13 +76,21 @@
 
   function fontStack(id){
     return ({
-      clean:'Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
-      bold:'"Arial Black",Impact,system-ui,sans-serif',
-      rock:'Impact,"Arial Black",system-ui,sans-serif',
-      elegant:'Georgia,"Times New Roman",serif',
-      retro:'"Courier New",Courier,monospace',
-      pop:'"Trebuchet MS","Arial Black",system-ui,sans-serif',
-      handwritten:'"Brush Script MT","Segoe Print",cursive'
+      clean:'"Helvetica Neue",Inter,system-ui,-apple-system,sans-serif',
+      avenir:'"Avenir Next",Avenir,system-ui,sans-serif',
+      futura:'Futura,"Century Gothic",system-ui,sans-serif',
+      gill:'"Gill Sans","Trebuchet MS",system-ui,sans-serif',
+      verdana:'Verdana,Geneva,sans-serif',trebuchet:'"Trebuchet MS",Arial,sans-serif',
+      arial:'Arial,Helvetica,sans-serif',bold:'"Arial Black",Impact,system-ui,sans-serif',
+      rock:'Impact,"Arial Black",system-ui,sans-serif',pop:'"Trebuchet MS","Arial Black",system-ui,sans-serif',
+      copperplate:'Copperplate,"Copperplate Gothic Light",serif',optima:'Optima,"Segoe UI",sans-serif',
+      elegant:'Georgia,"Times New Roman",serif',baskerville:'Baskerville,Georgia,serif',
+      didot:'Didot,"Times New Roman",serif',hoefler:'"Hoefler Text",Georgia,serif',
+      palatino:'Palatino,"Palatino Linotype",serif',times:'"Times New Roman",Times,serif',
+      retro:'"Courier New",Courier,monospace',menlo:'Menlo,Monaco,monospace',
+      typewriter:'"American Typewriter","Courier New",serif',chalkboard:'Chalkboard,"Comic Sans MS",cursive',
+      marker:'"Marker Felt","Comic Sans MS",cursive',handwritten:'"Brush Script MT","Segoe Print",cursive',
+      snell:'"Snell Roundhand","Brush Script MT",cursive'
     })[id]||'system-ui,sans-serif';
   }
   function alpha(hex,a){
@@ -118,11 +126,18 @@
     ctx.textBaseline='alphabetic';ctx.textAlign=spec?.align||'left';
     ctx.shadowColor=spec?.shadow===false?'transparent':'rgba(0,0,0,.55)';ctx.shadowBlur=spec?.shadow===false?0:Math.max(3,ctx.canvas.width*.004);
     const colors=Array.isArray(spec?.colors)&&spec.colors.length?spec.colors:[spec?.color||'#ffffff'];
-    if(!spec?.multicolor||colors.length<2){ctx.fillStyle=colors[0];ctx.fillText(text,x,y,maxWidth);return}
+    const colorMode=spec?.color_mode||(spec?.multicolor===true?'per_char':'solid');
+    const outline=spec?.outline_enabled===true,outlineColor=spec?.outline_color||'#000000',outlineWidth=Math.max(.5,Math.min(8,Number(spec?.outline_width||2.5)));
+    const drawGlyph=(txt,xx,yy,max)=>{
+      if(outline){ctx.save();ctx.strokeStyle=outlineColor;ctx.lineWidth=Math.max(1,size*outlineWidth/100);ctx.lineJoin='round';ctx.miterLimit=2;ctx.strokeText(txt,xx,yy,max);ctx.restore()}
+      ctx.fillText(txt,xx,yy,max);
+    };
+    if(colorMode==='solid'||colors.length<2){ctx.fillStyle=spec?.color||colors[0]||'#ffffff';drawGlyph(text,x,y,maxWidth);return}
+    const groupSize=colorMode==='groups_3'?3:(colorMode==='groups_2'?2:1);
     const chars=[...text],widths=chars.map(ch=>ctx.measureText(ch).width),total=widths.reduce((a,b)=>a+b,0);
     let left=x;if(ctx.textAlign==='center')left=x-total/2;else if(ctx.textAlign==='right')left=x-total;
-    ctx.textAlign='left';
-    chars.forEach((ch,i)=>{ctx.fillStyle=colors[i%colors.length];ctx.fillText(ch,left,y);left+=widths[i]});
+    ctx.textAlign='left';let visibleIndex=0;
+    chars.forEach((ch,i)=>{ctx.fillStyle=colors[Math.floor(visibleIndex/groupSize)%colors.length];drawGlyph(ch,left,y);if(!/\s/.test(ch))visibleIndex++;left+=widths[i]});
   }
 
   function pumpkinFrame(ctx,w,h){
@@ -193,13 +208,10 @@
     let cw,ch,cx,cy;
     if(source>target){ch=sh;cw=sh*target;cx=(sw-cw)/2;cy=0}
     else{cw=sw;ch=sw/target;cx=0;cy=(sh-ch)/2}
-    const mode=out.orientation==='landscape'?a.landscape:a.portrait;
-    const normal=out.orientation==='landscape'
-      ? clampNum(mode.banner_max_pct,14,26)
-      : clampNum(mode.banner_max_pct,9,13);
-    const minimum=out.orientation==='landscape'
-      ? clampNum(mode.banner_min_pct,10,normal)
-      : Math.min(clampNum(mode.banner_min_pct,6,normal),8);
+    const bannerMM=clampNum(config?.overlay?.banner?.height_mm??15,6,15);
+    const physicalWidthMM=out.orientation==='landscape'?148:100;
+    const fixedBannerPct=(tw*bannerMM/physicalWidthMM)/th*100;
+    const normal=fixedBannerPct,minimum=fixedBannerPct;
     const gap=clampNum(a.face_gap_pct,1,8);
     const faceUnion=a.enabled!==false&&a.face_safe_area!==false?unionBoxes(faces,clampNum(a.face_padding_ratio,.12,.65),sw,sh):null;
     if(faceUnion&&a.auto_crop!==false){
@@ -251,21 +263,13 @@
       if(helpers.drawEventDecorations)await Promise.resolve(helpers.drawEventDecorations(ctx,w,h,'photo'));
       return;
     }
-    const a=adaptiveConfig(conf),orientation=helpers.adaptiveState?.orientation||(w>h?'landscape':'portrait'),mode=orientation==='landscape'?a.landscape:a.portrait;
-    const banner=ov.banner||{},requestedHeight=clampNum(banner.height_pct||30,12,48);
-    const normalCap=orientation==='landscape'
-      ? clampNum(mode.banner_max_pct,14,26)
-      : clampNum(mode.banner_max_pct,9,13);
-    const minimum=orientation==='landscape'
-      ? clampNum(mode.banner_min_pct,10,normalCap)
-      : Math.min(clampNum(mode.banner_min_pct,6,normalCap),8);
-    const automatic=a.enabled!==false,adaptiveHeight=helpers.adaptiveState?.bannerPct;
-    const heightPct=automatic
-      ? clampNum(Number.isFinite(Number(adaptiveHeight))?adaptiveHeight:Math.min(requestedHeight,normalCap),minimum,normalCap)
-      : (orientation==='landscape'?requestedHeight:Math.min(requestedHeight,normalCap));
+    const a=adaptiveConfig(conf),orientation=helpers.adaptiveState?.orientation||(w>h?'landscape':'portrait');
+    const banner=ov.banner||{},automatic=a.enabled!==false;
     const adaptiveTextScale=automatic?clampNum(helpers.adaptiveState?.textScale??1,clampNum(a.min_text_scale,.52,.92),1):1;
     const textScale=adaptiveTextScale*(orientation==='portrait'?.72:1);
-    const bh=h*heightPct/100,by=h-bh;
+    const physicalWidthMM=orientation==='landscape'?148:100;
+    const bannerMM=clampNum(banner.height_mm??15,6,15);
+    const bh=w*bannerMM/physicalWidthMM,by=h-bh;
     if(banner.enabled!==false){
       const type=banner.type||'gradient',op=Math.max(0,Math.min(1,Number(banner.opacity??.86))),color=banner.color||'#071315';
       if(type==='solid'){ctx.fillStyle=alpha(color,op);ctx.fillRect(0,by,w,bh)}
@@ -276,7 +280,11 @@
       }
     }
     const pad=w*Math.max(.025,Math.min(.10,Number(ov.padding_pct||4.5)/100)),maxW=w-pad*2,title=ov.title||{},sub=ov.subtitle||{},line=ov.line||{};
-    const align=title.align||'left',x=align==='center'?w/2:align==='right'?w-pad:pad,titleY=by+bh*.40,subY=by+bh*.67,lineY=by+bh*.87;
+    const layout=ov.text_layout||{},gapTitleSub=bh*clampNum(layout.gap_title_sub_pct??0,0,20)/100,gapSubLine=bh*clampNum(layout.gap_sub_line_pct??0,0,20)/100;
+    const align=title.align||'left',x=align==='center'?w/2:align==='right'?w-pad:pad;
+    const titleY=clampNum(by+bh*.40-gapTitleSub*.50,by+bh*.18,by+bh*.56);
+    const subY=clampNum(by+bh*.67+gapTitleSub*.50-gapSubLine*.50,by+bh*.48,by+bh*.80);
+    const lineY=clampNum(by+bh*.87+gapSubLine*.50,by+bh*.72,by+bh*.97);
     if(title.enabled!==false)drawMulti(ctx,textValue(title,ev,'title'),x,titleY,{...title,_scale:textScale},maxW);
     if(sub.enabled!==false){const aa=sub.align||align,xx=aa==='center'?w/2:aa==='right'?w-pad:pad;drawMulti(ctx,textValue(sub,ev,'subtitle'),xx,subY,{...sub,align:aa,size_pct:sub.size_pct||3.2,weight:sub.weight||800,color:sub.color||ev.accent||'#d9b56d',_scale:textScale},maxW)}
     if(line.enabled!==false){
@@ -288,5 +296,5 @@
     if(helpers.drawEventDecorations)await Promise.resolve(helpers.drawEventDecorations(ctx,w,h,'photo'));
   }
 
-  window.FTS_PHOTO_ENGINE={version:78,catalog,filterInfo,applyFilter:pxFilter,filterCss,drawOverlay,fontStack,pumpkinFrame,adaptiveDefaults,adaptiveConfig,sourceOrientation,outputSpec,buildPlan,drawPhoto};
+  window.FTS_PHOTO_ENGINE={version:80,catalog,filterInfo,applyFilter:pxFilter,filterCss,drawOverlay,fontStack,pumpkinFrame,adaptiveDefaults,adaptiveConfig,sourceOrientation,outputSpec,buildPlan,drawPhoto};
 })();
