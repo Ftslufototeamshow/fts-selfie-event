@@ -37,6 +37,7 @@ enum FTSPhotoEffect: String, Codable, Hashable, CaseIterable {
 }
 
 enum FTSGreenBackgroundMode: String, Codable, Hashable, CaseIterable {
+    case none
     case color
     case image
     case comicBurst
@@ -44,20 +45,64 @@ enum FTSGreenBackgroundMode: String, Codable, Hashable, CaseIterable {
 
     var label:String {
         switch self {
+        case .none: return "Keiner"
         case .color: return "Farbe"
-        case .image: return "Bild"
+        case .image: return "Bild / GIF"
         case .comicBurst: return "Comic-Burst"
         case .fireworks: return "Feuerwerk"
         }
     }
 }
 
+enum FTSGreenBackgroundAssetKind: String, Codable, Hashable {
+    case image
+    case animatedGIF
+
+    var label:String { self == .animatedGIF ? "GIF · animiert" : "Bild" }
+
+    static func kind(for path:String)->FTSGreenBackgroundAssetKind {
+        URL(fileURLWithPath:path).pathExtension.lowercased()=="gif" ? .animatedGIF : .image
+    }
+}
+
+struct FTSGreenBackgroundAsset: Codable, Hashable, Identifiable {
+    var id:String
+    var name:String
+    var path:String
+    var assignedDay:String?
+    var kind:FTSGreenBackgroundAssetKind
+    var createdAt:Date
+}
+
 struct FTSGreenScreenSettings: Codable, Hashable {
     var enabled=false
-    var backgroundMode:FTSGreenBackgroundMode = .color
+    var backgroundMode:FTSGreenBackgroundMode = .none
     var backgroundColorHex="#1A73E8"
+    // Kept for print snapshots and backwards compatibility. For library assets
+    // this always mirrors the currently manually selected asset.
     var backgroundImagePath:String?=nil
+    var backgroundAssets:[FTSGreenBackgroundAsset]=[]
+    var activeBackgroundID:String?=nil
     var edgeSoftness:Double=5.0
+
+    var activeBackground:FTSGreenBackgroundAsset? {
+        if let id=activeBackgroundID,
+           let asset=backgroundAssets.first(where:{$0.id==id}) { return asset }
+        if let path=backgroundImagePath,
+           let asset=backgroundAssets.first(where:{$0.path==path}) { return asset }
+        return nil
+    }
+
+    var hasReplacementBackground:Bool {
+        guard enabled else{return false}
+        switch backgroundMode {
+        case .none:return false
+        case .image:
+            guard let path=backgroundImagePath,!path.isEmpty else{return false}
+            return FileManager.default.fileExists(atPath:path)
+        case .color,.comicBurst,.fireworks:return true
+        }
+    }
 
     var signature:String {
         [
@@ -65,8 +110,81 @@ struct FTSGreenScreenSettings: Codable, Hashable {
             backgroundMode.rawValue,
             backgroundColorHex.uppercased(),
             backgroundImagePath ?? "",
+            activeBackgroundID ?? "",
             String(format:"%.2f",edgeSoftness)
         ].joined(separator:"|")
+    }
+
+    var printSnapshot:FTSGreenScreenSettings {
+        var value=self
+        if let active=activeBackground {
+            value.backgroundAssets=[active]
+            value.activeBackgroundID=active.id
+            value.backgroundImagePath=active.path
+        } else {
+            value.backgroundAssets=[]
+            value.activeBackgroundID=nil
+            if backgroundMode == .image { value.backgroundImagePath=nil }
+        }
+        return value
+    }
+
+    init() {}
+
+    private enum CodingKeys:String,CodingKey {
+        case enabled,backgroundMode,backgroundColorHex,backgroundImagePath
+        case backgroundAssets,activeBackgroundID,edgeSoftness
+    }
+
+    init(from decoder:Decoder)throws {
+        let c=try decoder.container(keyedBy:CodingKeys.self)
+        enabled=try c.decodeIfPresent(Bool.self,forKey:.enabled) ?? false
+        backgroundMode=try c.decodeIfPresent(FTSGreenBackgroundMode.self,forKey:.backgroundMode) ?? .none
+        backgroundColorHex=try c.decodeIfPresent(String.self,forKey:.backgroundColorHex) ?? "#1A73E8"
+        backgroundImagePath=try c.decodeIfPresent(String.self,forKey:.backgroundImagePath)
+        backgroundAssets=try c.decodeIfPresent([FTSGreenBackgroundAsset].self,forKey:.backgroundAssets) ?? []
+        activeBackgroundID=try c.decodeIfPresent(String.self,forKey:.activeBackgroundID)
+        edgeSoftness=try c.decodeIfPresent(Double.self,forKey:.edgeSoftness) ?? 5.0
+
+        // Migrate the single-background v132/v137 setting into the new library.
+        if backgroundAssets.isEmpty,let path=backgroundImagePath,!path.isEmpty {
+            let asset=FTSGreenBackgroundAsset(
+                id:"legacy:"+path,
+                name:URL(fileURLWithPath:path).lastPathComponent,
+                path:path,
+                assignedDay:nil,
+                kind:FTSGreenBackgroundAssetKind.kind(for:path),
+                createdAt:Date(timeIntervalSince1970:0)
+            )
+            backgroundAssets=[asset]
+            activeBackgroundID=asset.id
+        } else if activeBackgroundID == nil,let path=backgroundImagePath,
+                  let asset=backgroundAssets.first(where:{$0.path==path}) {
+            activeBackgroundID=asset.id
+        }
+
+        // A missing image must mean "no replacement", never a color fallback.
+        if backgroundMode == .image {
+            guard let path=backgroundImagePath,
+                  !path.isEmpty,
+                  FileManager.default.fileExists(atPath:path) else {
+                backgroundMode = .none
+                backgroundImagePath=nil
+                activeBackgroundID=nil
+                return
+            }
+        }
+    }
+
+    func encode(to encoder:Encoder)throws {
+        var c=encoder.container(keyedBy:CodingKeys.self)
+        try c.encode(enabled,forKey:.enabled)
+        try c.encode(backgroundMode,forKey:.backgroundMode)
+        try c.encode(backgroundColorHex,forKey:.backgroundColorHex)
+        try c.encodeIfPresent(backgroundImagePath,forKey:.backgroundImagePath)
+        try c.encode(backgroundAssets,forKey:.backgroundAssets)
+        try c.encodeIfPresent(activeBackgroundID,forKey:.activeBackgroundID)
+        try c.encode(edgeSoftness,forKey:.edgeSoftness)
     }
 }
 
@@ -141,13 +259,14 @@ enum FTSPhotoEffectsV132 {
         cacheKey:String?=nil
     )->NSImage {
         let green=greenScreenSettings ?? FTSGreenScreenStore.settings(eventToken:event.event_token)
-        if effect == .normal && !green.enabled { return source }
+        let replacementActive=green.hasReplacementBackground
+        if effect == .normal && !replacementActive { return source }
         guard let cg=source.cgImage(forProposedRect:nil,context:nil,hints:nil) else{return source}
 
         let original=CIImage(cgImage:cg)
         let extent=original.extent
         var result=original
-        let needsPersonMask = green.enabled || effect == .comic
+        let needsPersonMask = replacementActive || effect == .comic
         let mask = needsPersonMask
             ? personMask(cgImage:cg,extent:extent,softness:green.edgeSoftness,cacheKey:cacheKey)
             : nil
@@ -155,14 +274,14 @@ enum FTSPhotoEffectsV132 {
         if effect == .comic {
             let comic=comicImage(original)
             if let mask {
-                let background = green.enabled ? backgroundImage(settings:green,extent:extent) : original
+                let background = replacementActive ? (backgroundImage(settings:green,extent:extent) ?? original) : original
                 result=blend(foreground:comic,background:background,mask:mask) ?? comic
             } else {
                 result=comic
             }
         } else {
-            if green.enabled,let mask {
-                let background=backgroundImage(settings:green,extent:extent)
+            if replacementActive,let mask,
+               let background=backgroundImage(settings:green,extent:extent) {
                 result=blend(foreground:original,background:background,mask:mask) ?? original
             }
             result=apply(effect:effect,to:result)
@@ -274,14 +393,17 @@ enum FTSPhotoEffectsV132 {
         ])?.outputImage ?? image
     }
 
-    private static func backgroundImage(settings:FTSGreenScreenSettings,extent:CGRect)->CIImage {
+    private static func backgroundImage(settings:FTSGreenScreenSettings,extent:CGRect)->CIImage? {
         switch settings.backgroundMode {
+        case .none:
+            return nil
         case .image:
-            if let path=settings.backgroundImagePath,!path.isEmpty,
-               let image=CIImage(contentsOf:URL(fileURLWithPath:path),options:[.applyOrientationProperty:true]) {
-                return aspectFill(image,to:extent)
-            }
-            return solid(settings.backgroundColorHex,extent:extent)
+            guard let path=settings.backgroundImagePath,!path.isEmpty,
+                  let nsImage=NSImage(contentsOfFile:path),
+                  let cg=nsImage.cgImage(forProposedRect:nil,context:nil,hints:nil) else{return nil}
+            // Animated GIFs move in the settings preview. A physical photo is a
+            // still image, so its first/default frame is used for the print.
+            return aspectFill(CIImage(cgImage:cg),to:extent)
         case .comicBurst:
             if let cg=generatedBackground(size:extent.size,mode:.comicBurst,colorHex:settings.backgroundColorHex)
                 .cgImage(forProposedRect:nil,context:nil,hints:nil) {
@@ -369,6 +491,26 @@ enum FTSPhotoEffectsV132 {
     }
 }
 
+struct FTSBackgroundFilePreview: NSViewRepresentable {
+    let path:String
+    let animated:Bool
+
+    func makeNSView(context:Context)->NSImageView {
+        let view=NSImageView()
+        view.imageScaling = .scaleProportionallyUpOrDown
+        view.imageAlignment = .alignCenter
+        view.animates = animated
+        return view
+    }
+
+    func updateNSView(_ view:NSImageView,context:Context) {
+        view.imageScaling = .scaleProportionallyUpOrDown
+        view.imageAlignment = .alignCenter
+        view.image = NSImage(contentsOfFile:path)
+        view.animates = animated
+    }
+}
+
 struct FTSGreenScreenView: View {
     @ObservedObject var state:AppState
     let event:EventRow
@@ -412,7 +554,12 @@ struct FTSGreenScreenView: View {
                             }
                         }
                         .pickerStyle(.segmented)
-                        .onChange(of:settings.backgroundMode){_ in saveSettings()}
+                        .onChange(of:settings.backgroundMode){mode in
+                            if mode == .image,settings.activeBackground == nil {
+                                settings.backgroundImagePath=nil
+                            }
+                            saveSettings()
+                        }
 
                         if settings.backgroundMode == .color || settings.backgroundMode == .comicBurst {
                             Text("Farbe").font(.caption.bold())
@@ -437,31 +584,34 @@ struct FTSGreenScreenView: View {
                             }
                         }
 
-                        if settings.backgroundMode == .image {
-                            HStack {
-                                Button("Hintergrundbild auswählen"){chooseBackground()}
-                                    .buttonStyle(.borderedProminent)
-                                if let p=settings.backgroundImagePath,!p.isEmpty {
-                                    Text(URL(fileURLWithPath:p).lastPathComponent)
-                                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                    Button("Entfernen") {
-                                        let oldPath=settings.backgroundImagePath
-                                        settings.backgroundImagePath=nil
-                                        saveSettings(clearEffectCache:true)
-                                        if let activation=state.mediaIngest.activation {
-                                            FTSGreenScreenStore.removeBackgroundCopy(oldPath,activation:activation)
-                                        }
-                                        message="Hintergrundbild entfernt. Kamera-Originale bleiben unverändert."
+                        HStack(spacing:10) {
+                            Button("Bilder / GIFs hinzufügen"){chooseBackgrounds()}
+                                .buttonStyle(.borderedProminent)
+                            if settings.activeBackground != nil || settings.backgroundMode == .image {
+                                Button("Hintergrund aus") { deactivateBackground() }
+                            }
+                        }
+
+                        Text("Mehrere Hintergründe bleiben für dieses Event gespeichert. Du wechselst sie ausschließlich manuell. GIF-Dateien werden hier animiert; der Ausdruck verwendet ein Standbild.")
+                            .font(.caption2).foregroundStyle(.secondary)
+
+                        if settings.backgroundAssets.isEmpty {
+                            Text("Noch keine Hintergrundbilder gespeichert.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        } else {
+                            ScrollView(.horizontal,showsIndicators:true) {
+                                HStack(alignment:.top,spacing:10) {
+                                    ForEach(settings.backgroundAssets) { asset in
+                                        backgroundAssetCard(asset)
                                     }
                                 }
+                                .padding(.vertical,2)
                             }
-                            Text("Das Bild wird in den Eventordner „Green Screen Hintergründe“ kopiert. Die Kamera-SD-Karte wird nicht beschrieben.")
-                                .font(.caption2).foregroundStyle(.secondary)
                         }
 
                         backgroundPreview
                             .frame(maxWidth:.infinity)
-                            .frame(height:230)
+                            .frame(height:260)
                             .clipShape(RoundedRectangle(cornerRadius:12))
                     }.padding(.vertical,4)
                 }
@@ -504,14 +654,34 @@ struct FTSGreenScreenView: View {
         ZStack {
             RoundedRectangle(cornerRadius:12).fill(Color.black.opacity(0.12))
             switch settings.backgroundMode {
+            case .none:
+                VStack(spacing:8) {
+                    Image(systemName:"rectangle.slash").font(.system(size:34))
+                    Text("Kein Green-Screen-Hintergrund aktiv")
+                    Text("Das echte Foto bleibt sichtbar.").font(.caption2)
+                }.foregroundStyle(.secondary)
             case .image:
-                if let p=settings.backgroundImagePath,
-                   let image=NSImage(contentsOfFile:p) {
-                    Image(nsImage:image).resizable().scaledToFill().clipped()
+                if let asset=settings.activeBackground {
+                    FTSBackgroundFilePreview(
+                        path:asset.path,
+                        animated:asset.kind == .animatedGIF
+                    )
+                    .padding(8)
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Text(asset.kind.label)
+                                .font(.caption2.bold())
+                                .padding(.horizontal,8).padding(.vertical,4)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Capsule())
+                        }
+                        Spacer()
+                    }.padding(10)
                 } else {
                     VStack(spacing:8) {
                         Image(systemName:"photo.on.rectangle.angled").font(.system(size:34))
-                        Text("Noch kein Hintergrundbild gewählt")
+                        Text("Kein Bild aktiv · unten ein gespeichertes Bild aktivieren")
                     }.foregroundStyle(.secondary)
                 }
             case .color:
@@ -535,6 +705,56 @@ struct FTSGreenScreenView: View {
         }
     }
 
+    @ViewBuilder private func backgroundAssetCard(_ asset:FTSGreenBackgroundAsset)->some View {
+        let active=settings.activeBackgroundID==asset.id && settings.backgroundMode == .image
+        VStack(alignment:.leading,spacing:7) {
+            ZStack(alignment:.topTrailing) {
+                RoundedRectangle(cornerRadius:9).fill(Color.black.opacity(0.08))
+                FTSBackgroundFilePreview(path:asset.path,animated:asset.kind == .animatedGIF)
+                    .padding(5)
+                if active {
+                    Label("Aktiv",systemImage:"checkmark.circle.fill")
+                        .font(.caption2.bold()).foregroundStyle(.green)
+                        .padding(5)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Capsule())
+                        .padding(5)
+                }
+            }
+            .frame(width:190,height:115)
+            .clipShape(RoundedRectangle(cornerRadius:9))
+
+            Text(asset.name).font(.caption.bold()).lineLimit(1)
+            Text(asset.kind.label).font(.caption2).foregroundStyle(.secondary)
+
+            HStack {
+                Button(active ? "Aktiv" : "Aktivieren") { activateBackground(asset) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(active)
+                Menu {
+                    Button("Alle Tage") { setAssignedDay(nil,assetID:asset.id) }
+                    ForEach(eventDays,id:\.self) { day in
+                        Button(day) { setAssignedDay(day,assetID:asset.id) }
+                    }
+                } label: {
+                    Label(asset.assignedDay ?? "Alle Tage",systemImage:"calendar")
+                }
+                .menuStyle(.borderlessButton)
+            }
+
+            Button("Aus Event löschen",role:.destructive) { deleteBackground(asset) }
+                .font(.caption)
+        }
+        .frame(width:190)
+        .padding(8)
+        .background(Color.secondary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius:10))
+    }
+
+    private var eventDays:[String] {
+        state.mediaIngest.eventDays(event)
+    }
+
     private func saveSettings(clearEffectCache:Bool=false) {
         // Settings are lightweight and must react immediately. Never re-render the
         // whole active photo set from this control; the large print preview and
@@ -546,29 +766,88 @@ struct FTSGreenScreenView: View {
             : "Green Screen ausgeschaltet · normaler Fotoweg aktiv."
     }
 
-    private func chooseBackground() {
+    private func chooseBackgrounds() {
         guard let activation=state.mediaIngest.activation else {
             message="Zuerst das Event-Album unter SD-Karte / Import aktivieren."
             return
         }
         let panel=NSOpenPanel()
-        panel.title="Green-Screen-Hintergrund auswählen"
+        panel.title="Green-Screen-Hintergründe auswählen"
         panel.canChooseDirectories=false
-        panel.allowsMultipleSelection=false
-        panel.allowedFileTypes=["jpg","jpeg","png","heic","tif","tiff"]
-        guard panel.runModal() == .OK,let url=panel.url else{return}
-        do {
-            let oldPath=settings.backgroundImagePath
-            let dest=try FTSGreenScreenStore.copyBackground(url,activation:activation)
-            settings.backgroundImagePath=dest.path
-            settings.backgroundMode = .image
-            saveSettings(clearEffectCache:true)
-            if oldPath != dest.path {
-                FTSGreenScreenStore.removeBackgroundCopy(oldPath,activation:activation)
+        panel.allowsMultipleSelection=true
+        panel.allowedFileTypes=["jpg","jpeg","png","heic","tif","tiff","gif"]
+        guard panel.runModal() == .OK,!panel.urls.isEmpty else{return}
+
+        var added:[FTSGreenBackgroundAsset]=[]
+        for url in panel.urls {
+            do {
+                let dest=try FTSGreenScreenStore.copyBackground(url,activation:activation)
+                added.append(FTSGreenBackgroundAsset(
+                    id:UUID().uuidString,
+                    name:dest.lastPathComponent,
+                    path:dest.path,
+                    assignedDay:nil,
+                    kind:FTSGreenBackgroundAssetKind.kind(for:dest.path),
+                    createdAt:Date()
+                ))
+            } catch {
+                message="Mindestens ein Hintergrund konnte nicht gespeichert werden: \(error.localizedDescription)"
             }
-            message="Hintergrund gespeichert: \(dest.lastPathComponent)"
-        } catch {
-            message="Hintergrund konnte nicht gespeichert werden: \(error.localizedDescription)"
         }
+
+        guard !added.isEmpty else{return}
+        settings.backgroundAssets.append(contentsOf:added)
+        // Initial import may activate the first selected file. Later changes are
+        // always manual and there is never an automatic rotation.
+        if settings.activeBackground == nil,let first=added.first {
+            settings.activeBackgroundID=first.id
+            settings.backgroundImagePath=first.path
+            settings.backgroundMode = .image
+        }
+        saveSettings(clearEffectCache:true)
+        message="\(added.count) Hintergrund\(added.count==1 ? "" : "bilder") gespeichert · Wechsel erfolgt nur manuell."
     }
+
+    private func activateBackground(_ asset:FTSGreenBackgroundAsset) {
+        guard FileManager.default.fileExists(atPath:asset.path) else {
+            message="Diese Hintergrunddatei fehlt. Bitte löschen und neu hinzufügen."
+            return
+        }
+        settings.activeBackgroundID=asset.id
+        settings.backgroundImagePath=asset.path
+        settings.backgroundMode = .image
+        saveSettings(clearEffectCache:true)
+        message="Aktiv: \(asset.name)"
+    }
+
+    private func deactivateBackground() {
+        settings.activeBackgroundID=nil
+        settings.backgroundImagePath=nil
+        settings.backgroundMode = .none
+        saveSettings(clearEffectCache:true)
+        message="Hintergrund ausgeschaltet · das echte Foto bleibt sichtbar."
+    }
+
+    private func deleteBackground(_ asset:FTSGreenBackgroundAsset) {
+        let wasActive=settings.activeBackgroundID==asset.id || settings.backgroundImagePath==asset.path
+        settings.backgroundAssets.removeAll{$0.id==asset.id}
+        if wasActive {
+            settings.activeBackgroundID=nil
+            settings.backgroundImagePath=nil
+            settings.backgroundMode = .none
+        }
+        saveSettings(clearEffectCache:true)
+        // Remove it from the event library immediately, but keep the local file
+        // until event cleanup so an already queued print snapshot can still use it.
+        message="\(asset.name) aus diesem Event gelöscht."
+    }
+
+    private func setAssignedDay(_ day:String?,assetID:String) {
+        guard let index=settings.backgroundAssets.firstIndex(where:{$0.id==assetID}) else{return}
+        settings.backgroundAssets[index].assignedDay=day
+        saveSettings()
+        message=day.map{"Bild für Tag \($0) gekennzeichnet · Aktivierung bleibt manuell."}
+            ?? "Tageskennzeichnung entfernt · Aktivierung bleibt manuell."
+    }
+
 }

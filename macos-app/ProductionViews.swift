@@ -1170,7 +1170,7 @@ struct V80PhotoPrintPreviewSheet: View {
                     if allowPrint {
                         Button("OK · Zum Druck"){
                             var confirmed=layout
-                            confirmed.greenScreenSnapshot=liveGreenSettings
+                            confirmed.greenScreenSnapshot=liveGreenSettings.printSnapshot
                             confirmed.preparedImagePath=savePreparedPreview()
                             onConfirm(quantity,confirmed)
                         }

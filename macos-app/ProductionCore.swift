@@ -281,7 +281,7 @@ struct V80PrintLayout: Codable, Hashable {
         abs(cropZoom - 1.0) > 0.001 || abs(cropOffsetX) > 0.001 || abs(cropOffsetY) > 0.001
     }
     var requiresFreshRender: Bool {
-        hasCustomCrop || photoEffect != .normal || greenScreenSnapshot?.enabled == true
+        hasCustomCrop || photoEffect != .normal || greenScreenSnapshot?.hasReplacementBackground == true
     }
 
     init() {}
@@ -1150,13 +1150,13 @@ enum V80MacSpooler {
 @MainActor
 final class ProductionCore: ObservableObject {
     static let version: String = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.47"
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.48"
         let value=raw.trimmingCharacters(in:.whitespacesAndNewlines)
-        return value.isEmpty ? "0.3.47" : value
+        return value.isEmpty ? "0.3.48" : value
     }()
     static let build: Int = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "137"
-        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 137
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "138"
+        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 138
     }()
 
     @Published var workUnits: [V80WorkUnit] = []
@@ -2114,7 +2114,9 @@ final class ProductionCore: ObservableObject {
                     let readyPath = (m.designedPath?.isEmpty == false) ? m.designedPath! : m.importedPath
                     var chosenLayout=layouts[m.id] ?? V80PrintLayout()
                     if chosenLayout.greenScreenSnapshot == nil {
-                        chosenLayout.greenScreenSnapshot=FTSGreenScreenStore.settings(eventToken:state.selectedEventToken)
+                        chosenLayout.greenScreenSnapshot=FTSGreenScreenStore
+                            .settings(eventToken:state.selectedEventToken)
+                            .printSnapshot
                     }
                     units.append(V80LocalPrintUnit(
                         id:UUID(),jobID:id,customerCode:code,mediaID:m.id,imagePath:readyPath,
