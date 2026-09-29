@@ -1523,6 +1523,7 @@ struct ProductionMediaContent: View {
                 ForEach(visibleItems) { item in
                     V80MediaItemCell(
                         item:item,
+                        event:event,
                         photoNumber:stablePhotoNumber(item),
                         quantity:Binding(
                             get:{quantities[item.id] ?? 0},
@@ -1951,8 +1952,79 @@ struct V80CardRegistrationRow: View {
     }
 }
 
+struct V140GreenScreenThumbnail: View {
+    let item:V80MediaItem
+    let event:EventRow?
+    @State private var image:NSImage?
+    @State private var refreshToken=0
+
+    private var greenSettings:FTSGreenScreenSettings {
+        guard let event else{return FTSGreenScreenSettings()}
+        return FTSGreenScreenStore.settings(eventToken:event.event_token)
+    }
+
+    private var renderKey:String {
+        [item.id,greenSettings.signature,String(refreshToken)].joined(separator:"|")
+    }
+
+    var body:some View {
+        ZStack {
+            Color.black.opacity(0.10)
+            if let image {
+                Image(nsImage:image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                ProgressView().controlSize(.small)
+            }
+        }
+        .task(id:renderKey) {
+            await refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for:.ftsGreenScreenSettingsDidChange)) { note in
+            guard let token=note.object as? String,token==event?.event_token else{return}
+            refreshToken += 1
+        }
+    }
+
+    @MainActor private func refresh() async {
+        guard let source=Self.thumbnailSource(path:item.importedPath) else {
+            image=nil
+            return
+        }
+        guard let event else {
+            image=source
+            return
+        }
+        let settings=greenSettings
+        let rendered=FTSPhotoEffectsV132.processedImage(
+            source:source,
+            event:event,
+            effect:.normal,
+            greenScreenSettings:settings,
+            cacheKey:item.importedPath+"|tile"
+        )
+        if !Task.isCancelled { image=rendered }
+    }
+
+    @MainActor private static func thumbnailSource(path:String,maxDimension:CGFloat=520)->NSImage? {
+        guard let source=NSImage(contentsOfFile:path) else{return nil}
+        let width=max(source.size.width,1)
+        let height=max(source.size.height,1)
+        let scale=min(1,maxDimension/max(width,height))
+        let size=NSSize(width:max(1,width*scale),height:max(1,height*scale))
+        let out=NSImage(size:size)
+        out.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        source.draw(in:NSRect(origin:.zero,size:size),from:.zero,operation:.copy,fraction:1)
+        out.unlockFocus()
+        return out
+    }
+}
+
 struct V80MediaItemCell: View {
     let item:V80MediaItem
+    let event:EventRow?
     let photoNumber:Int
     @Binding var quantity:Int
     let statusText:String
@@ -1975,28 +2047,25 @@ struct V80MediaItemCell: View {
 
     var body: some View {
         VStack(alignment:.leading,spacing:5) {
-            // The normal work-area tile always shows the immutable camera original.
-            if let image=NSImage(contentsOfFile:item.importedPath) {
-                Button(action:onPreview) {
-                    ZStack(alignment:.bottomTrailing) {
-                        Image(nsImage:image)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth:.infinity)
-                            .frame(height:100)
-                            .background(Color.black.opacity(0.10))
-                            .clipShape(RoundedRectangle(cornerRadius:7))
-                        Image(systemName:"arrow.up.left.and.arrow.down.right")
-                            .font(.caption.bold())
-                            .padding(5)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                            .padding(5)
-                    }
+            // Small work-area tiles are previews, not source files. When Green Screen
+            // is active they show the selected replacement immediately; the immutable
+            // camera original on disk is never modified.
+            Button(action:onPreview) {
+                ZStack(alignment:.bottomTrailing) {
+                    V140GreenScreenThumbnail(item:item,event:event)
+                        .frame(maxWidth:.infinity)
+                        .frame(height:100)
+                        .clipShape(RoundedRectangle(cornerRadius:7))
+                    Image(systemName:"arrow.up.left.and.arrow.down.right")
+                        .font(.caption.bold())
+                        .padding(5)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                        .padding(5)
                 }
-                .buttonStyle(.plain)
-                .help("Große Druckvorschau öffnen")
             }
+            .buttonStyle(.plain)
+            .help("Große Druckvorschau öffnen")
             Text("\(sourceTitle) · Foto \(String(format:"%03d",photoNumber))")
                 .font(.caption.bold())
                 .lineLimit(1)

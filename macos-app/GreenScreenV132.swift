@@ -188,6 +188,10 @@ struct FTSGreenScreenSettings: Codable, Hashable {
     }
 }
 
+extension Notification.Name {
+    static let ftsGreenScreenSettingsDidChange = Notification.Name("fts.green.screen.settings.changed")
+}
+
 enum FTSGreenScreenStore {
     private static func key(_ eventToken:String)->String {
         "fts.green.screen.v132.\(eventToken)"
@@ -204,6 +208,7 @@ enum FTSGreenScreenStore {
     static func save(_ value:FTSGreenScreenSettings,eventToken:String) {
         guard let data=try? JSONEncoder().encode(value) else{return}
         UserDefaults.standard.set(data,forKey:key(eventToken))
+        NotificationCenter.default.post(name:.ftsGreenScreenSettingsDidChange,object:eventToken)
     }
 
     static func copyBackground(_ source:URL,activation:V80MediaActivation)throws->URL {
