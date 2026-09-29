@@ -565,15 +565,7 @@ enum ProductionRendererV76 {
     }
 
     private static func fontFor(_ id:String,size:CGFloat,weight:Int)->NSFont {
-        let systemWeight:NSFont.Weight = weight>=900 ? .black : weight>=800 ? .heavy : weight>=700 ? .bold : weight>=600 ? .semibold : .regular
-        switch id {
-        case "bold","rock": return NSFont(name:"Impact",size:size) ?? NSFont.systemFont(ofSize:size,weight:.black)
-        case "elegant": return NSFont(name:"Georgia",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
-        case "retro": return NSFont(name:"Courier New",size:size) ?? NSFont.monospacedSystemFont(ofSize:size,weight:systemWeight)
-        case "pop": return NSFont(name:"Trebuchet MS Bold",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
-        case "handwritten": return NSFont(name:"Brush Script MT",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
-        default: return NSFont.systemFont(ofSize:size,weight:systemWeight)
-        }
+        FTSDesignTypography.nsFont(id:id,size:size,weight:weight)
     }
 
     // MARK: - Logos and decorations
@@ -654,6 +646,22 @@ enum ProductionRendererV76 {
     private static func remoteImage(_ storagePath:String) async throws -> NSImage {
         let key=storagePath as NSString
         if let cached=remoteImageCache.object(forKey:key) { return cached }
+
+        // Manual Printer events may use a stable local design asset copied by
+        // the app. MySelfie storage paths keep using the unchanged Supabase path.
+        if storagePath.hasPrefix("/") {
+            guard let image=NSImage(contentsOfFile:storagePath) else {
+                throw NSError(domain:"FTSPrinter",code:177,userInfo:[NSLocalizedDescriptionKey:"Lokale Design-Grafik konnte nicht geladen werden."])
+            }
+            remoteImageCache.setObject(image,forKey:key)
+            return image
+        }
+        if storagePath.hasPrefix("file://"),let url=URL(string:storagePath),
+           let image=NSImage(contentsOf:url) {
+            remoteImageCache.setObject(image,forKey:key)
+            return image
+        }
+
         let data=try await api.imageData(storagePath:storagePath)
         guard let image=NSImage(data:data) else {
             throw NSError(domain:"FTSPrinter",code:177,userInfo:[NSLocalizedDescriptionKey:"Design-Grafik konnte nicht geladen werden."])

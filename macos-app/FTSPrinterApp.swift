@@ -766,13 +766,13 @@ final class AppState: ObservableObject {
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
     static let appVersion: String = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.53"
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.54"
         let value=raw.trimmingCharacters(in:.whitespacesAndNewlines)
-        return value.isEmpty ? "0.3.53" : value
+        return value.isEmpty ? "0.3.54" : value
     }()
     static let appBuild: Int = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "143"
-        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 143
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "144"
+        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 144
     }()
     static var userAgent:String { "FTS Printer macOS \(appVersion) Build \(appBuild)" }
 
@@ -1389,6 +1389,7 @@ struct MainView: View {
     @State private var updateInstalling=false
     @State private var postponedUpdateBuild:Int?=nil
     @State private var showRemoteIssues=false
+    @State private var showManualEventCreate=false
 
     var printingActive:Bool {
         state.production.printerSlots.contains{["PREPARING","TRANSFER","PRINTING"].contains($0.state)}
@@ -1412,8 +1413,16 @@ struct MainView: View {
                     VStack(spacing:14){
                         Image(systemName:"calendar.badge.exclamationmark").font(.system(size:46)).foregroundStyle(FTSTheme.gold)
                         Text("Kein Printer-Event").font(.title2.bold())
-                        Text("Im FTS Cockpit zuerst ein Event mit Print oder lokaler Kamera freigeben.").foregroundStyle(FTSTheme.muted)
-                        Button("Events neu laden"){Task{_ = await state.loadEvents()}}.buttonStyle(.borderedProminent)
+                        Text("MySelfie-Event laden oder direkt hier ein eigenes Printer-Event anlegen.")
+                            .foregroundStyle(FTSTheme.muted)
+                        HStack {
+                            Button("Events neu laden"){Task{_ = await state.loadEvents()}}
+                                .buttonStyle(.borderedProminent)
+                            if state.currentUser?.role=="printer_admin" {
+                                Button("+ Manuelles Printer-Event"){showManualEventCreate=true}
+                                    .buttonStyle(.borderedProminent)
+                            }
+                        }
                     }.frame(maxWidth:.infinity,maxHeight:.infinity)
                 }
                 HStack{
@@ -1431,6 +1440,14 @@ struct MainView: View {
         .frame(minWidth:1080,minHeight:720)
         .sheet(isPresented:$showStock){StockSheet(isPresented:$showStock).environmentObject(state)}
         .sheet(item:$state.currentReceipt){r in ReceiptSheet(receipt:r).environmentObject(state)}
+        .sheet(isPresented:$showManualEventCreate){
+            FTSManualPrinterEventCreateSheet(state:state) { token in
+                Task {
+                    await state.selectEvent(token)
+                    section = .events
+                }
+            }
+        }
         .sheet(isPresented:$showRemoteIssues){
             V127RemoteIssuesPanel(state:state,core:state.production)
                 .frame(minWidth:760,minHeight:620)
@@ -1650,17 +1667,28 @@ struct MainView: View {
             VStack(alignment:.leading,spacing:2){
                 Text("Event").font(.caption.bold()).foregroundStyle(FTSTheme.gold)
                 Picker("",selection:Binding(get:{state.selectedEventToken},set:{v in Task{await state.selectEvent(v)}})){
-                    ForEach(state.events){e in Text(e.event_title).tag(e.event_token)}
+                    ForEach(state.events){e in
+                        Text("\(e.printerSourceLabel) · \(e.event_title)").tag(e.event_token)
+                    }
                 }
                 .labelsHidden()
-                .frame(width:255)
-                Text([event.location,event.event_date].compactMap{$0}.joined(separator:" · "))
-                    .font(.caption2).foregroundStyle(FTSTheme.muted).lineLimit(1)
-                    .frame(width:255,alignment:.leading)
+                .frame(width:300)
+                HStack(spacing:6) {
+                    Text(event.printerSourceLabel)
+                        .font(.caption2.bold())
+                        .foregroundStyle(event.isManualPrinterEvent ? Color.orange:FTSTheme.cyan)
+                    Text([event.location,event.event_date].compactMap{$0}.joined(separator:" · "))
+                        .font(.caption2).foregroundStyle(FTSTheme.muted).lineLimit(1)
+                }
+                .frame(width:300,alignment:.leading)
             }
             Spacer(minLength:6)
             FTSTopOperationalStatus(core:state.production)
             StockPill(stock:state.stock)
+            if state.currentUser?.role=="printer_admin" {
+                Button{showManualEventCreate=true} label:{Label("Manuell +",systemImage:"plus.circle.fill")}
+                    .buttonStyle(.borderedProminent)
+            }
             Button{Task{_ = await state.loadEvents()}} label:{Label("Neu laden",systemImage:"arrow.clockwise")}
                 .buttonStyle(.borderedProminent)
             Button{Task{await state.switchStaff()}} label:{Label("Mitarbeiter",systemImage:"person.2.fill")}
@@ -1801,20 +1829,89 @@ struct FTSDashboardView:View {
 struct FTSEventOverviewView:View {
     @EnvironmentObject var state:AppState
     let event:EventRow
+    @State private var showManualEditor=false
+    @State private var showArchiveConfirm=false
+    @State private var working=false
+
     var body:some View {
         ScrollView {
             VStack(alignment:.leading,spacing:14){
-                Text(event.event_title).font(.title.bold()).foregroundStyle(FTSTheme.gold)
-                Text([event.organizer_name,event.location,event.event_date].compactMap{$0}.joined(separator:" · ")).foregroundStyle(FTSTheme.muted)
+                HStack {
+                    VStack(alignment:.leading,spacing:4) {
+                        Text(event.event_title).font(.title.bold()).foregroundStyle(FTSTheme.gold)
+                        HStack(spacing:7) {
+                            Text(event.printerSourceLabel)
+                                .font(.caption.bold())
+                                .foregroundStyle(event.isManualPrinterEvent ? Color.orange:FTSTheme.cyan)
+                            Text([event.organizer_name,event.location,event.event_date].compactMap{$0}.joined(separator:" · "))
+                                .foregroundStyle(FTSTheme.muted)
+                        }
+                    }
+                    Spacer()
+                    if event.isManualPrinterEvent && state.currentUser?.role=="printer_admin" {
+                        Button("Design bearbeiten"){showManualEditor=true}
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+
                 HStack{
-                    VStack(alignment:.leading){Text("Print-Fenster").font(.caption).foregroundStyle(FTSTheme.muted);Text(event.print_window_active == true ? "Aktiv" : "Nicht aktiv").bold()}
+                    VStack(alignment:.leading){Text("Print-Fenster").font(.caption).foregroundStyle(FTSTheme.muted);Text(event.print_window_active == true ? "Aktiv" : "Nicht benötigt").bold()}
                     Spacer()
                     VStack(alignment:.leading){Text("Betriebsart").font(.caption).foregroundStyle(FTSTheme.muted);Text(event.operation_mode ?? "Standard").bold()}
                     Spacer()
                     VStack(alignment:.leading){Text("Lokale Kamera").font(.caption).foregroundStyle(FTSTheme.muted);Text(event.local_camera_photos == true ? "Ja" : "Nein").bold()}
                 }.ftsCard()
-                Button("Eventdaten aktualisieren"){Task{await state.refreshSelected()}}.buttonStyle(.borderedProminent)
+
+                if event.isManualPrinterEvent {
+                    VStack(alignment:.leading,spacing:10) {
+                        Label("Manuelles Printer-Event",systemImage:"slider.horizontal.3")
+                            .font(.headline).foregroundStyle(FTSTheme.gold)
+                        Text("Dieses Event wurde direkt im Printer angelegt. Titel, 148 × 15-mm-Balken, Transparenz, Schrift, Ausrichtung und Logo werden hier eingestellt. Der Ausdruck verwendet danach denselben ProductionRendererV76 wie MySelfie.")
+                            .font(.caption).foregroundStyle(FTSTheme.muted)
+                        if state.currentUser?.role=="printer_admin" {
+                            HStack {
+                                Button("Design bearbeiten"){showManualEditor=true}
+                                    .buttonStyle(.borderedProminent)
+                                Button(working ? "Bitte warten …":"Duplizieren") {
+                                    working=true
+                                    Task {
+                                        _=await state.duplicateManualPrinterEvent(event)
+                                        working=false
+                                    }
+                                }
+                                .disabled(working)
+                                Button("Archivieren",role:.destructive){showArchiveConfirm=true}
+                                    .disabled(working)
+                            }
+                        }
+                    }.ftsCard()
+                } else {
+                    VStack(alignment:.leading,spacing:7) {
+                        Label("MySelfie-Event · geschützt",systemImage:"checkmark.shield.fill")
+                            .font(.headline).foregroundStyle(FTSTheme.cyan)
+                        Text("Fotodesign, Titel, Logos und Studio-Konfiguration werden weiterhin aus MySelfie übernommen. Der manuelle Printer-Editor überschreibt dieses Event nicht.")
+                            .font(.caption).foregroundStyle(FTSTheme.muted)
+                    }.ftsCard()
+                }
+
+                Button("Eventdaten aktualisieren"){Task{await state.refreshSelected()}}
+                    .buttonStyle(.borderedProminent)
             }.padding(16)
+        }
+        .sheet(isPresented:$showManualEditor) {
+            FTSManualPrinterEventEditor(state:state,event:event)
+        }
+        .alert("Manuelles Event archivieren?",isPresented:$showArchiveConfirm) {
+            Button("Abbrechen",role:.cancel){}
+            Button("Archivieren",role:.destructive) {
+                working=true
+                Task {
+                    _=await state.archiveManualPrinterEvent(event)
+                    working=false
+                }
+            }
+        } message: {
+            Text("Das Event verschwindet aus der Printer-Auswahl. Offene lokale Druckaufträge müssen vorher abgeschlossen oder archiviert sein.")
         }
     }
 }

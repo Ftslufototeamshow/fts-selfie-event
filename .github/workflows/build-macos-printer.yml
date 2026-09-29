@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.53-background-framing-auto-person.zip
-            dist/FTS-Printer-macOS-v0.3.53-background-framing-auto-person.dmg
+            dist/FTS-Printer-macOS-v0.3.54-manual-printer-events.zip
+            dist/FTS-Printer-macOS-v0.3.54-manual-printer-events.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.53-background-framing-auto-person"
+          TAG="fts-printer-mac-v0.3.54-manual-printer-events"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.53-background-framing-auto-person.zip dist/FTS-Printer-macOS-v0.3.53-background-framing-auto-person.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.54-manual-printer-events.zip dist/FTS-Printer-macOS-v0.3.54-manual-printer-events.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.53-background-framing-auto-person.zip dist/FTS-Printer-macOS-v0.3.53-background-framing-auto-person.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.53 · Background Framing + Auto Person" --notes "Build 143: Ergänzt vier Green-Screen-Kompositionslogiken ohne Änderung am Kameraoriginal. Ganzes Bild zeigt den vollständigen Hintergrund proportional und füllt unvermeidbare Randflächen mit einer weichen Erweiterung desselben Bildes. Foto füllen bleibt randloses proportional zentriertes Fill. Manuell bietet Hintergrund-Zoom sowie X/Y-Position. Auto Person erkennt pro Foto die Personenposition und passt ausschließlich Hintergrund-Ausrichtung und eine leichte Hintergrund-Zoomkorrektur an; Person/Kameraoriginal werden niemals verschoben oder überschrieben. Die echte Green-Screen-Erkennung aus Build 142 bleibt unverändert und entscheidet weiterhin gemeinsam für kleine Vorschau, große Druckvorschau und Druck. Mehrfach-Hintergründe, GIF, Farbe, Comic-Burst, Feuerwerk, Filter, Eventtag, SD-A-Z, WLAN, Canon SELPHY, Material, Archiv, QR, 148x15-mm-Banner und bestehendes Layout bleiben bestehen."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.54-manual-printer-events.zip dist/FTS-Printer-macOS-v0.3.54-manual-printer-events.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.54 · Manual Printer Events" --notes "Build 144: Ergänzt echte manuelle Printer-only-Events als zweiten Eventweg neben MySelfie, ohne den vorhandenen Produktionsweg zu duplizieren. MySelfie-Events bleiben geschützt und übernehmen weiterhin ihr studio_config unverändert. Administratoren können direkt im Printer ein manuelles Event anlegen, bearbeiten, duplizieren und archivieren. Der manuelle Editor schreibt dieselbe studio_config-Struktur, die ProductionRendererV76 bereits verwendet: fester 148x15-mm-Balken, Farbe/Verlauf, Transparenz, Titel, Untertitel, dritte Zeile, Datum, zentrale Schriftarten, Schriftgröße/-stärke/-farbe, Ausrichtung, optionales lokales Logo und FTS-Branding. Typografie ist jetzt zentral definiert und wird vom Renderer und Editor gemeinsam verwendet. SD-A-Z, WLAN, Canon SELPHY, Material, Archiv, QR, Green Screen, Filter, Druckwarteschlange und Kamera-Original bleiben unverändert. Manuelle Events laufen als operation_mode=print_only mit local_camera_photos=true durch denselben vorhandenen Backend-/Druckweg."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.53-background-framing-auto-person"
+          CURRENT="fts-printer-mac-v0.3.54-manual-printer-events"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
