@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.51-green-detection-fit.zip
-            dist/FTS-Printer-macOS-v0.3.51-green-detection-fit.dmg
+            dist/FTS-Printer-macOS-v0.3.52-lime-green-detection.zip
+            dist/FTS-Printer-macOS-v0.3.52-lime-green-detection.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.51-green-detection-fit"
+          TAG="fts-printer-mac-v0.3.52-lime-green-detection"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.51-green-detection-fit.zip dist/FTS-Printer-macOS-v0.3.51-green-detection-fit.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.52-lime-green-detection.zip dist/FTS-Printer-macOS-v0.3.52-lime-green-detection.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.51-green-detection-fit.zip dist/FTS-Printer-macOS-v0.3.51-green-detection-fit.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.51 · Green Detection + Fit" --notes "Build 141: Green Screen ersetzt den Hintergrund nur noch, wenn im tatsächlichen Kamerafoto eine große zusammenhängende typische Chroma-Grün-Hintergrundfläche erkannt wird. Grüne Kleidung, kleine grüne Bereiche und normale Fotos ohne echte Green-Screen-Wand lösen keinen Ersatz aus. Kleine SD/WLAN-Vorschau, große Druckvorschau und physischer Druck verwenden dieselbe gecachte Entscheidung pro unverändertem Kameraoriginal. Die Hintergrundbibliothek bleibt Aspect-Fit und zeigt das komplette Bild proportional; der fertige Druckhintergrund bleibt proportional zentriertes Aspect-Fill ohne Verzerrung. Kamera Original bleibt unverändert. Mehrfach-Hintergründe, manuelle Auswahl, GIF, Farbe, Comic-Burst, Feuerwerk, Filter/Comic pro Foto, Eventtag, SD-A-Z, WLAN, Canon SELPHY, Material, Archiv, QR, 148x15-mm-Banner und bestehendes FTS-Layout bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.52-lime-green-detection.zip dist/FTS-Printer-macOS-v0.3.52-lime-green-detection.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.52 · Lime Green Detection" --notes "Build 142: Korrigiert die echte Green-Screen-Erkennung für helle Lime-/Gelbgrün-Wände unter Eventlicht. Der praktische Chroma-Hue-Bereich wurde erweitert, während die Schutzlogik gegen Wiese, grüne Kleidung und kleine grüne Flächen unverändert bleibt: Ersatz erfolgt nur bei einer großen zusammenhängenden Hintergrundfläche mit ausreichender Bildspannweite, oberen Bildanteilen und Hintergrundgeometrie. Kleine SD/WLAN-Vorschau, große Druckvorschau und physischer Druck teilen weiterhin dieselbe gecachte Entscheidung pro Kameraoriginal. Kamera Original bleibt unverändert. Hintergrundbibliothek bleibt Aspect-Fit; Druckhintergrund bleibt proportional zentriertes Aspect-Fill. Canon, SD-A-Z, WLAN, Material, Archiv, QR, Filter, Eventtag und 148x15-mm-Banner bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.51-green-detection-fit"
+          CURRENT="fts-printer-mac-v0.3.52-lime-green-detection"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

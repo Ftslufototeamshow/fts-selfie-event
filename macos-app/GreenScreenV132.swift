@@ -331,7 +331,7 @@ enum FTSPhotoEffectsV132 {
         // Tile, large preview and physical print all use the same imported source
         // path. Strip preview-only suffixes so they share exactly one decision.
         let base=raw.split(separator:"|",maxSplits:1,omittingEmptySubsequences:false).first.map(String.init) ?? raw
-        return ("green-wall-v141|"+base) as NSString
+        return ("green-wall-v142|"+base) as NSString
     }
 
     private static func detectsGreenScreenBackdrop(cgImage:CGImage,cacheKey:String?)->Bool {
@@ -382,7 +382,11 @@ enum FTSPhotoEffectsV132 {
                   maxV>0,
                   Double(delta)/Double(maxV)>=0.34 else{return false}
 
-            // HSV hue: real chroma-key greens sit near pure green / blue-green.
+            // Chroma cloth/walls can photograph much more yellow/lime than
+            // textbook pure green, especially under warm event lighting. Accept
+            // the full practical lime-green -> blue-green range here; false
+            // positives are still blocked below by connected area, vertical span,
+            // upper-frame coverage and edge/background geometry.
             let d=Double(max(delta,1))
             var hue:Double
             if maxV==r {
@@ -393,7 +397,7 @@ enum FTSPhotoEffectsV132 {
                 hue=60.0*((Double(r-g)/d)+4.0)
             }
             if hue<0 { hue += 360 }
-            return hue>=100 && hue<=165
+            return hue>=62 && hue<=178
         }
 
         for y in 0..<h {
