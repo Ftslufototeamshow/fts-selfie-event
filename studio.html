@@ -52,35 +52,77 @@ input,select,textarea{width:100%;border:1px solid #ffffff18;background:#071b1d;c
 
       <div class="panel">
         <h2>Text & Titel</h2>
+        <div class="hint">Alle drei Zeilen können unabhängig Schrift, Größe, Farbe, Buchstaben-Farbfolge und Kontur erhalten.</div>
+
+        <h3>1 · Haupttitel</h3>
         <div class="row">
-          <div class="field"><label>Haupttitel</label><input id="titleText" placeholder="leer = Eventtitel"></div>
-          <div class="field"><label>Schriftart</label><select id="titleFont"><option value="clean">Clean</option><option value="bold">Bold</option><option value="rock">Rock / Impact</option><option value="pop">Pop</option><option value="elegant">Elegant</option><option value="retro">Retro</option><option value="handwritten">Handschrift</option></select></div>
+          <div class="field"><label>Text</label><input id="titleText" placeholder="leer = Eventtitel"></div>
+          <div class="field"><label>Schriftart</label><select id="titleFont"></select></div>
         </div>
         <div class="row3">
-          <div class="field"><label>Größe</label><input id="titleSize" type="range" min="3" max="9" step=".2" value="5.8"></div>
-          <div class="field"><label>Farbe</label><input id="titleColor" type="color" value="#ffffff"></div>
+          <div class="field"><label>Größe</label><input id="titleSize" type="number" min="2.5" max="9" step=".1" value="5.8"></div>
+          <div class="field"><label>Stärke</label><select id="titleWeight"><option value="500">Normal</option><option value="600">Halbfett</option><option value="700">Fett</option><option value="900" selected>Extra Fett</option></select></div>
           <div class="field"><label>Ausrichtung</label><select id="titleAlign"><option value="left">Links</option><option value="center">Mitte</option><option value="right">Rechts</option></select></div>
         </div>
-        <label class="check"><input id="titleMulti" type="checkbox"> Einzelne Buchstaben mehrfarbig</label>
-        <div class="palette"><input id="pal1" type="color" value="#ffffff"><input id="pal2" type="color" value="#ffcf4a"><input id="pal3" type="color" value="#2ec4b6"><input id="pal4" type="color" value="#ff6b6b"></div>
-
-        <h3>Untertitel</h3>
+        <div class="row3">
+          <div class="field"><label>Grundfarbe</label><input id="titleColor" type="color" value="#ffffff"></div>
+          <div class="field"><label>Buchstaben-Farbfolge</label><select id="titleColorMode"><option value="solid">Einfarbig</option><option value="per_char">Jeder Buchstabe</option><option value="groups_2">Je 2 Buchstaben</option><option value="groups_3">Je 3 Buchstaben</option></select></div>
+          <div class="field"><label>Kontur</label><label class="check"><input id="titleOutline" type="checkbox"> Außenfarbe</label></div>
+        </div>
+        <div class="palette" id="titlePalette"><input id="titlePal1" type="color"><input id="titlePal2" type="color"><input id="titlePal3" type="color"><input id="titlePal4" type="color"><input id="titlePal5" type="color"><input id="titlePal6" type="color"></div>
         <div class="row">
-          <div class="field"><label>Untertitel</label><input id="subText" placeholder="leer = Event-Untertitel"></div>
-          <div class="field"><label>Schriftart</label><select id="subFont"><option value="clean">Clean</option><option value="bold">Bold</option><option value="rock">Rock</option><option value="pop">Pop</option><option value="elegant">Elegant</option><option value="retro">Retro</option></select></div>
+          <div class="field"><label>Konturfarbe</label><input id="titleOutlineColor" type="color" value="#000000"></div>
+          <div class="field"><label>Konturstärke</label><input id="titleOutlineWidth" type="number" min=".5" max="8" step=".5" value="2.5"></div>
+        </div>
+
+        <h3>2 · Untertitel</h3>
+        <div class="row">
+          <div class="field"><label>Text</label><input id="subText" placeholder="leer = Event-Untertitel"></div>
+          <div class="field"><label>Schriftart</label><select id="subFont"></select></div>
         </div>
         <div class="row3">
-          <div class="field"><label>Größe</label><input id="subSize" type="range" min="1.8" max="6" step=".2" value="3.2"></div>
-          <div class="field"><label>Farbe</label><input id="subColor" type="color" value="#d9b56d"></div>
+          <div class="field"><label>Größe</label><input id="subSize" type="number" min="1.8" max="7" step=".1" value="3.2"></div>
+          <div class="field"><label>Stärke</label><select id="subWeight"><option value="500">Normal</option><option value="600">Halbfett</option><option value="700">Fett</option><option value="900">Extra Fett</option></select></div>
           <div class="field"><label>Ausrichtung</label><select id="subAlign"><option value="left">Links</option><option value="center">Mitte</option><option value="right">Rechts</option></select></div>
         </div>
+        <div class="row3">
+          <div class="field"><label>Grundfarbe</label><input id="subColor" type="color" value="#d9b56d"></div>
+          <div class="field"><label>Buchstaben-Farbfolge</label><select id="subColorMode"><option value="solid">Einfarbig</option><option value="per_char">Jeder Buchstabe</option><option value="groups_2">Je 2 Buchstaben</option><option value="groups_3">Je 3 Buchstaben</option></select></div>
+          <div class="field"><label>Kontur</label><label class="check"><input id="subOutline" type="checkbox"> Außenfarbe</label></div>
+        </div>
+        <div class="palette" id="subPalette"><input id="subPal1" type="color"><input id="subPal2" type="color"><input id="subPal3" type="color"><input id="subPal4" type="color"><input id="subPal5" type="color"><input id="subPal6" type="color"></div>
+        <div class="row">
+          <div class="field"><label>Konturfarbe</label><input id="subOutlineColor" type="color" value="#000000"></div>
+          <div class="field"><label>Konturstärke</label><input id="subOutlineWidth" type="number" min=".5" max="8" step=".5" value="2.5"></div>
+        </div>
 
-        <h3>Dritte Zeile</h3>
+        <h3>3 · Dritte Zeile</h3>
         <div class="row">
           <div class="field"><label>Text</label><input id="lineText" placeholder="leer = bisheriger Overlay-Text"></div>
-          <div class="field"><label>Farbe</label><input id="lineColor" type="color" value="#e8efed"></div>
+          <div class="field"><label>Schriftart</label><select id="lineFont"></select></div>
+        </div>
+        <div class="row3">
+          <div class="field"><label>Größe</label><input id="lineSize" type="number" min="1.4" max="5" step=".1" value="2.1"></div>
+          <div class="field"><label>Stärke</label><select id="lineWeight"><option value="500">Normal</option><option value="600" selected>Halbfett</option><option value="700">Fett</option><option value="900">Extra Fett</option></select></div>
+          <div class="field"><label>Ausrichtung</label><select id="lineAlign"><option value="left">Links</option><option value="center">Mitte</option><option value="right">Rechts</option></select></div>
+        </div>
+        <div class="row3">
+          <div class="field"><label>Grundfarbe</label><input id="lineColor" type="color" value="#e8efed"></div>
+          <div class="field"><label>Buchstaben-Farbfolge</label><select id="lineColorMode"><option value="solid">Einfarbig</option><option value="per_char">Jeder Buchstabe</option><option value="groups_2">Je 2 Buchstaben</option><option value="groups_3">Je 3 Buchstaben</option></select></div>
+          <div class="field"><label>Kontur</label><label class="check"><input id="lineOutline" type="checkbox"> Außenfarbe</label></div>
+        </div>
+        <div class="palette" id="linePalette"><input id="linePal1" type="color"><input id="linePal2" type="color"><input id="linePal3" type="color"><input id="linePal4" type="color"><input id="linePal5" type="color"><input id="linePal6" type="color"></div>
+        <div class="row">
+          <div class="field"><label>Konturfarbe</label><input id="lineOutlineColor" type="color" value="#000000"></div>
+          <div class="field"><label>Konturstärke</label><input id="lineOutlineWidth" type="number" min=".5" max="8" step=".5" value="2.5"></div>
         </div>
         <label class="check"><input id="includeDate" type="checkbox" checked> Eventdatum automatisch anhängen</label>
+
+        <h3>Abstand der drei Zeilen</h3>
+        <div class="row">
+          <div class="field"><label>Titel ↔ Untertitel (%)</label><input id="gapTitleSub" type="number" min="0" max="20" step=".5" value="0"></div>
+          <div class="field"><label>Untertitel ↔ Zeile 3 (%)</label><input id="gapSubLine" type="number" min="0" max="20" step=".5" value="0"></div>
+        </div>
       </div>
 
       <div class="panel">
@@ -88,7 +130,7 @@ input,select,textarea{width:100%;border:1px solid #ffffff18;background:#071b1d;c
         <div class="row3">
           <div class="field"><label>Stil</label><select id="bannerType"><option value="gradient">Verlauf</option><option value="solid">Feste Fläche</option></select></div>
           <div class="field"><label>Farbe</label><input id="bannerColor" type="color" value="#071315"></div>
-          <div class="field"><label>Höhe</label><input id="bannerHeight" type="range" min="16" max="45" step="1" value="30"></div>
+          <div class="field"><label>Höhe (mm · max. 15)</label><input id="bannerHeight" type="number" min="6" max="15" step=".5" value="15"></div>
         </div>
         <div class="row">
           <div class="field"><label>Deckkraft</label><input id="bannerOpacity" type="range" min="0" max="1" step=".05" value=".86"></div>
@@ -152,13 +194,34 @@ input,select,textarea{width:100%;border:1px solid #ffffff18;background:#071b1d;c
 </main>
 <script src="./config.js"></script>
 <script src="./social-share.js"></script>
-<script src="./fts-photo-engine.js?v=79"></script>
+<script src="./fts-photo-engine.js?v=80"></script>
 <script src="./printer-staff-v72.js"></script>
 <script>
 const cfg=window.FTS_CONFIG, DEVICE_KEY='fts_device_token_v1', LEGACY_CODE_KEY='fts_cockpit_admin_code';
 const $=s=>document.querySelector(s);
 let eventToken=new URLSearchParams(location.search).get('e')||'',eventRow=null,studio={},previewImg=null,previewFaces=[],pendingBanner=null,oldBannerPath='',removeBanner=false;
 const categoryNames={standard:'Standard',classic:'Klassisch',retro:'Retro / Oldschool',event:'Event / Fun',comic:'Comic'};
+const fontChoices=[
+  ['clean','Helvetica / Clean'],['avenir','Avenir Next'],['futura','Futura'],['gill','Gill Sans'],
+  ['verdana','Verdana'],['trebuchet','Trebuchet'],['arial','Arial'],['bold','Arial Black'],
+  ['rock','Impact / Rock'],['pop','Pop'],['copperplate','Copperplate'],['optima','Optima'],
+  ['elegant','Georgia'],['baskerville','Baskerville'],['didot','Didot'],['hoefler','Hoefler Text'],
+  ['palatino','Palatino'],['times','Times New Roman'],['retro','Courier New'],['menlo','Menlo'],
+  ['typewriter','American Typewriter'],['chalkboard','Chalkboard'],['marker','Marker Felt'],
+  ['handwritten','Brush Script'],['snell','Snell Roundhand']
+];
+function ensureFontChoices(){
+  const html=fontChoices.map(([id,label])=>'<option value="'+id+'">'+label+'</option>').join('');
+  ['#titleFont','#subFont','#lineFont'].forEach(id=>{const e=$(id);if(e&&!e.options.length)e.innerHTML=html});
+}
+const defaultPalette=['#ffffff','#ffcf4a','#2ec4b6','#ff6b6b','#9b5de5','#00bbf9'];
+function setPalette(prefix,values,fallback){
+  const p=Array.isArray(values)&&values.length?values:[fallback,...defaultPalette.slice(1)];
+  for(let i=1;i<=6;i++)setV('#'+prefix+'Pal'+i,p[i-1]||defaultPalette[(i-1)%defaultPalette.length]);
+}
+function readPalette(prefix){
+  const out=[];for(let i=1;i<=6;i++)out.push($('#'+prefix+'Pal'+i).value);return out;
+}
 function auth(){return localStorage.getItem(DEVICE_KEY)||localStorage.getItem(LEGACY_CODE_KEY)||''}
 function H(){return {'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':'application/json'}}
 async function rpc(n,b){const r=await fetch(cfg.supabaseUrl+'/rest/v1/rpc/'+n,{method:'POST',headers:H(),body:JSON.stringify(b)});if(!r.ok)throw new Error(await r.text());const t=await r.text();return t?JSON.parse(t):null}
@@ -171,10 +234,10 @@ async function adminFiles(action,extra={}){const r=await fetch(cfg.supabaseUrl+'
 function defaultConfig(){
   return {version:76,
     adaptive:{enabled:true,auto_orientation:true,auto_crop:true,face_safe_area:true,face_padding_ratio:.34,face_gap_pct:2.5,min_text_scale:.68,portrait:{banner_max_pct:18,banner_min_pct:12},landscape:{banner_max_pct:22,banner_min_pct:14},print:{ratio:'10x15',bleed_pct:1.5}},
-    overlay:{enabled:true,padding_pct:4.5,banner:{enabled:true,type:'gradient',color:'#071315',opacity:.86,height_pct:30,image_path:'',image_opacity:1},
-    title:{enabled:true,source:'title',text:'',font:'clean',weight:900,size_pct:5.8,color:'#ffffff',align:'left',shadow:true,multicolor:false,colors:['#ffffff','#ffcf4a','#2ec4b6','#ff6b6b']},
-    subtitle:{enabled:true,source:'subtitle',text:'',font:'clean',weight:800,size_pct:3.2,color:eventRow?.accent||'#d9b56d',align:'left',shadow:true},
-    line:{enabled:true,source:'overlay',text:'',font:'clean',weight:600,size_pct:2.1,color:'#e8efed',align:'left',shadow:true,include_date:true},branding:true},
+    overlay:{enabled:true,padding_pct:4.5,text_layout:{gap_title_sub_pct:0,gap_sub_line_pct:0},banner:{enabled:true,type:'gradient',color:'#071315',opacity:.86,height_mm:15,height_pct:30,image_path:'',image_opacity:1},
+    title:{enabled:true,source:'title',text:'',font:'clean',weight:900,size_pct:5.8,color:'#ffffff',align:'left',shadow:true,multicolor:false,color_mode:'solid',colors:defaultPalette,outline_enabled:false,outline_color:'#000000',outline_width:2.5},
+    subtitle:{enabled:true,source:'subtitle',text:'',font:'clean',weight:800,size_pct:3.2,color:eventRow?.accent||'#d9b56d',align:'left',shadow:true,multicolor:false,color_mode:'solid',colors:defaultPalette,outline_enabled:false,outline_color:'#000000',outline_width:2.5},
+    line:{enabled:true,source:'overlay',text:'',font:'clean',weight:600,size_pct:2.1,color:'#e8efed',align:'left',shadow:true,include_date:true,multicolor:false,color_mode:'solid',colors:defaultPalette,outline_enabled:false,outline_color:'#000000',outline_width:2.5},branding:true},
     filters:{enabled:['natural','warm','vivid','mono','cool','sepia','oldfilm','fade','retro90','polaroid','comic_soft','comic_pop','sketch','pumpkin'],featured:['natural','warm','mono','oldfilm','comic_soft','pumpkin'],default:'natural'}};
 }
 function mergeDefaults(raw){
@@ -182,18 +245,22 @@ function mergeDefaults(raw){
   return {...d,...r,
     version:76,
     adaptive:{...d.adaptive,...a,portrait:{...d.adaptive.portrait,...(a.portrait||{})},landscape:{...d.adaptive.landscape,...(a.landscape||{})},print:{...d.adaptive.print,...(a.print||{})}},
-    overlay:{...d.overlay,...(r.overlay||{}),banner:{...d.overlay.banner,...(r.overlay?.banner||{})},title:{...d.overlay.title,...(r.overlay?.title||{})},subtitle:{...d.overlay.subtitle,...(r.overlay?.subtitle||{})},line:{...d.overlay.line,...(r.overlay?.line||{})}},
+    overlay:{...d.overlay,...(r.overlay||{}),text_layout:{...d.overlay.text_layout,...(r.overlay?.text_layout||{})},banner:{...d.overlay.banner,...(r.overlay?.banner||{})},title:{...d.overlay.title,...(r.overlay?.title||{})},subtitle:{...d.overlay.subtitle,...(r.overlay?.subtitle||{})},line:{...d.overlay.line,...(r.overlay?.line||{})}},
     filters:{...d.filters,...(r.filters||{})}
   };
 }
 function setV(id,v){const e=$(id);if(e)e.value=v??''}function setC(id,v){const e=$(id);if(e)e.checked=!!v}
 function fillControls(){
-  studio=mergeDefaults(studio);const o=studio.overlay,b=o.banner,t=o.title,s=o.subtitle,l=o.line;
-  setV('#titleText',t.text);setV('#titleFont',t.font);setV('#titleSize',t.size_pct);setV('#titleColor',t.color);setV('#titleAlign',t.align);setC('#titleMulti',t.multicolor);
-  const colors=Array.isArray(t.colors)?t.colors:[];['#pal1','#pal2','#pal3','#pal4'].forEach((id,i)=>setV(id,colors[i]||['#ffffff','#ffcf4a','#2ec4b6','#ff6b6b'][i]));
-  setV('#subText',s.text);setV('#subFont',s.font);setV('#subSize',s.size_pct);setV('#subColor',s.color);setV('#subAlign',s.align);
-  setV('#lineText',l.text);setV('#lineColor',l.color);setC('#includeDate',l.include_date!==false);
-  setV('#bannerType',b.type);setV('#bannerColor',b.color);setV('#bannerHeight',b.height_pct);setV('#bannerOpacity',b.opacity);setV('#bannerImageOpacity',b.image_opacity);setC('#bannerEnabled',b.enabled!==false);
+  ensureFontChoices();
+  studio=mergeDefaults(studio);const o=studio.overlay,b=o.banner,t=o.title,su=o.subtitle,l=o.line,tl=o.text_layout||{};
+  setV('#titleText',t.text);setV('#titleFont',t.font);setV('#titleSize',t.size_pct);setV('#titleWeight',t.weight);setV('#titleColor',t.color);setV('#titleAlign',t.align);
+  setV('#titleColorMode',t.color_mode||(t.multicolor?'per_char':'solid'));setPalette('title',t.colors,t.color||'#ffffff');setC('#titleOutline',t.outline_enabled);setV('#titleOutlineColor',t.outline_color||'#000000');setV('#titleOutlineWidth',t.outline_width??2.5);
+  setV('#subText',su.text);setV('#subFont',su.font);setV('#subSize',su.size_pct);setV('#subWeight',su.weight);setV('#subColor',su.color);setV('#subAlign',su.align);
+  setV('#subColorMode',su.color_mode||(su.multicolor?'per_char':'solid'));setPalette('sub',su.colors,su.color||'#d9b56d');setC('#subOutline',su.outline_enabled);setV('#subOutlineColor',su.outline_color||'#000000');setV('#subOutlineWidth',su.outline_width??2.5);
+  setV('#lineText',l.text);setV('#lineFont',l.font);setV('#lineSize',l.size_pct);setV('#lineWeight',l.weight);setV('#lineColor',l.color);setV('#lineAlign',l.align);setC('#includeDate',l.include_date!==false);
+  setV('#lineColorMode',l.color_mode||(l.multicolor?'per_char':'solid'));setPalette('line',l.colors,l.color||'#e8efed');setC('#lineOutline',l.outline_enabled);setV('#lineOutlineColor',l.outline_color||'#000000');setV('#lineOutlineWidth',l.outline_width??2.5);
+  setV('#gapTitleSub',tl.gap_title_sub_pct??0);setV('#gapSubLine',tl.gap_sub_line_pct??0);
+  setV('#bannerType',b.type);setV('#bannerColor',b.color);setV('#bannerHeight',Math.max(6,Math.min(15,Number(b.height_mm??15))));setV('#bannerOpacity',b.opacity);setV('#bannerImageOpacity',b.image_opacity);setC('#bannerEnabled',b.enabled!==false);
   const a=studio.adaptive||defaultConfig().adaptive;
   setC('#adaptiveEnabled',a.enabled!==false);setC('#autoOrientation',a.auto_orientation!==false);setC('#autoCrop',a.auto_crop!==false);setC('#faceSafeArea',a.face_safe_area!==false);
   setV('#portraitBannerMax',a.portrait?.banner_max_pct??18);setV('#portraitBannerMin',a.portrait?.banner_min_pct??12);
@@ -210,6 +277,20 @@ function readControls(){
   const portraitMin=Math.max(10,Math.min(portraitMax,Number($('#portraitBannerMin').value)||12));
   const landscapeMax=Math.max(14,Math.min(26,Number($('#landscapeBannerMax').value)||22));
   const landscapeMin=Math.max(10,Math.min(landscapeMax,Number($('#landscapeBannerMin').value)||14));
+  const textSpec=(prefix,source,defaultWeight,defaultSize,defaultColor,alignId)=>({
+    enabled:true,source,text:$('#'+prefix+'Text').value.trim(),font:$('#'+prefix+'Font').value||'clean',
+    weight:Number($('#'+prefix+'Weight').value)||defaultWeight,
+    size_pct:Number($('#'+prefix+'Size').value)||defaultSize,
+    color:$('#'+prefix+'Color').value||defaultColor,
+    align:$('#'+alignId).value||'left',shadow:true,
+    color_mode:$('#'+prefix+'ColorMode').value||'solid',
+    multicolor:$('#'+prefix+'ColorMode').value!=='solid',
+    colors:readPalette(prefix),
+    outline_enabled:$('#'+prefix+'Outline').checked,
+    outline_color:$('#'+prefix+'OutlineColor').value||'#000000',
+    outline_width:Math.max(.5,Math.min(8,Number($('#'+prefix+'OutlineWidth').value)||2.5))
+  });
+  const lineSpec=textSpec('line','overlay',600,2.1,'#e8efed','lineAlign');lineSpec.include_date=$('#includeDate').checked;
   return {version:76,
     adaptive:{
       enabled:$('#adaptiveEnabled').checked,
@@ -223,10 +304,15 @@ function readControls(){
       landscape:{banner_max_pct:landscapeMax,banner_min_pct:landscapeMin},
       print:{ratio:'10x15',bleed_pct:1.5}
     },
-    overlay:{enabled:true,padding_pct:4.5,banner:{enabled:$('#bannerEnabled').checked,type:$('#bannerType').value,color:$('#bannerColor').value,opacity:Number($('#bannerOpacity').value),height_pct:Number($('#bannerHeight').value),image_path:studio?.overlay?.banner?.image_path||'',image_opacity:Number($('#bannerImageOpacity').value)},
-    title:{enabled:true,source:'title',text:$('#titleText').value.trim(),font:$('#titleFont').value,weight:900,size_pct:Number($('#titleSize').value),color:$('#titleColor').value,align:$('#titleAlign').value,shadow:true,multicolor:$('#titleMulti').checked,colors:['#pal1','#pal2','#pal3','#pal4'].map(id=>$(id).value)},
-    subtitle:{enabled:true,source:'subtitle',text:$('#subText').value.trim(),font:$('#subFont').value,weight:800,size_pct:Number($('#subSize').value),color:$('#subColor').value,align:$('#subAlign').value,shadow:true},
-    line:{enabled:true,source:'overlay',text:$('#lineText').value.trim(),font:'clean',weight:600,size_pct:2.1,color:$('#lineColor').value,align:$('#subAlign').value,shadow:true,include_date:$('#includeDate').checked},branding:true},
+    overlay:{enabled:true,padding_pct:4.5,
+      text_layout:{
+        gap_title_sub_pct:Math.max(0,Math.min(20,Number($('#gapTitleSub').value)||0)),
+        gap_sub_line_pct:Math.max(0,Math.min(20,Number($('#gapSubLine').value)||0))
+      },
+      banner:{enabled:$('#bannerEnabled').checked,type:$('#bannerType').value,color:$('#bannerColor').value,opacity:Number($('#bannerOpacity').value),height_mm:Math.max(6,Math.min(15,Number($('#bannerHeight').value)||15)),height_pct:30,image_path:studio?.overlay?.banner?.image_path||'',image_opacity:Number($('#bannerImageOpacity').value)},
+      title:textSpec('title','title',900,5.8,'#ffffff','titleAlign'),
+      subtitle:textSpec('sub','subtitle',800,3.2,eventRow?.accent||'#d9b56d','subAlign'),
+      line:lineSpec,branding:true},
     filters:{enabled:enabled.length?enabled:['natural'],featured:featured.length?featured:[enabled[0]||'natural'],default:enabled.includes(def)?def:(enabled[0]||'natural')}
   };
 }

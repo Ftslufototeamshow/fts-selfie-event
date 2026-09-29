@@ -12,12 +12,31 @@ enum FTSDesignTypography {
     }
 
     static let options:[Option] = [
-        .init(id:"clean",label:"Clean"),
-        .init(id:"bold",label:"Bold"),
-        .init(id:"elegant",label:"Elegant"),
-        .init(id:"retro",label:"Retro"),
+        .init(id:"clean",label:"Helvetica / Clean"),
+        .init(id:"avenir",label:"Avenir Next"),
+        .init(id:"futura",label:"Futura"),
+        .init(id:"gill",label:"Gill Sans"),
+        .init(id:"verdana",label:"Verdana"),
+        .init(id:"trebuchet",label:"Trebuchet"),
+        .init(id:"arial",label:"Arial"),
+        .init(id:"bold",label:"Arial Black"),
+        .init(id:"rock",label:"Impact / Rock"),
         .init(id:"pop",label:"Pop"),
-        .init(id:"handwritten",label:"Handschrift")
+        .init(id:"copperplate",label:"Copperplate"),
+        .init(id:"optima",label:"Optima"),
+        .init(id:"elegant",label:"Georgia"),
+        .init(id:"baskerville",label:"Baskerville"),
+        .init(id:"didot",label:"Didot"),
+        .init(id:"hoefler",label:"Hoefler Text"),
+        .init(id:"palatino",label:"Palatino"),
+        .init(id:"times",label:"Times New Roman"),
+        .init(id:"retro",label:"Courier New"),
+        .init(id:"menlo",label:"Menlo"),
+        .init(id:"typewriter",label:"American Typewriter"),
+        .init(id:"chalkboard",label:"Chalkboard"),
+        .init(id:"marker",label:"Marker Felt"),
+        .init(id:"handwritten",label:"Brush Script"),
+        .init(id:"snell",label:"Snell Roundhand")
     ]
 
     static func nsFont(id:String,size:CGFloat,weight:Int)->NSFont {
@@ -28,18 +47,31 @@ enum FTSDesignTypography {
             weight>=600 ? .semibold : .regular
 
         switch id {
-        case "bold","rock":
-            return NSFont(name:"Impact",size:size) ?? NSFont.systemFont(ofSize:size,weight:.black)
-        case "elegant":
-            return NSFont(name:"Georgia",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
-        case "retro":
-            return NSFont(name:"Courier New",size:size) ?? NSFont.monospacedSystemFont(ofSize:size,weight:systemWeight)
-        case "pop":
-            return NSFont(name:"Trebuchet MS Bold",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
-        case "handwritten":
-            return NSFont(name:"Brush Script MT",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
-        default:
-            return NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "avenir": return NSFont(name:"Avenir Next",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "futura": return NSFont(name:"Futura",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "gill": return NSFont(name:"Gill Sans",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "verdana": return NSFont(name:"Verdana",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "trebuchet": return NSFont(name:"Trebuchet MS",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "arial": return NSFont(name:"Arial",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "bold": return NSFont(name:"Arial Black",size:size) ?? NSFont.systemFont(ofSize:size,weight:.black)
+        case "rock": return NSFont(name:"Impact",size:size) ?? NSFont.systemFont(ofSize:size,weight:.black)
+        case "pop": return NSFont(name:"Trebuchet MS Bold",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "copperplate": return NSFont(name:"Copperplate",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "optima": return NSFont(name:"Optima",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "elegant": return NSFont(name:"Georgia",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "baskerville": return NSFont(name:"Baskerville",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "didot": return NSFont(name:"Didot",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "hoefler": return NSFont(name:"Hoefler Text",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "palatino": return NSFont(name:"Palatino",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "times": return NSFont(name:"Times New Roman",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "retro": return NSFont(name:"Courier New",size:size) ?? NSFont.monospacedSystemFont(ofSize:size,weight:systemWeight)
+        case "menlo": return NSFont(name:"Menlo",size:size) ?? NSFont.monospacedSystemFont(ofSize:size,weight:systemWeight)
+        case "typewriter": return NSFont(name:"American Typewriter",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "chalkboard": return NSFont(name:"Chalkboard",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "marker": return NSFont(name:"Marker Felt",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "handwritten": return NSFont(name:"Brush Script MT",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        case "snell": return NSFont(name:"Snell Roundhand",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
+        default: return NSFont(name:"Helvetica Neue",size:size) ?? NSFont.systemFont(ofSize:size,weight:systemWeight)
         }
     }
 
@@ -50,14 +82,37 @@ enum FTSDesignTypography {
             weight>=700 ? .bold :
             weight>=600 ? .semibold : .regular
 
-        switch id {
-        case "bold","rock": return .custom("Impact",size:size).weight(.black)
-        case "elegant": return .custom("Georgia",size:size).weight(swiftWeight)
-        case "retro": return .custom("Courier New",size:size).weight(swiftWeight)
-        case "pop": return .custom("Trebuchet MS Bold",size:size).weight(swiftWeight)
-        case "handwritten": return .custom("Brush Script MT",size:size).weight(swiftWeight)
-        default: return .system(size:size,weight:swiftWeight)
-        }
+        let names:[String:String] = [
+            "clean":"Helvetica Neue","avenir":"Avenir Next","futura":"Futura","gill":"Gill Sans",
+            "verdana":"Verdana","trebuchet":"Trebuchet MS","arial":"Arial","bold":"Arial Black",
+            "rock":"Impact","pop":"Trebuchet MS Bold","copperplate":"Copperplate","optima":"Optima",
+            "elegant":"Georgia","baskerville":"Baskerville","didot":"Didot","hoefler":"Hoefler Text",
+            "palatino":"Palatino","times":"Times New Roman","retro":"Courier New","menlo":"Menlo",
+            "typewriter":"American Typewriter","chalkboard":"Chalkboard","marker":"Marker Felt",
+            "handwritten":"Brush Script MT","snell":"Snell Roundhand"
+        ]
+        guard let name=names[id] else{return .system(size:size,weight:swiftWeight)}
+        return .custom(name,size:size).weight(id=="bold" || id=="rock" ? .black:swiftWeight)
+    }
+}
+
+
+enum FTSDesignColor {
+    static func color(_ hex:String)->Color { Color(nsColor:NSColor(hex:hex)) }
+
+    static func hex(_ color:Color)->String {
+        let ns=NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
+        let r=Int(round(ns.redComponent*255))
+        let g=Int(round(ns.greenComponent*255))
+        let b=Int(round(ns.blueComponent*255))
+        return String(format:"#%02X%02X%02X",r,g,b)
+    }
+
+    static func palette(_ spec:[String:JSONValue],fallback:String)->[String] {
+        var values=(spec["colors"]?.array ?? []).compactMap{$0.string}.filter{!$0.isEmpty}
+        let defaults=[fallback,"#FFCF4A","#2EC4B6","#FF6B6B","#9B5DE5","#00BBF9"]
+        while values.count<6 { values.append(defaults[values.count % defaults.count]) }
+        return Array(values.prefix(6))
     }
 }
 
@@ -109,6 +164,9 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
     @Published var bannerType:String
     @Published var bannerColorHex:String
     @Published var bannerOpacity:Double
+    @Published var bannerHeightMM:Double
+    @Published var gapTitleSubtitle:Double
+    @Published var gapSubtitleLine:Double
     @Published var align:String
 
     @Published var titleEnabled:Bool
@@ -117,6 +175,11 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
     @Published var titleSize:Double
     @Published var titleWeight:Int
     @Published var titleColorHex:String
+    @Published var titleColorMode:String
+    @Published var titleColors:[String]
+    @Published var titleOutlineEnabled:Bool
+    @Published var titleOutlineColorHex:String
+    @Published var titleOutlineWidth:Double
 
     @Published var subtitleEnabled:Bool
     @Published var subtitleText:String
@@ -124,6 +187,11 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
     @Published var subtitleSize:Double
     @Published var subtitleWeight:Int
     @Published var subtitleColorHex:String
+    @Published var subtitleColorMode:String
+    @Published var subtitleColors:[String]
+    @Published var subtitleOutlineEnabled:Bool
+    @Published var subtitleOutlineColorHex:String
+    @Published var subtitleOutlineWidth:Double
 
     @Published var lineEnabled:Bool
     @Published var lineText:String
@@ -131,6 +199,11 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
     @Published var lineSize:Double
     @Published var lineWeight:Int
     @Published var lineColorHex:String
+    @Published var lineColorMode:String
+    @Published var lineColors:[String]
+    @Published var lineOutlineEnabled:Bool
+    @Published var lineOutlineColorHex:String
+    @Published var lineOutlineWidth:Double
     @Published var includeDate:Bool
 
     @Published var showFTSBranding:Bool
@@ -145,6 +218,7 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
         let title=overlay["title"]?.object ?? [:]
         let subtitle=overlay["subtitle"]?.object ?? [:]
         let line=overlay["line"]?.object ?? [:]
+        let textLayout=overlay["text_layout"]?.object ?? [:]
         let firstLogo=event.logo_items?.array?.compactMap{$0.object}.first
 
         eventTitle=event.event_title
@@ -155,6 +229,9 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
         bannerType=banner["type"]?.string == "gradient" ? "gradient":"solid"
         bannerColorHex=banner["color"]?.string ?? "#071315"
         bannerOpacity=max(0.10,min(1,banner["opacity"]?.double ?? 0.72))
+        bannerHeightMM=max(6,min(15,banner["height_mm"]?.double ?? 15))
+        gapTitleSubtitle=max(0,min(20,textLayout["gap_title_sub_pct"]?.double ?? 0))
+        gapSubtitleLine=max(0,min(20,textLayout["gap_sub_line_pct"]?.double ?? 0))
         align=title["align"]?.string ?? "left"
 
         titleEnabled=title["enabled"]?.bool != false
@@ -163,6 +240,11 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
         titleSize=max(2.5,min(7,title["size_pct"]?.double ?? 5.0))
         titleWeight=Int(title["weight"]?.double ?? 900)
         titleColorHex=title["color"]?.string ?? "#FFFFFF"
+        titleColorMode=title["color_mode"]?.string ?? (title["multicolor"]?.bool == true ? "per_char":"solid")
+        titleColors=FTSDesignColor.palette(title,fallback:titleColorHex)
+        titleOutlineEnabled=title["outline_enabled"]?.bool == true
+        titleOutlineColorHex=title["outline_color"]?.string ?? "#000000"
+        titleOutlineWidth=max(0.5,min(8,title["outline_width"]?.double ?? 2.5))
 
         subtitleEnabled=subtitle["enabled"]?.bool == true
         subtitleText=subtitle["text"]?.string ?? event.subtitle ?? ""
@@ -170,6 +252,11 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
         subtitleSize=max(1.8,min(5,subtitle["size_pct"]?.double ?? 3.0))
         subtitleWeight=Int(subtitle["weight"]?.double ?? 700)
         subtitleColorHex=subtitle["color"]?.string ?? "#D9B56D"
+        subtitleColorMode=subtitle["color_mode"]?.string ?? (subtitle["multicolor"]?.bool == true ? "per_char":"solid")
+        subtitleColors=FTSDesignColor.palette(subtitle,fallback:subtitleColorHex)
+        subtitleOutlineEnabled=subtitle["outline_enabled"]?.bool == true
+        subtitleOutlineColorHex=subtitle["outline_color"]?.string ?? "#000000"
+        subtitleOutlineWidth=max(0.5,min(8,subtitle["outline_width"]?.double ?? 2.5))
 
         lineEnabled=line["enabled"]?.bool == true
         lineText=line["text"]?.string ?? event.overlay_text ?? ""
@@ -177,6 +264,11 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
         lineSize=max(1.4,min(4,line["size_pct"]?.double ?? 2.1))
         lineWeight=Int(line["weight"]?.double ?? 600)
         lineColorHex=line["color"]?.string ?? "#E8EFED"
+        lineColorMode=line["color_mode"]?.string ?? (line["multicolor"]?.bool == true ? "per_char":"solid")
+        lineColors=FTSDesignColor.palette(line,fallback:lineColorHex)
+        lineOutlineEnabled=line["outline_enabled"]?.bool == true
+        lineOutlineColorHex=line["outline_color"]?.string ?? "#000000"
+        lineOutlineWidth=max(0.5,min(8,line["outline_width"]?.double ?? 2.5))
         includeDate=line["include_date"]?.bool != false
 
         showFTSBranding=overlay["branding"]?.bool == true && event.photo_branding != "none"
@@ -190,6 +282,9 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
         bannerType="solid"
         bannerColorHex="#071315"
         bannerOpacity=0.72
+        bannerHeightMM=15
+        gapTitleSubtitle=0
+        gapSubtitleLine=0
         align="left"
 
         titleEnabled=true
@@ -198,6 +293,11 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
         titleSize=5.0
         titleWeight=900
         titleColorHex="#FFFFFF"
+        titleColorMode="solid"
+        titleColors=["#FFFFFF","#FFCF4A","#2EC4B6","#FF6B6B","#9B5DE5","#00BBF9"]
+        titleOutlineEnabled=false
+        titleOutlineColorHex="#000000"
+        titleOutlineWidth=2.5
 
         subtitleEnabled=false
         subtitleText=""
@@ -205,6 +305,11 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
         subtitleSize=3.0
         subtitleWeight=700
         subtitleColorHex="#D9B56D"
+        subtitleColorMode="solid"
+        subtitleColors=["#D9B56D","#FFFFFF","#FFCF4A","#2EC4B6","#FF6B6B","#9B5DE5"]
+        subtitleOutlineEnabled=false
+        subtitleOutlineColorHex="#000000"
+        subtitleOutlineWidth=2.5
 
         lineEnabled=false
         lineText=location
@@ -212,6 +317,11 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
         lineSize=2.1
         lineWeight=600
         lineColorHex="#E8EFED"
+        lineColorMode="solid"
+        lineColors=["#E8EFED","#FFFFFF","#FFCF4A","#2EC4B6","#FF6B6B","#9B5DE5"]
+        lineOutlineEnabled=false
+        lineOutlineColorHex="#000000"
+        lineOutlineWidth=2.5
         includeDate=true
         showFTSBranding=false
     }
@@ -220,17 +330,22 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
         [
             "version":76,
             "printer_manual":true,
-            "manual_design_version":144,
+            "manual_design_version":145,
             "filters":["default":"natural"],
             "overlay":[
                 "enabled":designEnabled,
                 "branding":showFTSBranding,
                 "padding_pct":4.5,
+                "text_layout":[
+                    "gap_title_sub_pct":gapTitleSubtitle,
+                    "gap_sub_line_pct":gapSubtitleLine
+                ],
                 "banner":[
                     "enabled":designEnabled,
                     "type":bannerType,
                     "color":bannerColorHex,
                     "opacity":bannerOpacity,
+                    "height_mm":bannerHeightMM,
                     "height_pct":22,
                     "image_path":"",
                     "image_opacity":1
@@ -243,6 +358,12 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
                     "size_pct":titleSize,
                     "weight":titleWeight,
                     "color":titleColorHex,
+                    "color_mode":titleColorMode,
+                    "multicolor":titleColorMode != "solid",
+                    "colors":titleColors,
+                    "outline_enabled":titleOutlineEnabled,
+                    "outline_color":titleOutlineColorHex,
+                    "outline_width":titleOutlineWidth,
                     "align":align,
                     "shadow":true
                 ],
@@ -254,6 +375,12 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
                     "size_pct":subtitleSize,
                     "weight":subtitleWeight,
                     "color":subtitleColorHex,
+                    "color_mode":subtitleColorMode,
+                    "multicolor":subtitleColorMode != "solid",
+                    "colors":subtitleColors,
+                    "outline_enabled":subtitleOutlineEnabled,
+                    "outline_color":subtitleOutlineColorHex,
+                    "outline_width":subtitleOutlineWidth,
                     "align":align,
                     "shadow":true
                 ],
@@ -265,6 +392,12 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
                     "size_pct":lineSize,
                     "weight":lineWeight,
                     "color":lineColorHex,
+                    "color_mode":lineColorMode,
+                    "multicolor":lineColorMode != "solid",
+                    "colors":lineColors,
+                    "outline_enabled":lineOutlineEnabled,
+                    "outline_color":lineOutlineColorHex,
+                    "outline_width":lineOutlineWidth,
                     "align":align,
                     "shadow":true,
                     "include_date":includeDate
@@ -563,7 +696,7 @@ struct FTSManualPrinterEventEditor:View {
                         }.padding(.vertical,3)
                     }
 
-                    GroupBox("Unterer FTS-Balken · 148 × 15 mm") {
+                    GroupBox("Unterer FTS-Balken · max. 148 × 15 mm") {
                         VStack(alignment:.leading,spacing:9) {
                             Toggle("Fotodesign / Balken aktiv",isOn:$draft.designEnabled)
                             if draft.designEnabled {
@@ -573,22 +706,61 @@ struct FTSManualPrinterEventEditor:View {
                                 }.pickerStyle(.segmented)
 
                                 HStack {
-                                    Text("Farbe")
+                                    ColorPicker(
+                                        "Balkenfarbe",
+                                        selection:colorBinding($draft.bannerColorHex),
+                                        supportsOpacity:false
+                                    )
                                     TextField("#071315",text:$draft.bannerColorHex)
-                                        .textFieldStyle(.roundedBorder).frame(width:110)
+                                        .textFieldStyle(.roundedBorder).frame(width:105)
                                     Spacer()
-                                    Text("Transparenz")
+                                    Text("Transparenz").font(.caption)
                                     Slider(value:$draft.bannerOpacity,in:0.10...1,step:0.01)
-                                        .frame(width:150)
+                                        .frame(width:135)
                                     Text(String(format:"%.0f %%",draft.bannerOpacity*100))
-                                        .monospacedDigit().frame(width:50,alignment:.trailing)
-                                }.font(.caption)
+                                        .font(.caption).monospacedDigit().frame(width:45,alignment:.trailing)
+                                }
+
+                                HStack {
+                                    Text("Balkenhöhe").font(.caption)
+                                    Slider(value:$draft.bannerHeightMM,in:6...15,step:0.5)
+                                    TextField(
+                                        "mm",
+                                        value:$draft.bannerHeightMM,
+                                        format:.number.precision(.fractionLength(1))
+                                    )
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width:58)
+                                    Text("mm · maximal 15").font(.caption2).foregroundStyle(FTSTheme.muted)
+                                }
 
                                 Picker("Ausrichtung",selection:$draft.align) {
                                     Text("Links").tag("left")
                                     Text("Mitte").tag("center")
                                     Text("Rechts").tag("right")
                                 }.pickerStyle(.segmented)
+
+                                HStack(spacing:12) {
+                                    Text("Abstand Titel ↔ Untertitel").font(.caption)
+                                    TextField(
+                                        "%",
+                                        value:$draft.gapTitleSubtitle,
+                                        format:.number.precision(.fractionLength(1))
+                                    )
+                                    .textFieldStyle(.roundedBorder).frame(width:55)
+                                    Text("%").font(.caption2).foregroundStyle(FTSTheme.muted)
+                                    Spacer()
+                                    Text("Abstand Untertitel ↔ Zeile 3").font(.caption)
+                                    TextField(
+                                        "%",
+                                        value:$draft.gapSubtitleLine,
+                                        format:.number.precision(.fractionLength(1))
+                                    )
+                                    .textFieldStyle(.roundedBorder).frame(width:55)
+                                    Text("%").font(.caption2).foregroundStyle(FTSTheme.muted)
+                                }
+                                Text("0–20 %. Größerer Wert setzt die drei Textzeilen weiter auseinander.")
+                                    .font(.caption2).foregroundStyle(FTSTheme.muted)
                             }
                         }.padding(.vertical,3)
                     }
@@ -602,7 +774,12 @@ struct FTSManualPrinterEventEditor:View {
                             size:$draft.titleSize,
                             weight:$draft.titleWeight,
                             color:$draft.titleColorHex,
-                            sizeRange:2.5...7
+                            colorMode:$draft.titleColorMode,
+                            colors:$draft.titleColors,
+                            outlineEnabled:$draft.titleOutlineEnabled,
+                            outlineColor:$draft.titleOutlineColorHex,
+                            outlineWidth:$draft.titleOutlineWidth,
+                            sizeRange:2.5...9
                         )
 
                         textSection(
@@ -613,34 +790,32 @@ struct FTSManualPrinterEventEditor:View {
                             size:$draft.subtitleSize,
                             weight:$draft.subtitleWeight,
                             color:$draft.subtitleColorHex,
-                            sizeRange:1.8...5
+                            colorMode:$draft.subtitleColorMode,
+                            colors:$draft.subtitleColors,
+                            outlineEnabled:$draft.subtitleOutlineEnabled,
+                            outlineColor:$draft.subtitleOutlineColorHex,
+                            outlineWidth:$draft.subtitleOutlineWidth,
+                            sizeRange:1.8...7
                         )
 
-                        GroupBox("Dritte Zeile") {
-                            VStack(alignment:.leading,spacing:8) {
-                                Toggle("Dritte Zeile anzeigen",isOn:$draft.lineEnabled)
-                                if draft.lineEnabled {
-                                    TextField("Text",text:$draft.lineText).textFieldStyle(.roundedBorder)
-                                    HStack {
-                                        fontPicker(selection:$draft.lineFont)
-                                        Picker("Stärke",selection:$draft.lineWeight) {
-                                            Text("Normal").tag(500)
-                                            Text("Halbfett").tag(600)
-                                            Text("Fett").tag(700)
-                                            Text("Extra Fett").tag(900)
-                                        }.frame(width:150)
-                                    }
-                                    HStack {
-                                        Text("Größe").font(.caption)
-                                        Slider(value:$draft.lineSize,in:1.4...4,step:0.1)
-                                        Text(String(format:"%.1f",draft.lineSize)).font(.caption).monospacedDigit().frame(width:40)
-                                        Text("Farbe").font(.caption)
-                                        TextField("#E8EFED",text:$draft.lineColorHex)
-                                            .textFieldStyle(.roundedBorder).frame(width:100)
-                                    }
-                                    Toggle("Datum automatisch anhängen",isOn:$draft.includeDate)
-                                }
-                            }.padding(.vertical,3)
+                        textSection(
+                            title:"Dritte Zeile",
+                            enabled:$draft.lineEnabled,
+                            text:$draft.lineText,
+                            font:$draft.lineFont,
+                            size:$draft.lineSize,
+                            weight:$draft.lineWeight,
+                            color:$draft.lineColorHex,
+                            colorMode:$draft.lineColorMode,
+                            colors:$draft.lineColors,
+                            outlineEnabled:$draft.lineOutlineEnabled,
+                            outlineColor:$draft.lineOutlineColorHex,
+                            outlineWidth:$draft.lineOutlineWidth,
+                            sizeRange:1.4...5
+                        )
+                        if draft.lineEnabled {
+                            Toggle("Datum automatisch an dritte Zeile anhängen",isOn:$draft.includeDate)
+                                .padding(.horizontal,8)
                         }
 
                         GroupBox("Logo & Branding") {
@@ -688,7 +863,7 @@ struct FTSManualPrinterEventEditor:View {
                 Text("Live-Designvorschau").font(.headline).foregroundStyle(FTSTheme.gold)
                 FTSManualPrinterDesignPreview(draft:draft,photo:previewPhoto)
                     .frame(minWidth:500,minHeight:380)
-                Text("Die Vorschau zeigt die Gestaltung. Nach Speichern werden echte Fotos weiterhin ausschließlich mit dem vorhandenen ProductionRendererV76 und der festen 148 × 15-mm-Bannerlogik gerendert.")
+                Text("Die Vorschau zeigt die Gestaltung. Der reale Ausdruck nutzt weiterhin ausschließlich ProductionRendererV76. Der Balken bleibt 148 mm breit und ist maximal 15 mm hoch; kleinere Höhen sind erlaubt.")
                     .font(.caption2).foregroundStyle(FTSTheme.muted)
 
                 Spacer()
@@ -725,6 +900,11 @@ struct FTSManualPrinterEventEditor:View {
         size:Binding<Double>,
         weight:Binding<Int>,
         color:Binding<String>,
+        colorMode:Binding<String>,
+        colors:Binding<[String]>,
+        outlineEnabled:Binding<Bool>,
+        outlineColor:Binding<String>,
+        outlineWidth:Binding<Double>,
         sizeRange:ClosedRange<Double>
     )->some View {
         GroupBox(title) {
@@ -732,6 +912,7 @@ struct FTSManualPrinterEventEditor:View {
                 Toggle("\(title) anzeigen",isOn:enabled)
                 if enabled.wrappedValue {
                     TextField(title,text:text).textFieldStyle(.roundedBorder)
+
                     HStack {
                         fontPicker(selection:font)
                         Picker("Stärke",selection:weight) {
@@ -741,17 +922,92 @@ struct FTSManualPrinterEventEditor:View {
                             Text("Extra Fett").tag(900)
                         }.frame(width:150)
                     }
+
                     HStack {
                         Text("Größe").font(.caption)
                         Slider(value:size,in:sizeRange,step:0.1)
-                        Text(String(format:"%.1f",size.wrappedValue)).font(.caption).monospacedDigit().frame(width:40)
-                        Text("Farbe").font(.caption)
+                        TextField(
+                            "Größe",
+                            value:size,
+                            format:.number.precision(.fractionLength(1))
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width:58)
+                    }
+
+                    HStack {
+                        ColorPicker("Grundfarbe",selection:colorBinding(color),supportsOpacity:false)
                         TextField("#FFFFFF",text:color)
-                            .textFieldStyle(.roundedBorder).frame(width:100)
+                            .textFieldStyle(.roundedBorder).frame(width:105)
+                        Spacer()
+                        Picker("Farbfolge",selection:colorMode) {
+                            Text("Einfarbig").tag("solid")
+                            Text("Jeder Buchstabe").tag("per_char")
+                            Text("Je 2 Buchstaben").tag("groups_2")
+                            Text("Je 3 Buchstaben").tag("groups_3")
+                        }
+                        .frame(width:180)
+                    }
+
+                    if colorMode.wrappedValue != "solid" {
+                        VStack(alignment:.leading,spacing:5) {
+                            Text("Buchstabenfarben · frei wählen, die Palette wird wiederholt")
+                                .font(.caption2).foregroundStyle(FTSTheme.muted)
+                            HStack(spacing:8) {
+                                ForEach(0..<6,id:\.self) { index in
+                                    ColorPicker(
+                                        "\(index+1)",
+                                        selection:colorBinding(arrayBinding(colors,index:index)),
+                                        supportsOpacity:false
+                                    )
+                                    .labelsHidden()
+                                    .help("Farbe \(index+1)")
+                                }
+                            }
+                        }
+                    }
+
+                    Toggle("Kontur / Außenfarbe",isOn:outlineEnabled)
+                    if outlineEnabled.wrappedValue {
+                        HStack {
+                            ColorPicker("Konturfarbe",selection:colorBinding(outlineColor),supportsOpacity:false)
+                            TextField("#000000",text:outlineColor)
+                                .textFieldStyle(.roundedBorder).frame(width:105)
+                            Text("Stärke").font(.caption)
+                            Slider(value:outlineWidth,in:0.5...8,step:0.5)
+                            TextField(
+                                "Kontur",
+                                value:outlineWidth,
+                                format:.number.precision(.fractionLength(1))
+                            )
+                            .textFieldStyle(.roundedBorder).frame(width:58)
+                        }
                     }
                 }
             }.padding(.vertical,3)
         }
+    }
+
+    private func arrayBinding(_ values:Binding<[String]>,index:Int)->Binding<String> {
+        Binding(
+            get:{
+                guard values.wrappedValue.indices.contains(index) else{return "#FFFFFF"}
+                return values.wrappedValue[index]
+            },
+            set:{newValue in
+                var copy=values.wrappedValue
+                while copy.count<=index {copy.append("#FFFFFF")}
+                copy[index]=newValue
+                values.wrappedValue=copy
+            }
+        )
+    }
+
+    private func colorBinding(_ hex:Binding<String>)->Binding<Color> {
+        Binding(
+            get:{FTSDesignColor.color(hex.wrappedValue)},
+            set:{hex.wrappedValue=FTSDesignColor.hex($0)}
+        )
     }
 
     private func fontPicker(selection:Binding<String>)->some View {
@@ -779,18 +1035,75 @@ struct FTSManualPrinterEventEditor:View {
     }
 }
 
+struct FTSManualStyledTextPreview:View {
+    let text:String
+    let fontID:String
+    let size:Double
+    let weight:Int
+    let baseColor:String
+    let colorMode:String
+    let colors:[String]
+    let outlineEnabled:Bool
+    let outlineColor:String
+    let outlineWidth:Double
+    let base:CGFloat
+    let alignment:Alignment
+
+    private var chars:[Character] { Array(text) }
+    private var groupSize:Int { colorMode=="groups_3" ? 3 : (colorMode=="groups_2" ? 2 : 1) }
+
+    private func color(at index:Int)->Color {
+        guard colorMode != "solid",!colors.isEmpty else{return FTSDesignColor.color(baseColor)}
+        let visible=chars[..<index].filter{!$0.isWhitespace}.count
+        return FTSDesignColor.color(colors[(visible/groupSize) % colors.count])
+    }
+
+    var body:some View {
+        HStack(spacing:0) {
+            ForEach(chars.indices,id:\.self) { index in
+                Text(String(chars[index]))
+                    .font(FTSDesignTypography.swiftUIFont(
+                        id:fontID,
+                        size:max(7,base*CGFloat(size)/100),
+                        weight:weight
+                    ))
+                    .foregroundStyle(color(at:index))
+                    .shadow(
+                        color:outlineEnabled ? FTSDesignColor.color(outlineColor):.clear,
+                        radius:0,x:CGFloat(max(0.5,outlineWidth*0.35)),y:0
+                    )
+                    .shadow(
+                        color:outlineEnabled ? FTSDesignColor.color(outlineColor):.clear,
+                        radius:0,x:-CGFloat(max(0.5,outlineWidth*0.35)),y:0
+                    )
+                    .shadow(
+                        color:outlineEnabled ? FTSDesignColor.color(outlineColor):.clear,
+                        radius:0,x:0,y:CGFloat(max(0.5,outlineWidth*0.35))
+                    )
+                    .shadow(
+                        color:outlineEnabled ? FTSDesignColor.color(outlineColor):.clear,
+                        radius:0,x:0,y:-CGFloat(max(0.5,outlineWidth*0.35))
+                    )
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.45)
+        .frame(maxWidth:.infinity,alignment:alignment)
+    }
+}
+
 struct FTSManualPrinterDesignPreview:View {
     @ObservedObject var draft:FTSManualPrinterDesignDraft
     let photo:NSImage?
-
-    private func previewFont(_ id:String,_ pct:Double,_ weight:Int,_ base:CGFloat)->Font {
-        FTSDesignTypography.swiftUIFont(id:id,size:max(9,base*CGFloat(pct)/100),weight:weight)
-    }
 
     var body:some View {
         GeometryReader { geo in
             let w=max(1,geo.size.width)
             let h=max(1,geo.size.height)
+            let physicalWidth:CGFloat=w>=h ? 148:100
+            let bh=min(h*0.44,max(30,w*CGFloat(draft.bannerHeightMM)/physicalWidth))
+            let base=min(w,h)
+
             ZStack(alignment:.bottom) {
                 if let photo {
                     Image(nsImage:photo)
@@ -810,45 +1123,66 @@ struct FTSManualPrinterDesignPreview:View {
                 }
 
                 if draft.designEnabled {
-                    let bh=max(76,h*0.18)
                     ZStack(alignment:alignment) {
                         Group {
                             if draft.bannerType=="gradient" {
                                 LinearGradient(
                                     colors:[
-                                        Color(nsColor:NSColor(hex:draft.bannerColorHex)).opacity(draft.bannerOpacity),
-                                        Color(nsColor:NSColor(hex:draft.bannerColorHex)).opacity(draft.bannerOpacity*0.72),
+                                        FTSDesignColor.color(draft.bannerColorHex).opacity(draft.bannerOpacity),
+                                        FTSDesignColor.color(draft.bannerColorHex).opacity(draft.bannerOpacity*0.72),
                                         Color.clear
                                     ],
                                     startPoint:.bottom,endPoint:.top
                                 )
                             } else {
-                                Color(nsColor:NSColor(hex:draft.bannerColorHex)).opacity(draft.bannerOpacity)
+                                FTSDesignColor.color(draft.bannerColorHex).opacity(draft.bannerOpacity)
                             }
                         }
 
                         HStack(alignment:.center,spacing:12) {
                             VStack(alignment:textAlignment,spacing:0) {
                                 if draft.titleEnabled && !draft.titleText.isEmpty {
-                                    Text(draft.titleText)
-                                        .font(previewFont(draft.titleFont,draft.titleSize,draft.titleWeight,min(w,h)))
-                                        .foregroundStyle(Color(nsColor:NSColor(hex:draft.titleColorHex)))
-                                        .lineLimit(1).minimumScaleFactor(0.55)
+                                    FTSManualStyledTextPreview(
+                                        text:draft.titleText,fontID:draft.titleFont,size:draft.titleSize,
+                                        weight:draft.titleWeight,baseColor:draft.titleColorHex,
+                                        colorMode:draft.titleColorMode,colors:draft.titleColors,
+                                        outlineEnabled:draft.titleOutlineEnabled,
+                                        outlineColor:draft.titleOutlineColorHex,
+                                        outlineWidth:draft.titleOutlineWidth,base:base,alignment:alignment
+                                    )
                                 }
+
+                                if draft.titleEnabled && draft.subtitleEnabled {
+                                    Spacer().frame(height:bh*CGFloat(draft.gapTitleSubtitle)/100)
+                                }
+
                                 if draft.subtitleEnabled && !draft.subtitleText.isEmpty {
-                                    Text(draft.subtitleText)
-                                        .font(previewFont(draft.subtitleFont,draft.subtitleSize,draft.subtitleWeight,min(w,h)))
-                                        .foregroundStyle(Color(nsColor:NSColor(hex:draft.subtitleColorHex)))
-                                        .lineLimit(1).minimumScaleFactor(0.55)
+                                    FTSManualStyledTextPreview(
+                                        text:draft.subtitleText,fontID:draft.subtitleFont,size:draft.subtitleSize,
+                                        weight:draft.subtitleWeight,baseColor:draft.subtitleColorHex,
+                                        colorMode:draft.subtitleColorMode,colors:draft.subtitleColors,
+                                        outlineEnabled:draft.subtitleOutlineEnabled,
+                                        outlineColor:draft.subtitleOutlineColorHex,
+                                        outlineWidth:draft.subtitleOutlineWidth,base:base,alignment:alignment
+                                    )
                                 }
+
+                                if draft.subtitleEnabled && draft.lineEnabled {
+                                    Spacer().frame(height:bh*CGFloat(draft.gapSubtitleLine)/100)
+                                }
+
                                 if draft.lineEnabled {
                                     let dateText=draft.includeDate ? FTSManualEventDate.string(draft.eventDate) : ""
                                     let value=[draft.lineText,dateText].filter{!$0.isEmpty}.joined(separator:" · ")
                                     if !value.isEmpty {
-                                        Text(value)
-                                            .font(previewFont(draft.lineFont,draft.lineSize,draft.lineWeight,min(w,h)))
-                                            .foregroundStyle(Color(nsColor:NSColor(hex:draft.lineColorHex)))
-                                            .lineLimit(1).minimumScaleFactor(0.55)
+                                        FTSManualStyledTextPreview(
+                                            text:value,fontID:draft.lineFont,size:draft.lineSize,
+                                            weight:draft.lineWeight,baseColor:draft.lineColorHex,
+                                            colorMode:draft.lineColorMode,colors:draft.lineColors,
+                                            outlineEnabled:draft.lineOutlineEnabled,
+                                            outlineColor:draft.lineOutlineColorHex,
+                                            outlineWidth:draft.lineOutlineWidth,base:base,alignment:alignment
+                                        )
                                     }
                                 }
                             }
@@ -858,12 +1192,14 @@ struct FTSManualPrinterDesignPreview:View {
                                 Image(nsImage:logo)
                                     .resizable()
                                     .scaledToFit()
-                                    .frame(width:draft.logoSize=="small" ? 54:(draft.logoSize=="large" ? 104:78),
-                                           height:bh*0.72)
+                                    .frame(
+                                        width:draft.logoSize=="small" ? 48:(draft.logoSize=="large" ? 92:68),
+                                        height:bh*0.72
+                                    )
                             }
                         }
-                        .padding(.horizontal,22)
-                        .padding(.vertical,9)
+                        .padding(.horizontal,18)
+                        .padding(.vertical,4)
                     }
                     .frame(height:bh)
                 }

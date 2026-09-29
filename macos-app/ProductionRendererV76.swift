@@ -143,10 +143,13 @@ enum ProductionRendererV76 {
             cw=sw; ch=sw/target; cx=0; cy=(sh-ch)/2
         }
 
-        // Fixed FTS banner height: 15 mm. Landscape spans the physical 148 mm
-        // paper width; portrait spans the 100 mm width.
+        // FTS banner keeps the physical width of the photo and may be reduced
+        // in height by the organizer. 15 mm remains the hard maximum.
+        let overlay=config["overlay"]?.object ?? [:]
+        let banner=overlay["banner"]?.object ?? [:]
+        let bannerHeightMM=clamp(CGFloat(banner["height_mm"]?.double ?? 15.0),6.0,15.0)
         let physicalWidthMM:CGFloat=landscape ? 148.0 : 100.0
-        let fixedBannerPx=canvas.width*15.0/physicalWidthMM
+        let fixedBannerPx=canvas.width*bannerHeightMM/physicalWidthMM
         let fixedBannerPct=fixedBannerPx/canvas.height*100.0
         let normal=fixedBannerPct
         let minimum=fixedBannerPct
@@ -423,9 +426,29 @@ enum ProductionRendererV76 {
         let safeBottom=printSafeInset+6
         let safeTop=max(safeBottom+1,bh-printSafeInset-6)
         let safeHeight=max(1,safeTop-safeBottom)
-        let titleRect=NSRect(x:pad,y:safeBottom+safeHeight*0.50,width:textBlockWidth,height:safeHeight*0.50)
-        let subtitleRect=NSRect(x:pad,y:safeBottom+safeHeight*0.22,width:textBlockWidth,height:safeHeight*0.28)
-        let lineRect=NSRect(x:pad,y:safeBottom,width:textBlockWidth,height:safeHeight*0.22)
+        let textLayout=ov["text_layout"]?.object ?? [:]
+        let gapTitleSub=clamp(CGFloat(textLayout["gap_title_sub_pct"]?.double ?? 0),0,20)/100*safeHeight
+        let gapSubLine=clamp(CGFloat(textLayout["gap_sub_line_pct"]?.double ?? 0),0,20)/100*safeHeight
+
+        let titleCenter=clamp(
+            safeBottom+safeHeight*0.75+gapTitleSub*0.50,
+            safeBottom+safeHeight*0.55,
+            safeTop-safeHeight*0.10
+        )
+        let subtitleCenter=clamp(
+            safeBottom+safeHeight*0.36-gapTitleSub*0.50+gapSubLine*0.50,
+            safeBottom+safeHeight*0.20,
+            safeTop-safeHeight*0.30
+        )
+        let lineCenter=clamp(
+            safeBottom+safeHeight*0.11-gapSubLine*0.50,
+            safeBottom+safeHeight*0.06,
+            safeTop-safeHeight*0.55
+        )
+
+        let titleRect=NSRect(x:pad,y:titleCenter-safeHeight*0.25,width:textBlockWidth,height:safeHeight*0.50)
+        let subtitleRect=NSRect(x:pad,y:subtitleCenter-safeHeight*0.14,width:textBlockWidth,height:safeHeight*0.28)
+        let lineRect=NSRect(x:pad,y:lineCenter-safeHeight*0.11,width:textBlockWidth,height:safeHeight*0.22)
         let title=ov["title"]?.object ?? [:]
         let sub=ov["subtitle"]?.object ?? [:]
         let line=ov["line"]?.object ?? [:]
@@ -503,10 +526,14 @@ enum ProductionRendererV76 {
         let start=max(12,CGFloat(spec["size_pct"]?.double ?? Double(defaultSize))*base/100*textScale)
         let minSize=max(10,min(start*0.55,safeRect.height*0.72))
         let shadowEnabled=spec["shadow"]?.bool != false
-        let multicolor=spec["multicolor"]?.bool == true
+        let legacyMulticolor=spec["multicolor"]?.bool == true
+        let colorMode=spec["color_mode"]?.string ?? (legacyMulticolor ? "per_char":"solid")
         let colors=(spec["colors"]?.array ?? []).compactMap{$0.string}
         let fallbackColor=spec["color"]?.string ?? defaultColor
         let palette=colors.isEmpty ? [fallbackColor] : colors
+        let outlineEnabled=spec["outline_enabled"]?.bool == true
+        let outlineColor=NSColor(hex:spec["outline_color"]?.string ?? "#000000")
+        let outlineWidth=clamp(CGFloat(spec["outline_width"]?.double ?? 2.5),0.5,8.0)
 
         var size=min(start,safeRect.height*0.72)
         while size>minSize {
@@ -525,29 +552,41 @@ enum ProductionRendererV76 {
         shadow.shadowColor=shadowEnabled ? NSColor.black.withAlphaComponent(0.55) : .clear
         shadow.shadowBlurRadius=shadowEnabled ? max(3,canvas.width*0.004):0
 
-        if !multicolor || palette.count<2 {
-            let attrs:[NSAttributedString.Key:Any]=[
+        func attrs(color:NSColor,paragraph:Bool)->[NSAttributedString.Key:Any] {
+            var values:[NSAttributedString.Key:Any]=[
                 .font:font,
-                .foregroundColor:NSColor(hex:palette[0]),
-                .paragraphStyle:p,
+                .foregroundColor:color,
                 .shadow:shadow
             ]
-            (text as NSString).draw(in:rect,withAttributes:attrs)
+            if paragraph { values[.paragraphStyle]=p }
+            if outlineEnabled {
+                values[.strokeColor]=outlineColor
+                // Negative stroke width keeps the glyph filled and adds an outer contour.
+                values[.strokeWidth] = -outlineWidth
+            }
+            return values
+        }
+
+        if colorMode=="solid" || palette.count<2 {
+            (text as NSString).draw(in:rect,withAttributes:attrs(color:NSColor(hex:fallbackColor),paragraph:true))
             return
         }
 
+        let groupSize:Int = colorMode=="groups_3" ? 3 : (colorMode=="groups_2" ? 2 : 1)
         let chars=Array(text)
         let widths=chars.map { (String($0) as NSString).size(withAttributes:[.font:font]).width }
         let total=widths.reduce(0,+)
         var left=align=="center" ? safeRect.midX-total/2 : (align=="right" ? safeRect.maxX-total : safeRect.minX)
         let y=safeRect.midY-size*0.45
+        var visibleIndex=0
         for (i,ch) in chars.enumerated() {
-            let attrs:[NSAttributedString.Key:Any]=[
-                .font:font,
-                .foregroundColor:NSColor(hex:palette[i % palette.count]),
-                .shadow:shadow
-            ]
-            String(ch).draw(at:NSPoint(x:left,y:y),withAttributes:attrs)
+            let isSpace=ch.isWhitespace
+            let paletteIndex=(visibleIndex/groupSize) % palette.count
+            String(ch).draw(
+                at:NSPoint(x:left,y:y),
+                withAttributes:attrs(color:NSColor(hex:palette[paletteIndex]),paragraph:false)
+            )
+            if !isSpace { visibleIndex += 1 }
             left += widths[i]
         }
     }
