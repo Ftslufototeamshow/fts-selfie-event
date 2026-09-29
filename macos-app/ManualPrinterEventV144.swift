@@ -241,7 +241,7 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
         titleWeight=Int(title["weight"]?.double ?? 900)
         titleColorHex=title["color"]?.string ?? "#FFFFFF"
         titleColorMode=title["color_mode"]?.string ?? (title["multicolor"]?.bool == true ? "per_char":"solid")
-        titleColors=FTSDesignColor.palette(title,fallback:titleColorHex)
+        titleColors=FTSDesignColor.palette(title,fallback:title["color"]?.string ?? "#FFFFFF")
         titleOutlineEnabled=title["outline_enabled"]?.bool == true
         titleOutlineColorHex=title["outline_color"]?.string ?? "#000000"
         titleOutlineWidth=max(0.5,min(8,title["outline_width"]?.double ?? 2.5))
@@ -253,7 +253,7 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
         subtitleWeight=Int(subtitle["weight"]?.double ?? 700)
         subtitleColorHex=subtitle["color"]?.string ?? "#D9B56D"
         subtitleColorMode=subtitle["color_mode"]?.string ?? (subtitle["multicolor"]?.bool == true ? "per_char":"solid")
-        subtitleColors=FTSDesignColor.palette(subtitle,fallback:subtitleColorHex)
+        subtitleColors=FTSDesignColor.palette(subtitle,fallback:subtitle["color"]?.string ?? "#D9B56D")
         subtitleOutlineEnabled=subtitle["outline_enabled"]?.bool == true
         subtitleOutlineColorHex=subtitle["outline_color"]?.string ?? "#000000"
         subtitleOutlineWidth=max(0.5,min(8,subtitle["outline_width"]?.double ?? 2.5))
@@ -265,7 +265,7 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
         lineWeight=Int(line["weight"]?.double ?? 600)
         lineColorHex=line["color"]?.string ?? "#E8EFED"
         lineColorMode=line["color_mode"]?.string ?? (line["multicolor"]?.bool == true ? "per_char":"solid")
-        lineColors=FTSDesignColor.palette(line,fallback:lineColorHex)
+        lineColors=FTSDesignColor.palette(line,fallback:line["color"]?.string ?? "#E8EFED")
         lineOutlineEnabled=line["outline_enabled"]?.bool == true
         lineOutlineColorHex=line["outline_color"]?.string ?? "#000000"
         lineOutlineWidth=max(0.5,min(8,line["outline_width"]?.double ?? 2.5))
