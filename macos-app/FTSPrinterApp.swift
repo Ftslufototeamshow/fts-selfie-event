@@ -766,13 +766,13 @@ final class AppState: ObservableObject {
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
     static let appVersion: String = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.48"
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.49"
         let value=raw.trimmingCharacters(in:.whitespacesAndNewlines)
-        return value.isEmpty ? "0.3.48" : value
+        return value.isEmpty ? "0.3.49" : value
     }()
     static let appBuild: Int = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "138"
-        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 138
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "139"
+        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 139
     }()
     static var userAgent:String { "FTS Printer macOS \(appVersion) Build \(appBuild)" }
 
@@ -1423,6 +1423,8 @@ struct MainView: View {
                     Text("v\(AppState.appVersion)").font(.caption2).foregroundStyle(FTSTheme.muted)
                 }.padding(.horizontal,16).padding(.vertical,7).background(Color.black.opacity(0.26))
             }
+            .frame(minWidth:0,maxWidth:.infinity,maxHeight:.infinity)
+            .clipped()
         }
         .background(FTSTheme.background.ignoresSafeArea())
         .foregroundStyle(.white)
@@ -1584,6 +1586,8 @@ struct MainView: View {
         }
         .padding(14)
         .frame(width:220)
+        .fixedSize(horizontal:true,vertical:false)
+        .layoutPriority(10)
         .background(LinearGradient(colors:[FTSTheme.sidebar,Color.black.opacity(0.92)],startPoint:.top,endPoint:.bottom))
     }
 

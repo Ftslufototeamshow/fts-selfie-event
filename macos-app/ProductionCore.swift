@@ -1150,13 +1150,13 @@ enum V80MacSpooler {
 @MainActor
 final class ProductionCore: ObservableObject {
     static let version: String = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.48"
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.49"
         let value=raw.trimmingCharacters(in:.whitespacesAndNewlines)
-        return value.isEmpty ? "0.3.48" : value
+        return value.isEmpty ? "0.3.49" : value
     }()
     static let build: Int = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "138"
-        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 138
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "139"
+        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 139
     }()
 
     @Published var workUnits: [V80WorkUnit] = []

@@ -491,19 +491,29 @@ enum FTSPhotoEffectsV132 {
     }
 }
 
+final class FTSBackgroundPreviewImageView:NSImageView {
+    override var intrinsicContentSize:NSSize { .zero }
+    override func hitTest(_ point:NSPoint)->NSView? { nil }
+}
+
 struct FTSBackgroundFilePreview: NSViewRepresentable {
     let path:String
     let animated:Bool
 
-    func makeNSView(context:Context)->NSImageView {
-        let view=NSImageView()
+    func makeNSView(context:Context)->FTSBackgroundPreviewImageView {
+        let view=FTSBackgroundPreviewImageView()
         view.imageScaling = .scaleProportionallyUpOrDown
         view.imageAlignment = .alignCenter
+        view.imageFrameStyle = .none
         view.animates = animated
+        view.setContentHuggingPriority(.defaultLow,for:.horizontal)
+        view.setContentHuggingPriority(.defaultLow,for:.vertical)
+        view.setContentCompressionResistancePriority(.defaultLow,for:.horizontal)
+        view.setContentCompressionResistancePriority(.defaultLow,for:.vertical)
         return view
     }
 
-    func updateNSView(_ view:NSImageView,context:Context) {
+    func updateNSView(_ view:FTSBackgroundPreviewImageView,context:Context) {
         view.imageScaling = .scaleProportionallyUpOrDown
         view.imageAlignment = .alignCenter
         view.image = NSImage(contentsOfFile:path)
@@ -554,6 +564,7 @@ struct FTSGreenScreenView: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                        .frame(maxWidth:760,alignment:.leading)
                         .onChange(of:settings.backgroundMode){mode in
                             if mode == .image,settings.activeBackground == nil {
                                 settings.backgroundImagePath=nil
@@ -587,6 +598,7 @@ struct FTSGreenScreenView: View {
                         HStack(spacing:10) {
                             Button("Bilder / GIFs hinzufügen"){chooseBackgrounds()}
                                 .buttonStyle(.borderedProminent)
+                                .keyboardShortcut("b",modifiers:[.command,.shift])
                             if settings.activeBackground != nil || settings.backgroundMode == .image {
                                 Button("Hintergrund aus") { deactivateBackground() }
                             }
@@ -611,7 +623,7 @@ struct FTSGreenScreenView: View {
 
                         backgroundPreview
                             .frame(maxWidth:.infinity)
-                            .frame(height:260)
+                            .frame(height:220)
                             .clipShape(RoundedRectangle(cornerRadius:12))
                     }.padding(.vertical,4)
                 }
@@ -644,7 +656,10 @@ struct FTSGreenScreenView: View {
                 }
             }
             .padding(16)
+            .frame(maxWidth:.infinity,alignment:.leading)
         }
+        .frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
+        .clipped()
         .task(id:event.event_token) {
             settings=FTSGreenScreenStore.settings(eventToken:event.event_token)
         }
@@ -666,6 +681,9 @@ struct FTSGreenScreenView: View {
                         path:asset.path,
                         animated:asset.kind == .animatedGIF
                     )
+                    .allowsHitTesting(false)
+                    .frame(maxWidth:.infinity,maxHeight:.infinity)
+                    .clipped()
                     .padding(8)
                     VStack {
                         HStack {
@@ -711,6 +729,9 @@ struct FTSGreenScreenView: View {
             ZStack(alignment:.topTrailing) {
                 RoundedRectangle(cornerRadius:9).fill(Color.black.opacity(0.08))
                 FTSBackgroundFilePreview(path:asset.path,animated:asset.kind == .animatedGIF)
+                    .allowsHitTesting(false)
+                    .frame(width:180,height:105)
+                    .clipped()
                     .padding(5)
                 if active {
                     Label("Aktiv",systemImage:"checkmark.circle.fill")
@@ -743,6 +764,8 @@ struct FTSGreenScreenView: View {
             }
 
             Button("Aus Event löschen",role:.destructive) { deleteBackground(asset) }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
                 .font(.caption)
         }
         .frame(width:190)

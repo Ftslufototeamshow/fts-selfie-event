@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.48-green-library-gif.zip
-            dist/FTS-Printer-macOS-v0.3.48-green-library-gif.dmg
+            dist/FTS-Printer-macOS-v0.3.49-green-ui-layout-fix.zip
+            dist/FTS-Printer-macOS-v0.3.49-green-ui-layout-fix.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.48-green-library-gif"
+          TAG="fts-printer-mac-v0.3.49-green-ui-layout-fix"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.48-green-library-gif.zip dist/FTS-Printer-macOS-v0.3.48-green-library-gif.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.49-green-ui-layout-fix.zip dist/FTS-Printer-macOS-v0.3.49-green-ui-layout-fix.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.48-green-library-gif.zip dist/FTS-Printer-macOS-v0.3.48-green-library-gif.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.48 · Green Library + GIF" --notes "Build 138: Green Screen Stufe 1 bis 3 fertig. Ein echter Kein-Hintergrund-Zustand verhindert den bisherigen Farb-Fallback nach Entfernen. Mehrere Bilder und GIFs werden pro Event in einer manuellen Hintergrundbibliothek gespeichert; genau ein Hintergrund kann manuell aktiviert oder ausgeschaltet werden, Bilder können aus der Event-Liste gelöscht und optional einem Veranstaltungstag als Kennzeichnung zugeordnet werden, ohne automatischen Wechsel. Alte Einzelbild-Einstellungen werden automatisch in die Bibliothek übernommen. Die Einstellungs-Vorschau zeigt das vollständige Bild ohne Abschneiden; GIFs laufen dort animiert. Physische Fotos und QR-Ausgaben bleiben Standbilder und verwenden den ersten/default GIF-Frame. Druckaufträge speichern nur den aktiven Green-Screen-Snapshot. Kamera Original bleibt unverändert; Druckbereit bleibt Green-Screen-neutral. SD-A-Z, schneller Import, Canon-Spooler, Spiegelkorrektur, Materiallogik, Archiv, QR und 148x15-mm-Banner bleiben bestehen."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.49-green-ui-layout-fix.zip dist/FTS-Printer-macOS-v0.3.49-green-ui-layout-fix.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.49 · Green UI Layout Fix" --notes "Build 139: Repariert die Green-Screen-Bibliothek auf kleinen und normalen MacBook-Fenstern. Die Bild/GIF-Vorschau ist jetzt layout-neutral und komplett nicht-interaktiv, sodass sie keine Buttons oder Segmentfelder mehr überdecken kann. Farbe, Bild/GIF, Comic-Burst, Feuerwerk, Hintergrund aus, Bilder hinzufügen, Aktivieren und Löschen bleiben anklickbar. Die linke FTS-Navigation ist wieder fest 220 px breit und kann von großen Hintergrundbildern nicht mehr aus dem Fenster gedrückt werden; der Inhaltsbereich wird sauber auf die verfügbare Fensterbreite begrenzt. Hintergrundbilder werden in der Einstellungsansicht vollständig proportional angezeigt und nicht abgeschnitten. Mehrfach-Hintergründe, manuelle Auswahl, Tageskennzeichnung und GIF-Vorschau aus Build 138 bleiben erhalten. Kamera Original bleibt unverändert; Green Screen bleibt nur Vorschau-/Druckebene. Canon-Spooler, SD-A-Z, Material, Archiv, QR und 148x15-mm-Banner bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.48-green-library-gif"
+          CURRENT="fts-printer-mac-v0.3.49-green-ui-layout-fix"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
