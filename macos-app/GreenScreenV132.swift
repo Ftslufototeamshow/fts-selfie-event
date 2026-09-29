@@ -54,6 +54,20 @@ enum FTSGreenBackgroundMode: String, Codable, Hashable, CaseIterable {
     }
 }
 
+enum FTSGreenBackgroundFitMode: String, Codable, Hashable, CaseIterable {
+    case fit
+    case fill
+    case manual
+
+    var label:String {
+        switch self {
+        case .fit:return "Ganzes Bild"
+        case .fill:return "Foto füllen"
+        case .manual:return "Manuell"
+        }
+    }
+}
+
 enum FTSGreenBackgroundAssetKind: String, Codable, Hashable {
     case image
     case animatedGIF
@@ -85,6 +99,15 @@ struct FTSGreenScreenSettings: Codable, Hashable {
     var activeBackgroundID:String?=nil
     var edgeSoftness:Double=5.0
 
+    // How the replacement image is composed into the physical photo.
+    var backgroundFitMode:FTSGreenBackgroundFitMode = .fill
+    var backgroundZoom:Double = 1.0
+    var backgroundOffsetX:Double = 0.0
+    var backgroundOffsetY:Double = 0.0
+    // Per-photo subject detection adjusts only the background framing.
+    // The camera original/person pixels are never moved or rewritten.
+    var autoPersonPlacement=false
+
     var activeBackground:FTSGreenBackgroundAsset? {
         if let id=activeBackgroundID,
            let asset=backgroundAssets.first(where:{$0.id==id}) { return asset }
@@ -111,7 +134,12 @@ struct FTSGreenScreenSettings: Codable, Hashable {
             backgroundColorHex.uppercased(),
             backgroundImagePath ?? "",
             activeBackgroundID ?? "",
-            String(format:"%.2f",edgeSoftness)
+            String(format:"%.2f",edgeSoftness),
+            backgroundFitMode.rawValue,
+            String(format:"%.3f",backgroundZoom),
+            String(format:"%.3f",backgroundOffsetX),
+            String(format:"%.3f",backgroundOffsetY),
+            autoPersonPlacement ? "auto-person-1":"auto-person-0"
         ].joined(separator:"|")
     }
 
@@ -134,6 +162,7 @@ struct FTSGreenScreenSettings: Codable, Hashable {
     private enum CodingKeys:String,CodingKey {
         case enabled,backgroundMode,backgroundColorHex,backgroundImagePath
         case backgroundAssets,activeBackgroundID,edgeSoftness
+        case backgroundFitMode,backgroundZoom,backgroundOffsetX,backgroundOffsetY,autoPersonPlacement
     }
 
     init(from decoder:Decoder)throws {
@@ -145,6 +174,11 @@ struct FTSGreenScreenSettings: Codable, Hashable {
         backgroundAssets=try c.decodeIfPresent([FTSGreenBackgroundAsset].self,forKey:.backgroundAssets) ?? []
         activeBackgroundID=try c.decodeIfPresent(String.self,forKey:.activeBackgroundID)
         edgeSoftness=try c.decodeIfPresent(Double.self,forKey:.edgeSoftness) ?? 5.0
+        backgroundFitMode=try c.decodeIfPresent(FTSGreenBackgroundFitMode.self,forKey:.backgroundFitMode) ?? .fill
+        backgroundZoom=max(1.0,min(2.0,try c.decodeIfPresent(Double.self,forKey:.backgroundZoom) ?? 1.0))
+        backgroundOffsetX=max(-1.0,min(1.0,try c.decodeIfPresent(Double.self,forKey:.backgroundOffsetX) ?? 0.0))
+        backgroundOffsetY=max(-1.0,min(1.0,try c.decodeIfPresent(Double.self,forKey:.backgroundOffsetY) ?? 0.0))
+        autoPersonPlacement=try c.decodeIfPresent(Bool.self,forKey:.autoPersonPlacement) ?? false
 
         // Migrate the single-background v132/v137 setting into the new library.
         if backgroundAssets.isEmpty,let path=backgroundImagePath,!path.isEmpty {
@@ -185,6 +219,11 @@ struct FTSGreenScreenSettings: Codable, Hashable {
         try c.encode(backgroundAssets,forKey:.backgroundAssets)
         try c.encodeIfPresent(activeBackgroundID,forKey:.activeBackgroundID)
         try c.encode(edgeSoftness,forKey:.edgeSoftness)
+        try c.encode(backgroundFitMode,forKey:.backgroundFitMode)
+        try c.encode(backgroundZoom,forKey:.backgroundZoom)
+        try c.encode(backgroundOffsetX,forKey:.backgroundOffsetX)
+        try c.encode(backgroundOffsetY,forKey:.backgroundOffsetY)
+        try c.encode(autoPersonPlacement,forKey:.autoPersonPlacement)
     }
 }
 
@@ -256,10 +295,16 @@ enum FTSPhotoEffectsV132 {
         cache.countLimit=800
         return cache
     }()
+    private static let personBoundsCache:NSCache<NSString,NSValue> = {
+        let cache=NSCache<NSString,NSValue>()
+        cache.countLimit=800
+        return cache
+    }()
 
     static func clearTransientCache() {
         personMaskCache.removeAllObjects()
         greenBackdropDecisionCache.removeAllObjects()
+        personBoundsCache.removeAllObjects()
     }
 
     static func processedImage(
@@ -285,6 +330,9 @@ enum FTSPhotoEffectsV132 {
         let original=CIImage(cgImage:cg)
         let extent=original.extent
         var result=original
+        let subjectBounds = (replacementActive && green.autoPersonPlacement)
+            ? detectedPersonBounds(cgImage:cg,cacheKey:cacheKey)
+            : nil
         let needsPersonMask = replacementActive || effect == .comic
         let mask = needsPersonMask
             ? personMask(cgImage:cg,extent:extent,softness:green.edgeSoftness,cacheKey:cacheKey)
@@ -297,14 +345,14 @@ enum FTSPhotoEffectsV132 {
         if effect == .comic {
             let comic=comicImage(original)
             if let mask {
-                let background = replacementActive ? (backgroundImage(settings:green,extent:extent) ?? original) : original
+                let background = replacementActive ? (backgroundImage(settings:green,extent:extent,subjectBounds:subjectBounds) ?? original) : original
                 result=blend(foreground:comic,background:background,mask:mask) ?? comic
             } else {
                 result=comic
             }
         } else {
             if replacementActive,let mask,
-               let background=backgroundImage(settings:green,extent:extent) {
+               let background=backgroundImage(settings:green,extent:extent,subjectBounds:subjectBounds) {
                 result=blend(foreground:original,background:background,mask:mask) ?? original
             }
             result=apply(effect:effect,to:result)
@@ -490,6 +538,42 @@ enum FTSPhotoEffectsV132 {
         return result
     }
 
+    private static func detectedPersonBounds(cgImage:CGImage,cacheKey:String?)->CGRect? {
+        let baseKey:String
+        if let raw=cacheKey,!raw.isEmpty {
+            baseKey=raw.split(separator:"|",maxSplits:1,omittingEmptySubsequences:false).first.map(String.init) ?? raw
+        } else {
+            baseKey="\(cgImage.width)x\(cgImage.height)"
+        }
+        let key=("person-bounds-v143|"+baseKey) as NSString
+        if let cached=personBoundsCache.object(forKey:key) {
+            let rect=cached.rectValue
+            return rect.isEmpty ? nil : rect
+        }
+
+        let request=VNDetectHumanRectanglesRequest()
+        request.upperBodyOnly=false
+        do {
+            try VNImageRequestHandler(cgImage:cgImage,orientation:.up,options:[:]).perform([request])
+            let observations=request.results ?? []
+            guard !observations.isEmpty else {
+                personBoundsCache.setObject(NSValue(rect:.zero),forKey:key)
+                return nil
+            }
+
+            var union=CGRect.null
+            for observation in observations {
+                union=union.union(observation.boundingBox)
+            }
+            let clipped=union.intersection(CGRect(x:0,y:0,width:1,height:1))
+            personBoundsCache.setObject(NSValue(rect:clipped),forKey:key)
+            return clipped.isEmpty ? nil : clipped
+        } catch {
+            personBoundsCache.setObject(NSValue(rect:.zero),forKey:key)
+            return nil
+        }
+    }
+
     private static func personMask(cgImage:CGImage,extent:CGRect,softness:Double,cacheKey:String?)->CIImage? {
         let key=cacheKey.map{
             "\($0)|\(cgImage.width)x\(cgImage.height)|\(String(format:"%.2f",softness))" as NSString
@@ -592,7 +676,11 @@ enum FTSPhotoEffectsV132 {
         ])?.outputImage ?? image
     }
 
-    private static func backgroundImage(settings:FTSGreenScreenSettings,extent:CGRect)->CIImage? {
+    private static func backgroundImage(
+        settings:FTSGreenScreenSettings,
+        extent:CGRect,
+        subjectBounds:CGRect?
+    )->CIImage? {
         switch settings.backgroundMode {
         case .none:
             return nil
@@ -600,9 +688,29 @@ enum FTSPhotoEffectsV132 {
             guard let path=settings.backgroundImagePath,!path.isEmpty,
                   let nsImage=NSImage(contentsOfFile:path),
                   let cg=nsImage.cgImage(forProposedRect:nil,context:nil,hints:nil) else{return nil}
-            // Animated GIFs move in the settings preview. A physical photo is a
-            // still image, so its first/default frame is used for the print.
-            return aspectFill(CIImage(cgImage:cg),to:extent)
+            // GIFs animate in the settings preview. A physical photo is a still
+            // image, so its first/default frame is used for print.
+            let image=CIImage(cgImage:cg)
+            switch settings.backgroundFitMode {
+            case .fit:
+                return aspectFitWithBackdrop(image,to:extent)
+            case .fill:
+                return positionedFill(
+                    image,to:extent,
+                    zoom:1.0,
+                    offsetX:0,
+                    offsetY:0,
+                    subjectBounds:settings.autoPersonPlacement ? subjectBounds:nil
+                )
+            case .manual:
+                return positionedFill(
+                    image,to:extent,
+                    zoom:settings.backgroundZoom,
+                    offsetX:settings.backgroundOffsetX,
+                    offsetY:settings.backgroundOffsetY,
+                    subjectBounds:settings.autoPersonPlacement ? subjectBounds:nil
+                )
+            }
         case .comicBurst:
             if let cg=generatedBackground(size:extent.size,mode:.comicBurst,colorHex:settings.backgroundColorHex)
                 .cgImage(forProposedRect:nil,context:nil,hints:nil) {
@@ -626,14 +734,62 @@ enum FTSPhotoEffectsV132 {
         return CIImage(color:ci).cropped(to:extent)
     }
 
-    private static func aspectFill(_ image:CIImage,to extent:CGRect)->CIImage {
+    private static func aspectFitWithBackdrop(_ image:CIImage,to extent:CGRect)->CIImage {
+        // Show the complete background without distortion. Any unavoidable side/
+        // top space is filled with a soft extension of the same image rather than
+        // black bars.
+        let blurredBase=positionedFill(
+            image,to:extent,zoom:1,offsetX:0,offsetY:0,subjectBounds:nil
+        )
+        let soft=CIFilter(name:"CIGaussianBlur",parameters:[
+            kCIInputImageKey:blurredBase,
+            kCIInputRadiusKey:24.0
+        ])?.outputImage.cropped(to:extent) ?? blurredBase
+
         let iw=max(image.extent.width,1),ih=max(image.extent.height,1)
-        let scale=max(extent.width/iw,extent.height/ih)
-        var result=image.transformed(by:CGAffineTransform(scaleX:scale,y:scale))
-        result=result.transformed(by:CGAffineTransform(
-            translationX:extent.midX-result.extent.midX,
-            y:extent.midY-result.extent.midY
+        let scale=min(extent.width/iw,extent.height/ih)
+        var fitted=image.transformed(by:CGAffineTransform(scaleX:scale,y:scale))
+        fitted=fitted.transformed(by:CGAffineTransform(
+            translationX:extent.midX-fitted.extent.midX,
+            y:extent.midY-fitted.extent.midY
         ))
+        return fitted.composited(over:soft).cropped(to:extent)
+    }
+
+    private static func positionedFill(
+        _ image:CIImage,
+        to extent:CGRect,
+        zoom:Double,
+        offsetX:Double,
+        offsetY:Double,
+        subjectBounds:CGRect?
+    )->CIImage {
+        let iw=max(image.extent.width,1),ih=max(image.extent.height,1)
+        var effectiveZoom=max(1.0,min(2.0,zoom))
+        var nx=max(-1.0,min(1.0,offsetX))
+        var ny=max(-1.0,min(1.0,offsetY))
+
+        if let subject=subjectBounds,!subject.isEmpty {
+            // Person close/large -> keep more environment visible.
+            // Person small/far -> a very mild extra zoom prevents the background
+            // from feeling disproportionately distant. Position follows the
+            // detected person's normalized center.
+            let personHeight=max(0.05,min(1.0,subject.height))
+            let automaticZoom=max(1.0,min(1.12,1.08+(0.52-personHeight)*0.16))
+            effectiveZoom=max(1.0,min(2.0,effectiveZoom*automaticZoom))
+            nx=max(-1.0,min(1.0,nx+(subject.midX-0.5)*1.35))
+            ny=max(-1.0,min(1.0,ny+(subject.midY-0.5)*0.80))
+        }
+
+        let base=max(extent.width/iw,extent.height/ih)
+        let scale=base*CGFloat(effectiveZoom)
+        var result=image.transformed(by:CGAffineTransform(scaleX:scale,y:scale))
+
+        let overflowX=max(0,(result.extent.width-extent.width)/2)
+        let overflowY=max(0,(result.extent.height-extent.height)/2)
+        let tx=extent.midX-result.extent.midX+CGFloat(nx)*overflowX
+        let ty=extent.midY-result.extent.midY+CGFloat(ny)*overflowY
+        result=result.transformed(by:CGAffineTransform(translationX:tx,y:ty))
         return result.cropped(to:extent)
     }
 
@@ -800,6 +956,64 @@ struct FTSGreenScreenView: View {
                                 .keyboardShortcut("b",modifiers:[.command,.shift])
                             if settings.activeBackground != nil || settings.backgroundMode == .image {
                                 Button("Hintergrund aus") { deactivateBackground() }
+                            }
+                        }
+
+                        if settings.backgroundMode == .image {
+                            GroupBox("Hintergrund im Druckfoto") {
+                                VStack(alignment:.leading,spacing:8) {
+                                    Picker("Einpassung",selection:$settings.backgroundFitMode) {
+                                        ForEach(FTSGreenBackgroundFitMode.allCases,id:\.self){mode in
+                                            Text(mode.label).tag(mode)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .onChange(of:settings.backgroundFitMode){_ in saveSettings(clearEffectCache:true)}
+
+                                    if settings.backgroundFitMode == .manual {
+                                        HStack {
+                                            Text("Zoom").font(.caption)
+                                            Slider(value:$settings.backgroundZoom,in:1...2,step:0.01)
+                                                .onChange(of:settings.backgroundZoom){_ in saveSettings()}
+                                            Text(String(format:"%.0f %%",settings.backgroundZoom*100))
+                                                .font(.caption).monospacedDigit().frame(width:52,alignment:.trailing)
+                                        }
+                                        HStack {
+                                            Text("Links / Rechts").font(.caption).frame(width:85,alignment:.leading)
+                                            Slider(value:$settings.backgroundOffsetX,in:-1...1,step:0.02)
+                                                .onChange(of:settings.backgroundOffsetX){_ in saveSettings()}
+                                        }
+                                        HStack {
+                                            Text("Hoch / Runter").font(.caption).frame(width:85,alignment:.leading)
+                                            Slider(value:$settings.backgroundOffsetY,in:-1...1,step:0.02)
+                                                .onChange(of:settings.backgroundOffsetY){_ in saveSettings()}
+                                        }
+                                        Button("Position zurücksetzen") {
+                                            settings.backgroundZoom=1
+                                            settings.backgroundOffsetX=0
+                                            settings.backgroundOffsetY=0
+                                            saveSettings(clearEffectCache:true)
+                                        }
+                                        .buttonStyle(.borderless)
+                                    }
+
+                                    Button {
+                                        settings.autoPersonPlacement.toggle()
+                                        saveSettings(clearEffectCache:true)
+                                    } label: {
+                                        Label(
+                                            settings.autoPersonPlacement ? "Auto · Person: AN" : "Auto · Person erkennen",
+                                            systemImage:settings.autoPersonPlacement ? "person.crop.rectangle.badge.checkmark" : "person.crop.rectangle"
+                                        )
+                                    }
+                                    .buttonStyle(.borderedProminent)
+
+                                    Text(settings.autoPersonPlacement
+                                         ? "Auto erkennt pro Foto die Personenposition und passt nur Hintergrund-Ausrichtung/Zoom an. Die Person selbst bleibt unverändert."
+                                         : "Auto ist aus. Hintergrund folgt nur deiner gewählten Fit/Fill/Manuell-Einstellung.")
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                }
+                                .padding(.vertical,3)
                             }
                         }
 
