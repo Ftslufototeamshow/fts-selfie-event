@@ -251,9 +251,15 @@ enum FTSPhotoEffectsV132 {
         cache.totalCostLimit=128*1024*1024
         return cache
     }()
+    private static let greenBackdropDecisionCache:NSCache<NSString,NSNumber> = {
+        let cache=NSCache<NSString,NSNumber>()
+        cache.countLimit=800
+        return cache
+    }()
 
     static func clearTransientCache() {
         personMaskCache.removeAllObjects()
+        greenBackdropDecisionCache.removeAllObjects()
     }
 
     static func processedImage(
@@ -264,9 +270,17 @@ enum FTSPhotoEffectsV132 {
         cacheKey:String?=nil
     )->NSImage {
         let green=greenScreenSettings ?? FTSGreenScreenStore.settings(eventToken:event.event_token)
-        let replacementActive=green.hasReplacementBackground
-        if effect == .normal && !replacementActive { return source }
+        let replacementRequested=green.hasReplacementBackground
+        if effect == .normal && !replacementRequested { return source }
         guard let cg=source.cgImage(forProposedRect:nil,context:nil,hints:nil) else{return source}
+
+        // Green Screen is allowed only when the actual camera image contains a
+        // large, connected, chroma-green background field. This blocks grass,
+        // green clothing and small green objects from triggering replacement.
+        let greenWallDetected = replacementRequested
+            ? detectsGreenScreenBackdrop(cgImage:cg,cacheKey:cacheKey)
+            : false
+        let replacementActive = replacementRequested && greenWallDetected
 
         let original=CIImage(cgImage:cg)
         let extent=original.extent
@@ -275,6 +289,10 @@ enum FTSPhotoEffectsV132 {
         let mask = needsPersonMask
             ? personMask(cgImage:cg,extent:extent,softness:green.edgeSoftness,cacheKey:cacheKey)
             : nil
+
+        // Normal photo + no real green wall = untouched camera image. Filters still
+        // work normally when the operator explicitly selected one for this photo.
+        if effect == .normal && !replacementActive { return source }
 
         if effect == .comic {
             let comic=comicImage(original)
@@ -294,6 +312,178 @@ enum FTSPhotoEffectsV132 {
 
         guard let out=ciContext.createCGImage(result,from:extent) else{return source}
         return NSImage(cgImage:out,size:source.size)
+    }
+
+    private struct GreenComponentStats {
+        var count=0
+        var minX=Int.max
+        var maxX=Int.min
+        var minY=Int.max
+        var maxY=Int.min
+        var touchesLeft=false
+        var touchesRight=false
+        var touchesTop=false
+        var touchesBottom=false
+    }
+
+    private static func canonicalDetectionKey(_ cacheKey:String?)->NSString? {
+        guard let raw=cacheKey,!raw.isEmpty else{return nil}
+        // Tile, large preview and physical print all use the same imported source
+        // path. Strip preview-only suffixes so they share exactly one decision.
+        let base=raw.split(separator:"|",maxSplits:1,omittingEmptySubsequences:false).first.map(String.init) ?? raw
+        return ("green-wall-v141|"+base) as NSString
+    }
+
+    private static func detectsGreenScreenBackdrop(cgImage:CGImage,cacheKey:String?)->Bool {
+        let key=canonicalDetectionKey(cacheKey)
+        if let key,let cached=greenBackdropDecisionCache.object(forKey:key) {
+            return cached.boolValue
+        }
+
+        let sourceW=max(cgImage.width,1)
+        let sourceH=max(cgImage.height,1)
+        let maxSide:CGFloat=192
+        let scale=min(min(maxSide/CGFloat(sourceW),maxSide/CGFloat(sourceH)),1)
+        let w=max(32,Int((CGFloat(sourceW)*scale).rounded()))
+        let h=max(32,Int((CGFloat(sourceH)*scale).rounded()))
+        let bytesPerRow=w*4
+        var rgba=[UInt8](repeating:0,count:h*bytesPerRow)
+
+        let rendered=rgba.withUnsafeMutableBytes { raw -> Bool in
+            guard let base=raw.baseAddress,
+                  let ctx=CGContext(
+                    data:base,
+                    width:w,
+                    height:h,
+                    bitsPerComponent:8,
+                    bytesPerRow:bytesPerRow,
+                    space:CGColorSpaceCreateDeviceRGB(),
+                    bitmapInfo:CGImageAlphaInfo.noneSkipLast.rawValue
+                  ) else{return false}
+            ctx.interpolationQuality = .medium
+            ctx.draw(cgImage,in:CGRect(x:0,y:0,width:w,height:h))
+            return true
+        }
+        guard rendered else{return false}
+
+        var green=[UInt8](repeating:0,count:w*h)
+        var totalGreen=0
+        var upperGreen=0
+        var rowCounts=[Int](repeating:0,count:h)
+        var colCounts=[Int](repeating:0,count:w)
+
+        func chromaGreen(_ r:Int,_ g:Int,_ b:Int)->Bool {
+            let maxV=max(r,max(g,b))
+            let minV=min(r,min(g,b))
+            let delta=maxV-minV
+            guard g>=82,
+                  g-r>=32,
+                  g-b>=18,
+                  maxV>0,
+                  Double(delta)/Double(maxV)>=0.34 else{return false}
+
+            // HSV hue: real chroma-key greens sit near pure green / blue-green.
+            let d=Double(max(delta,1))
+            var hue:Double
+            if maxV==r {
+                hue=60.0*((Double(g-b)/d).truncatingRemainder(dividingBy:6.0))
+            } else if maxV==g {
+                hue=60.0*((Double(b-r)/d)+2.0)
+            } else {
+                hue=60.0*((Double(r-g)/d)+4.0)
+            }
+            if hue<0 { hue += 360 }
+            return hue>=100 && hue<=165
+        }
+
+        for y in 0..<h {
+            for x in 0..<w {
+                let p=y*bytesPerRow+x*4
+                let r=Int(rgba[p]),g=Int(rgba[p+1]),b=Int(rgba[p+2])
+                if chromaGreen(r,g,b) {
+                    let i=y*w+x
+                    green[i]=1
+                    totalGreen += 1
+                    rowCounts[y] += 1
+                    colCounts[x] += 1
+                    if y < h/3 { upperGreen += 1 }
+                }
+            }
+        }
+
+        let total=max(w*h,1)
+        let overallFraction=Double(totalGreen)/Double(total)
+        let upperFraction=Double(upperGreen)/Double(max(w*max(h/3,1),1))
+
+        // Small green objects/clothing can never qualify.
+        guard overallFraction>=0.14,upperFraction>=0.055 else {
+            if let key { greenBackdropDecisionCache.setObject(NSNumber(value:false),forKey:key) }
+            return false
+        }
+
+        var visited=[UInt8](repeating:0,count:w*h)
+        var best=GreenComponentStats()
+        let edgeX=max(1,Int(Double(w)*0.06))
+        let edgeY=max(1,Int(Double(h)*0.06))
+
+        for start in 0..<(w*h) where green[start]==1 && visited[start]==0 {
+            var stats=GreenComponentStats()
+            var stack=[start]
+            visited[start]=1
+            while let i=stack.popLast() {
+                let x=i%w,y=i/w
+                stats.count += 1
+                stats.minX=min(stats.minX,x);stats.maxX=max(stats.maxX,x)
+                stats.minY=min(stats.minY,y);stats.maxY=max(stats.maxY,y)
+                if x<edgeX {stats.touchesLeft=true}
+                if x>=w-edgeX {stats.touchesRight=true}
+                if y<edgeY {stats.touchesTop=true}
+                if y>=h-edgeY {stats.touchesBottom=true}
+
+                for ny in max(0,y-1)...min(h-1,y+1) {
+                    for nx in max(0,x-1)...min(w-1,x+1) {
+                        let n=ny*w+nx
+                        if green[n]==1 && visited[n]==0 {
+                            visited[n]=1
+                            stack.append(n)
+                        }
+                    }
+                }
+            }
+            if stats.count>best.count {best=stats}
+        }
+
+        let componentFraction=Double(best.count)/Double(total)
+        let dominance=Double(best.count)/Double(max(totalGreen,1))
+        let spanW=best.count>0 ? Double(best.maxX-best.minX+1)/Double(w) : 0
+        let spanH=best.count>0 ? Double(best.maxY-best.minY+1)/Double(h) : 0
+        let rowsCovered=Double(rowCounts.filter{$0>=max(3,Int(Double(w)*0.12))}.count)/Double(h)
+        let colsCovered=Double(colCounts.filter{$0>=max(3,Int(Double(h)*0.12))}.count)/Double(w)
+        let edgeTouches=[best.touchesLeft,best.touchesRight,best.touchesTop,best.touchesBottom].filter{$0}.count
+
+        // A real backdrop is one dominant connected field spanning a substantial
+        // part of both axes. Natural grass is normally confined to the lower area;
+        // clothing/small props fail area, span and edge conditions.
+        let normalBackdrop =
+            componentFraction>=0.12 &&
+            dominance>=0.52 &&
+            spanW>=0.46 &&
+            spanH>=0.44 &&
+            rowsCovered>=0.36 &&
+            colsCovered>=0.34 &&
+            edgeTouches>=1
+
+        // Allow a centered backdrop that does not quite reach the frame edges only
+        // when it is unmistakably large.
+        let centeredLargeBackdrop =
+            componentFraction>=0.30 &&
+            dominance>=0.60 &&
+            spanW>=0.68 &&
+            spanH>=0.58
+
+        let result=normalBackdrop || centeredLargeBackdrop
+        if let key { greenBackdropDecisionCache.setObject(NSNumber(value:result),forKey:key) }
+        return result
     }
 
     private static func personMask(cgImage:CGImage,extent:CGRect,softness:Double,cacheKey:String?)->CIImage? {
@@ -555,7 +745,7 @@ struct FTSGreenScreenView: View {
                             .toggleStyle(.switch)
                             .onChange(of:settings.enabled){_ in saveSettings(clearEffectCache:true)}
                         Text(settings.enabled
-                             ? "Neue und aktive Kamerafotos erhalten den hier gewählten Hintergrund. Originale bleiben unverändert."
+                             ? "Nur Fotos mit tatsächlich erkannter großer Green-Screen-Fläche erhalten den gewählten Hintergrund. Normale Fotos bleiben unverändert."
                              : "Keine Freistellung und kein Hintergrundersatz. Fotos werden exakt wie bisher verarbeitet.")
                             .font(.caption).foregroundStyle(.secondary)
                     }.padding(.vertical,4)
