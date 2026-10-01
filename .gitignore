@@ -1,0 +1,29 @@
+# Local OS / editor noise
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.temp
+*~
+
+# Local configuration / secrets
+.env
+.env.*
+!.env.example
+
+# Generated dependencies and build output
+node_modules/
+dist/
+build/
+release/
+.gradle/
+android-app/.gradle/
+android-app/app/build/
+macos-app/build/
+
+# Packaged binaries
+*.apk
+*.aab
+*.dmg
+*.pkg
+*.zip
