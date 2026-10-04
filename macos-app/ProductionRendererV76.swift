@@ -44,27 +44,35 @@ enum ProductionRendererV76 {
         cropOffsetX: CGFloat = 0,
         cropOffsetY: CGFloat = 0,
         photoEffect: FTSPhotoEffect = .normal,
-        greenScreenSettings: FTSGreenScreenSettings? = nil
+        greenScreenSettings: FTSGreenScreenSettings? = nil,
+        previewMode: Bool = false
     ) async throws -> NSImage {
-        guard let originalSource = uprightImage(contentsOf: sourceURL) else {
+        guard let loadedSource = uprightImage(contentsOf: sourceURL) else {
             throw NSError(domain:"FTSPrinter",code:176,userInfo:[NSLocalizedDescriptionKey:"Lokales Foto konnte nicht geöffnet werden."])
         }
+
+        // Interactive previews do not need the camera's full multi-megapixel raster.
+        // Cap only the preview working image; physical print rendering keeps the
+        // original resolution and therefore remains bit-for-bit on the old path.
+        let originalSource = previewMode ? previewSizedImage(loadedSource,maxDimension:1600) : loadedSource
+        let renderCacheKey = sourceURL.path + (previewMode ? "|preview" : "")
+        let faceCacheKey = renderCacheKey
 
         let source=FTSPhotoEffectsV132.processedImage(
             source:originalSource,
             event:event,
             effect:photoEffect,
             greenScreenSettings:greenScreenSettings,
-            cacheKey:sourceURL.path
+            cacheKey:renderCacheKey
         )
         let config = event.studio_config?.object ?? [:]
         let faces:[FaceBox]
-        if let cached=faceCache[sourceURL.path] {
+        if let cached=faceCache[faceCacheKey] {
             faces=cached
         } else {
             let detected=detectFaces(originalSource)
             if faceCache.count>300 { faceCache.removeAll(keepingCapacity:true) }
-            faceCache[sourceURL.path]=detected
+            faceCache[faceCacheKey]=detected
             faces=detected
         }
         let plan = buildPlan(
@@ -103,6 +111,19 @@ enum ProductionRendererV76 {
             drawEventDecorations(event:event,canvas:plan.canvas)
         }
 
+        return out
+    }
+
+    private static func previewSizedImage(_ image:NSImage,maxDimension:CGFloat)->NSImage {
+        let w=max(image.size.width,1),h=max(image.size.height,1)
+        let scale=min(1,maxDimension/max(w,h))
+        guard scale < 0.999 else{return image}
+        let target=NSSize(width:max(1,round(w*scale)),height:max(1,round(h*scale)))
+        let out=NSImage(size:target)
+        out.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        image.draw(in:NSRect(origin:.zero,size:target),from:.zero,operation:.copy,fraction:1)
+        out.unlockFocus()
         return out
     }
 
