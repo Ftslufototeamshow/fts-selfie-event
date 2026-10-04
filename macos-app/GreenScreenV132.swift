@@ -533,7 +533,23 @@ enum FTSPhotoEffectsV132 {
             spanW>=0.68 &&
             spanH>=0.58
 
-        let result=normalBackdrop || centeredLargeBackdrop
+        // Event cubes often have a green rear wall but neutral/white side walls.
+        // Once that rear wall is clearly detected, the person segmentation mask
+        // replaces the complete room around the people, including non-green side
+        // walls and floor. Requiring a large, central, vertically extended green
+        // component keeps normal green clothing/props from activating this mode.
+        let centerX=w/2
+        let coversCenter = best.count>0 && best.minX<=centerX && best.maxX>=centerX
+        let roomBackdrop =
+            coversCenter &&
+            componentFraction>=0.14 &&
+            dominance>=0.58 &&
+            spanW>=0.34 &&
+            spanH>=0.50 &&
+            rowsCovered>=0.34 &&
+            upperFraction>=0.07
+
+        let result=normalBackdrop || centeredLargeBackdrop || roomBackdrop
         if let key { greenBackdropDecisionCache.setObject(NSNumber(value:result),forKey:key) }
         return result
     }
@@ -581,7 +597,10 @@ enum FTSPhotoEffectsV132 {
         if let key,let cached=personMaskCache.object(forKey:key) { return cached }
 
         let request=VNGeneratePersonSegmentationRequest()
-        request.qualityLevel = .accurate
+        // Small tiles and the interactive print preview favor responsiveness.
+        // Physical print rendering keeps Vision's accurate mode unchanged.
+        let fastPreview = cacheKey?.contains("|tile") == true || cacheKey?.contains("|preview") == true
+        request.qualityLevel = fastPreview ? .balanced : .accurate
         request.outputPixelFormat = kCVPixelFormatType_OneComponent8
         do {
             try VNImageRequestHandler(cgImage:cgImage,orientation:.up,options:[:]).perform([request])
