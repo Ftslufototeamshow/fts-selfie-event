@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.56-usb-camera-direct.zip
-            dist/FTS-Printer-macOS-v0.3.56-usb-camera-direct.dmg
+            dist/FTS-Printer-macOS-v0.3.57-green-screen-fix.zip
+            dist/FTS-Printer-macOS-v0.3.57-green-screen-fix.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.56-usb-camera-direct"
+          TAG="fts-printer-mac-v0.3.57-green-screen-fix"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.56-usb-camera-direct.zip dist/FTS-Printer-macOS-v0.3.56-usb-camera-direct.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.57-green-screen-fix.zip dist/FTS-Printer-macOS-v0.3.57-green-screen-fix.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.56-usb-camera-direct.zip dist/FTS-Printer-macOS-v0.3.56-usb-camera-direct.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.56 · USB Camera Direct" --notes "Build 146: Ergänzt direkten USB/PTP-Kameraimport über Apples ImageCaptureCore, ohne den bestehenden Canon-Druckpfad oder SD/WLAN-Import zu verändern. Eine per Kabel erkannte Kamera wird als USB-Kamera angezeigt; bei freigegebenen Kamera-/Print-Only-Events kann das aktuelle Tagesalbum automatisch aktiviert werden. Eventrelevante neue Fotos werden read-only von der Kamera in einen lokalen USB-Eingang übertragen, anschließend in Kamera Original/USB übernommen und erscheinen als eigene Quelle USB-Kamera im bestehenden Foto-, Green-Screen-, Vorschau-, Archiv- und Druckablauf. Kamera-Dateien werden auf dem Gerät nie gelöscht. RAW+JPEG-Paare bevorzugen weiterhin JPEG/HEIC/PNG. Bestehende SD-A-Z-, WLAN-, Green-Screen-, Textdesigner-, Material-, Archiv-, QR-, Remote-Admin- und Canon-Spooler-Logik bleibt unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.57-green-screen-fix.zip dist/FTS-Printer-macOS-v0.3.57-green-screen-fix.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.57 · Green Screen Fix" --notes "Build 147: Behebt ausschließlich zwei Green-Screen-Fehler. „Ganzes Bild“ zeigt den vollständigen Hintergrund jetzt ohne doppelte oder wiederholte Streifen oben/unten; freie Randbereiche werden aus den Bildkanten weich erweitert. Außerdem öffnet „Bilder / GIFs hinzufügen“ wieder direkt den Dateidialog und aktiviert bei einem neuen manuellen Event das Tagesalbum erst nach der Bildauswahl automatisch. Alle bestehenden Funktionen für Green Screen, USB-Kamera, SD/WLAN, Canon-Druck, Vorschau, Archiv, Material, QR, Remote-Admin und Druckwarteschlange bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.56-usb-camera-direct"
+          CURRENT="fts-printer-mac-v0.3.57-green-screen-fix"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
