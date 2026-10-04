@@ -766,13 +766,13 @@ final class AppState: ObservableObject {
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
     static let appVersion: String = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.56"
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.57"
         let value=raw.trimmingCharacters(in:.whitespacesAndNewlines)
-        return value.isEmpty ? "0.3.56" : value
+        return value.isEmpty ? "0.3.57" : value
     }()
     static let appBuild: Int = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "146"
-        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 145
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "147"
+        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 147
     }()
     static var userAgent:String { "FTS Printer macOS \(appVersion) Build \(appBuild)" }
 

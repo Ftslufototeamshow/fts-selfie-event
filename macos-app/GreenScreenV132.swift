@@ -735,17 +735,10 @@ enum FTSPhotoEffectsV132 {
     }
 
     private static func aspectFitWithBackdrop(_ image:CIImage,to extent:CGRect)->CIImage {
-        // Show the complete background without distortion. Any unavoidable side/
-        // top space is filled with a soft extension of the same image rather than
-        // black bars.
-        let blurredBase=positionedFill(
-            image,to:extent,zoom:1,offsetX:0,offsetY:0,subjectBounds:nil
-        )
-        let soft=CIFilter(name:"CIGaussianBlur",parameters:[
-            kCIInputImageKey:blurredBase,
-            kCIInputRadiusKey:24.0
-        ])?.outputImage?.cropped(to:extent) ?? blurredBase
-
+        // Keep the complete background visible and preserve its aspect ratio.
+        // Missing top/bottom or side space is extended from the nearest edge
+        // pixels and softly blurred. This avoids the duplicated image strips that
+        // the old fill-behind-fit implementation produced on portrait prints.
         let iw=max(image.extent.width,1),ih=max(image.extent.height,1)
         let scale=min(extent.width/iw,extent.height/ih)
         var fitted=image.transformed(by:CGAffineTransform(scaleX:scale,y:scale))
@@ -753,7 +746,14 @@ enum FTSPhotoEffectsV132 {
             translationX:extent.midX-fitted.extent.midX,
             y:extent.midY-fitted.extent.midY
         ))
-        return fitted.composited(over:soft).cropped(to:extent)
+
+        let edgeExtension=fitted.clampedToExtent()
+        let softEdges=CIFilter(name:"CIGaussianBlur",parameters:[
+            kCIInputImageKey:edgeExtension,
+            kCIInputRadiusKey:18.0
+        ])?.outputImage?.cropped(to:extent) ?? edgeExtension.cropped(to:extent)
+
+        return fitted.composited(over:softEdges).cropped(to:extent)
     }
 
     private static func positionedFill(
@@ -1203,16 +1203,25 @@ struct FTSGreenScreenView: View {
     }
 
     private func chooseBackgrounds() {
-        guard let activation=state.mediaIngest.activation else {
-            message="Zuerst das Event-Album unter SD-Karte / Import aktivieren."
-            return
-        }
         let panel=NSOpenPanel()
         panel.title="Green-Screen-Hintergründe auswählen"
         panel.canChooseDirectories=false
         panel.allowsMultipleSelection=true
         panel.allowedFileTypes=["jpg","jpeg","png","heic","tif","tiff","gif"]
         guard panel.runModal() == .OK,!panel.urls.isEmpty else{return}
+
+        if state.mediaIngest.activation == nil {
+            do {
+                try state.mediaIngest.activate(event:event)
+            } catch {
+                message="Event-Album konnte für den Green Screen nicht aktiviert werden: \(error.localizedDescription)"
+                return
+            }
+        }
+        guard let activation=state.mediaIngest.activation else {
+            message="Event-Album konnte für den Green Screen nicht aktiviert werden."
+            return
+        }
 
         var added:[FTSGreenBackgroundAsset]=[]
         for url in panel.urls {
