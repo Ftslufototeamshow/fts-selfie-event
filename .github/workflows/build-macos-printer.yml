@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.58-frame-safe.zip
-            dist/FTS-Printer-macOS-v0.3.58-frame-safe.dmg
+            dist/FTS-Printer-macOS-v0.3.59-green-room-speed.zip
+            dist/FTS-Printer-macOS-v0.3.59-green-room-speed.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.58-frame-safe"
+          TAG="fts-printer-mac-v0.3.59-green-room-speed"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.58-frame-safe.zip dist/FTS-Printer-macOS-v0.3.58-frame-safe.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.59-green-room-speed.zip dist/FTS-Printer-macOS-v0.3.59-green-room-speed.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.58-frame-safe.zip dist/FTS-Printer-macOS-v0.3.58-frame-safe.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.58 · Rahmen-Fix" --notes "Build 148: Fixiert den sichtbaren weißen oder farbigen Druckrahmen bei lokalen Kamera-, SD-, WLAN- und USB-Fotos. Wenn ein Rahmen gewählt ist, wird die fertig komponierte Seite im letzten Canon-SELPHY-Druckschritt nicht mehr mit dem 1,8-%-Borderless-Overscan vergrößert, sondern vollständig und mit kleiner Sicherheitsreserve in die Postcard-Fläche eingepasst. Dadurch bleiben oben, unten, links und rechts sichtbar. Der bestehende rahmenlose Druckpfad, Green Screen, USB-Kamera, SD/WLAN, Vorschau, Archiv, Material, QR, Remote-Admin und die Druckwarteschlange bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.59-green-room-speed.zip dist/FTS-Printer-macOS-v0.3.59-green-room-speed.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.59 · Green Room + Speed" --notes "Build 149: Enthält den Rahmen-Fix aus Build 148 und ergänzt zwei Green-Screen-Verbesserungen. Erstens erkennt FTS jetzt auch Event-Cubes mit klar grüner Rückwand und weißen oder neutralen Seitenwänden als Green-Screen-Raum; nach sicherer Rückwanderkennung ersetzt die Personensegmentierung den kompletten Raum außerhalb der Personen, also auch nicht-grüne Seitenwände und Boden. Zweitens arbeitet die kleine und große interaktive Vorschau schneller: Vorschauen verwenden ein begrenztes Arbeitsbild und Vision Balanced, während der physische Druck weiterhin die volle Originalauflösung und Vision Accurate verwendet. Canon-Druckpfad, SD/WLAN/USB, Archiv, Material, QR, Remote-Admin und Druckwarteschlange bleiben unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.58-frame-safe"
+          CURRENT="fts-printer-mac-v0.3.59-green-room-speed"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
