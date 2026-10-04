@@ -449,9 +449,20 @@ enum V80QueueStore {
 
 final class V80BorderlessPrintView: NSView {
     let image: NSImage
+    let preserveComposedFrame: Bool
+    let frameBackground: NSColor
     let compensateHorizontalMirror: Bool
-    init(image: NSImage, size: NSSize, compensateHorizontalMirror: Bool = false) {
+
+    init(
+        image: NSImage,
+        size: NSSize,
+        preserveComposedFrame: Bool = false,
+        frameBackground: NSColor = .white,
+        compensateHorizontalMirror: Bool = false
+    ) {
         self.image = image
+        self.preserveComposedFrame = preserveComposedFrame
+        self.frameBackground = frameBackground
         self.compensateHorizontalMirror = compensateHorizontalMirror
         super.init(frame: NSRect(origin: .zero, size: size))
     }
@@ -459,12 +470,22 @@ final class V80BorderlessPrintView: NSView {
     override var isFlipped: Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.black.setFill()
+        (preserveComposedFrame ? frameBackground : NSColor.black).setFill()
         bounds.fill()
         let iw = max(image.size.width, 1), ih = max(image.size.height, 1)
-        // CP1500 borderless safety bleed: fill the nominal 10×15 surface and
-        // overscan 1.8% so driver/paper tolerances cannot expose a white hairline.
-        let scale = max(bounds.width / iw, bounds.height / ih) * 1.018
+
+        let scale: CGFloat
+        if preserveComposedFrame {
+            // A white/color frame is part of the finished page and must remain
+            // visible on all four sides. Do not apply the borderless 1.8% bleed
+            // here; fit the complete composed page into the advertised postcard
+            // surface instead. The tiny reserve absorbs printer/driver rounding.
+            scale = min(bounds.width / iw, bounds.height / ih) * 0.995
+        } else {
+            // Existing borderless path stays untouched.
+            scale = max(bounds.width / iw, bounds.height / ih) * 1.018
+        }
+
         let s = NSSize(width: iw * scale, height: ih * scale)
         let r = NSRect(
             x: (bounds.width - s.width) / 2,
@@ -977,7 +998,12 @@ enum V80MacSpooler {
     }
 
     @MainActor
-    static func submit(image: NSImage, printerName: String, title: String) throws -> String {
+    static func submit(
+        image: NSImage,
+        printerName: String,
+        title: String,
+        layout: V80PrintLayout? = nil
+    ) throws -> String {
         guard let printer = NSPrinter(name: printerName) else {
             throw NSError(domain:"FTSPrinter",code:80,userInfo:[NSLocalizedDescriptionKey:"Drucker \(printerName) ist nicht mehr in macOS installiert."])
         }
@@ -1023,9 +1049,20 @@ enum V80MacSpooler {
         let lowerPrinterName=printerName.lowercased()
         let selphyMirrorCompensation =
             lowerPrinterName.contains("selphy") || lowerPrinterName.contains("cp1500")
+
+        let preserveComposedFrame = layout?.frameMode != nil && layout?.frameMode != .borderless
+        let frameBackground:NSColor
+        switch layout?.frameMode {
+        case .white: frameBackground = .white
+        case .color: frameBackground = NSColor(hex:layout?.borderColorHex ?? "#FFFFFF")
+        default: frameBackground = .white
+        }
+
         let view=V80BorderlessPrintView(
             image:image,
             size:drawingPaper,
+            preserveComposedFrame:preserveComposedFrame,
+            frameBackground:frameBackground,
             compensateHorizontalMirror:selphyMirrorCompensation
         )
         let op=NSPrintOperation(view:view,printInfo:info)
@@ -1150,13 +1187,13 @@ enum V80MacSpooler {
 @MainActor
 final class ProductionCore: ObservableObject {
     static let version: String = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.57"
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.58"
         let value=raw.trimmingCharacters(in:.whitespacesAndNewlines)
-        return value.isEmpty ? "0.3.57" : value
+        return value.isEmpty ? "0.3.58" : value
     }()
     static let build: Int = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "147"
-        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 147
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "148"
+        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 148
     }()
 
     @Published var workUnits: [V80WorkUnit] = []
@@ -1887,7 +1924,12 @@ final class ProductionCore: ObservableObject {
             let estimate=V80MacSpooler.learnedSeconds(printerName:printerName)
             let start=Date()
             setSlot(printerName,state:"PRINTING",eta:Int(estimate),current:"LOCAL:"+jobID.uuidString,error:nil)
-            let cupsRequestID = try V80MacSpooler.submit(image:finalImage,printerName:printerName,title:"FTS Kamera · \(customer) · \(original)")
+            let cupsRequestID = try V80MacSpooler.submit(
+                image:finalImage,
+                printerName:printerName,
+                title:"FTS Kamera · \(customer) · \(original)",
+                layout:printLayout
+            )
 
             // Archive encoding must not delay CUPS receiving the print.
             if let archivedPath=saveRenderedArchiveImage(finalImage,jobID:jobID,unitID:unit.id) {
