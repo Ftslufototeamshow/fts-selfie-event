@@ -10,8 +10,8 @@
   <key>CFBundleDisplayName</key><string>FTS Printer</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleIconFile</key><string>FTSPrinter.icns</string>
-  <key>CFBundleShortVersionString</key><string>0.3.56</string>
-  <key>CFBundleVersion</key><string>146</string>
+  <key>CFBundleShortVersionString</key><string>0.3.57</string>
+  <key>CFBundleVersion</key><string>147</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSCameraUsageDescription</key><string>FTS Printer benötigt Zugriff auf angeschlossene Kameras, um Eventfotos per USB direkt in das aktive Tagesalbum zu übernehmen.</string>
