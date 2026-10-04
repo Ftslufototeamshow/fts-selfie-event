@@ -37,9 +37,6 @@ final class V146USBCameraBridge: NSObject, ICDeviceBrowserDelegate {
         super.init()
         browser.delegate=self
         browser.browsedDeviceTypeMask = .camera
-        if browser.contentsAuthorizationStatus == .notDetermined {
-            browser.requestContentsAuthorization { _ in }
-        }
         browser.start()
         started=true
     }
@@ -73,15 +70,6 @@ final class V146USBCameraBridge: NSObject, ICDeviceBrowserDelegate {
     func snapshot() -> V146USBCameraSnapshot {
         let live=cameras.values.filter{isDirectUSBCamera($0)}
         guard !live.isEmpty else {
-            let authorization=browser.contentsAuthorizationStatus
-            if authorization == .denied || authorization == .restricted {
-                return V146USBCameraSnapshot(
-                    connected:false,
-                    name:"",
-                    detail:"Kamerazugriff in macOS nicht erlaubt.",
-                    error:"FTS benötigt Zugriff auf angeschlossene Kameras."
-                )
-            }
             return V146USBCameraSnapshot(connected:false,name:"",detail:"",error:nil)
         }
 
