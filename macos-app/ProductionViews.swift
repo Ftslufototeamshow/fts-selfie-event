@@ -757,6 +757,46 @@ private struct FTSCameraLiveTile: View {
 }
 
 
+
+private struct FTSUSBCameraLiveTile:View {
+    let name:String
+    let detail:String
+    let error:String?
+
+    var body:some View {
+        HStack(spacing:9) {
+            ZStack {
+                RoundedRectangle(cornerRadius:11)
+                    .fill(Color.black.opacity(0.88))
+                    .overlay(RoundedRectangle(cornerRadius:11).stroke((error==nil ? Color.green:Color.orange).opacity(0.8),lineWidth:1.5))
+                Image(systemName:"cable.connector.horizontal")
+                    .font(.system(size:27,weight:.medium))
+                    .foregroundStyle(.white)
+            }
+            .frame(width:72,height:72)
+            VStack(alignment:.leading,spacing:4) {
+                Text(name.isEmpty ? "USB-Kamera" : name).font(.caption.bold()).lineLimit(2)
+                HStack(spacing:5) {
+                    Circle().fill(error==nil ? Color.green:Color.orange).frame(width:7,height:7)
+                    Text(error==nil ? "USB verbunden" : "USB erkannt")
+                        .font(.caption2.bold())
+                        .foregroundStyle(error==nil ? .green:.orange)
+                }
+                if let error,!error.isEmpty {
+                    Text(error).font(.system(size:9)).foregroundStyle(.orange).lineLimit(2)
+                } else if !detail.isEmpty {
+                    Text(detail).font(.system(size:9)).foregroundStyle(.secondary).lineLimit(2)
+                }
+                Text("Direktimport ins Tagesalbum").font(.system(size:9)).foregroundStyle(.green)
+            }
+        }
+        .padding(8)
+        .frame(width:260,height:92,alignment:.leading)
+        .background(Color(nsColor:.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius:12))
+    }
+}
+
 private struct V128ActiveSourceTile:View {
     let source:String
     let selected:Bool
@@ -766,8 +806,16 @@ private struct V128ActiveSourceTile:View {
     let errorCount:Int
     let onSelect:()->Void
 
-    private var title:String { source=="W" ? "WLAN-Kamera" : "SD-Karte \(source)" }
-    private var icon:String { source=="W" ? "camera.fill" : "sdcard.fill" }
+    private var title:String {
+        if source=="W" { return "WLAN-Kamera" }
+        if source=="USB" { return "USB-Kamera" }
+        return "SD-Karte \(source)"
+    }
+    private var icon:String {
+        if source=="USB" { return "cable.connector.horizontal" }
+        if source=="W" { return "camera.fill" }
+        return "sdcard.fill"
+    }
 
     var body:some View {
         Button(action:onSelect) {
@@ -1236,9 +1284,14 @@ struct ProductionMediaContent: View {
     var sourceChoices:[String] {
         let result=Set(ingest.items.filter{visibleInActiveWorkArea($0)}.map{$0.sourceLabel})
         return result.sorted {
-            if $0=="W" { return false }
-            if $1=="W" { return true }
-            return $0<$1
+            let rank:(String)->Int = { value in
+                if value.count==1 && value != "W" { return 0 }
+                if value=="USB" { return 1 }
+                if value=="W" { return 2 }
+                return 3
+            }
+            let a=rank($0),b=rank($1)
+            return a==b ? $0<$1 : a<b
         }
     }
 
@@ -1372,7 +1425,7 @@ struct ProductionMediaContent: View {
     private var headerView: some View {
         HStack {
             VStack(alignment:.leading,spacing:4) {
-                Text("SD-Karte / WLAN-Kamera").font(.title3.bold())
+                Text("SD-Karte / WLAN-/USB-Kamera").font(.title3.bold())
                 Text(ingest.status).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
@@ -1430,7 +1483,7 @@ struct ProductionMediaContent: View {
     @ViewBuilder private var liveDevicesView: some View {
         let connectedPrinters=core.printerSlots.filter(\.enabled)
         let unregisteredCards=ingest.detectedCards.filter{!$0.registered}
-        if !connectedPrinters.isEmpty || !sourceChoices.isEmpty || !unregisteredCards.isEmpty {
+        if !connectedPrinters.isEmpty || ingest.usbCameraActive || !sourceChoices.isEmpty || !unregisteredCards.isEmpty {
             VStack(alignment:.leading,spacing:8) {
                 if !connectedPrinters.isEmpty {
                     Text("Canon-Drucker · aktuell angeschlossen").font(.caption.bold()).foregroundStyle(.secondary)
@@ -1444,10 +1497,17 @@ struct ProductionMediaContent: View {
                     }
                 }
 
-                if !sourceChoices.isEmpty || !unregisteredCards.isEmpty {
-                    Text("Aktive SD-/WLAN-Quellen").font(.caption.bold()).foregroundStyle(.secondary)
+                if ingest.usbCameraActive || !sourceChoices.isEmpty || !unregisteredCards.isEmpty {
+                    Text("Aktive SD-/WLAN-/USB-Quellen").font(.caption.bold()).foregroundStyle(.secondary)
                     ScrollView(.horizontal,showsIndicators:true) {
                         HStack(spacing:8) {
+                            if ingest.usbCameraActive {
+                                FTSUSBCameraLiveTile(
+                                    name:ingest.usbCameraName,
+                                    detail:ingest.usbCameraDetail,
+                                    error:ingest.usbCameraError
+                                )
+                            }
                             ForEach(sourceChoices,id:\.self) { source in
                                 let counts=sourceCounts(source)
                                 V128ActiveSourceTile(
@@ -1492,10 +1552,10 @@ struct ProductionMediaContent: View {
     private var sourceToolbar: some View {
         HStack {
             if sourceChoices.isEmpty {
-                Text("Keine aktive Karte / WLAN-Quelle. Erledigte Fotos verschwinden nach 30 Minuten aus dieser Arbeitsansicht.")
+                Text("Keine aktive Karte / WLAN-/USB-Quelle. Erledigte Fotos verschwinden nach 30 Minuten aus dieser Arbeitsansicht.")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
-                Text(sourceLabel=="W" ? "WLAN-Kamera" : "Karte \(sourceLabel)")
+                Text(sourceLabel=="W" ? "WLAN-Kamera" : (sourceLabel=="USB" ? "USB-Kamera" : "Karte \(sourceLabel)"))
                     .font(.headline)
                 Text("· \(visibleItems.count) Foto\(visibleItems.count==1 ? "" : "s")")
                     .font(.caption).foregroundStyle(.secondary)
@@ -1572,7 +1632,7 @@ struct ProductionMediaContent: View {
         }
 
         let first=selection.keys.first
-        let selectedType=(first?.sourceType=="WIFI" || first?.sourceLabel=="W") ? "WIFI":"SD"
+        let selectedType=(first?.sourceType=="WIFI" || first?.sourceType=="USB" || first?.sourceLabel=="W" || first?.sourceLabel=="USB") ? "WIFI":"SD"
         let selectedLabel=first?.sourceLabel ?? sourceLabel
         let layouts=Dictionary(uniqueKeysWithValues:selection.keys.map {
             ($0.id,printLayouts[$0.id] ?? defaultPrintLayout)
@@ -1600,6 +1660,20 @@ struct ProductionMediaContent: View {
     }
 
     private func mediaSourceTitle(_ item:V80MediaItem)->String {
+        if item.sourceType=="USB" || item.sourceLabel=="USB" {
+            if let camera=item.cameraID,!camera.isEmpty {
+                let parts=camera.split(separator:"·").map{String($0).trimmingCharacters(in:.whitespacesAndNewlines)}
+                if parts.count>=2 { return parts[1]+" · USB" }
+            }
+            return "USB-Kamera"
+        }
+        if item.sourceType=="USB" || item.sourceLabel=="USB" {
+            if let camera=item.cameraID,!camera.isEmpty {
+                let parts=camera.split(separator:"·").map{String($0).trimmingCharacters(in:.whitespacesAndNewlines)}
+                if parts.count>=2 { return parts[1]+" · USB" }
+            }
+            return "USB-Kamera"
+        }
         if item.sourceType=="WIFI" {
             if let camera=item.cameraID,!camera.isEmpty {
                 let parts=camera.split(separator:"·").map{String($0).trimmingCharacters(in:.whitespacesAndNewlines)}
@@ -2035,6 +2109,13 @@ struct V80MediaItemCell: View {
     @State private var showHide=false
 
     var sourceTitle:String {
+        if item.sourceType=="USB" || item.sourceLabel=="USB" {
+            if let camera=item.cameraID,!camera.isEmpty {
+                let parts=camera.split(separator:"·").map{String($0).trimmingCharacters(in:.whitespacesAndNewlines)}
+                if parts.count>=2 { return parts[1]+" · USB" }
+            }
+            return "USB-Kamera"
+        }
         if item.sourceType=="WIFI" {
             if let camera=item.cameraID,!camera.isEmpty {
                 let parts=camera.split(separator:"·").map{String($0).trimmingCharacters(in:.whitespacesAndNewlines)}

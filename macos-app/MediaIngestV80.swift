@@ -107,6 +107,12 @@ final class MediaIngestV80: ObservableObject {
     @Published var wlanCameraBars = 0
     @Published var wlanCameraQuality = ""
     @Published var wlanCameraDetail = ""
+    @Published var usbCameraActive = false
+    @Published var usbCameraName = ""
+    @Published var usbCameraDetail = ""
+    @Published var usbCameraError: String?
+
+    private let usbCameraBridge=V146USBCameraBridge.shared
 
     private func legacyActivationKey(_ event: EventRow) -> String { "fts.media.activation.v80.\(event.event_token)" }
     private func activationKey(_ event: EventRow, day: String) -> String { "fts.media.activation.v92.\(event.event_token).\(day)" }
@@ -169,10 +175,12 @@ final class MediaIngestV80: ObservableObject {
               FileManager.default.fileExists(atPath:a.folderPath) else {
             activation=nil;items=[];detectedCards=[];registeredCardLabels=[]
             wlanCameraActive=false;wlanCameraName="";wlanCameraBars=0;wlanCameraQuality="";wlanCameraDetail=""
+            refreshUSBCameraPresence()
             status="Tagesalbum \(selectedDay) noch nicht aktiviert.";return
         }
         activation=a
         loadManifest()
+        refreshUSBCameraPresence()
         status="Tagesalbum \(selectedDay) aktiv."
     }
 
@@ -391,12 +399,45 @@ final class MediaIngestV80: ObservableObject {
         }
     }
 
+
+    func refreshUSBCameraPresence() {
+        let snapshot=usbCameraBridge.snapshot()
+        usbCameraActive=snapshot.connected
+        usbCameraName=snapshot.name
+        usbCameraDetail=snapshot.detail
+        usbCameraError=snapshot.error
+    }
+
+    @discardableResult
+    func activateForUSBCameraIfNeeded(event:EventRow)->Bool {
+        refreshUSBCameraPresence()
+        guard usbCameraActive,activation==nil else{return false}
+        do {
+            try activate(event:event)
+            status="USB-Kamera erkannt · Tagesalbum \(selectedDay) automatisch aktiviert."
+            return true
+        } catch {
+            usbCameraError=error.localizedDescription
+            status="USB-Kamera erkannt, Tagesalbum konnte aber nicht aktiviert werden: \(error.localizedDescription)"
+            return false
+        }
+    }
+
     func scan(event: EventRow) async {
         guard let a=activation,!scanning else{return}
         scanning=true
-        status="SD-Karten und WLAN-Eingang werden geprüft …"
+        status="SD-, WLAN- und USB-Kamera werden geprüft …"
         defer{scanning=false}
         do {
+            let usbResult=await usbCameraBridge.sync(
+                to:URL(fileURLWithPath:a.wlanInputPath,isDirectory:true),
+                since:a.activatedAt
+            )
+            usbCameraActive=usbResult.snapshot.connected
+            usbCameraName=usbResult.snapshot.name
+            usbCameraDetail=usbResult.snapshot.detail
+            usbCameraError=usbResult.snapshot.error
+
             let r=try await Task.detached(priority:.utility) {
                 try Self.scanSync(eventToken:event.event_token,activation:a)
             }.value
@@ -421,7 +462,8 @@ final class MediaIngestV80: ObservableObject {
             if designed.failed>0 {
                 status="\(r.newCount) neue Fotos übernommen · \(designed.failed) Design-Datei(en) konnten nicht erstellt werden."
             } else if r.newCount>0 || designed.created>0 {
-                status="\(r.newCount) neue Foto\(r.newCount==1 ? "" : "s") übernommen · \(designed.created) Druckdesign\(designed.created==1 ? "" : "s") erstellt."
+                let usbNote=usbResult.downloadedCount>0 ? " · USB \(usbResult.downloadedCount) übertragen" : ""
+                status="\(r.newCount) neue Foto\(r.newCount==1 ? "" : "s") übernommen · \(designed.created) Druckdesign\(designed.created==1 ? "" : "s") erstellt\(usbNote)."
             } else if r.cards.contains(where:{$0.marker==nil}) {
                 status="Unbekannte SD-Karte erkannt. Erst A–Z zuordnen – noch kein Import."
             } else {
@@ -914,12 +956,18 @@ final class MediaIngestV80: ObservableObject {
             if manifest.wlanFingerprints == nil { manifest.wlanFingerprints=[:] }
             manifest.wlanFingerprints?[key]=hash
             if hashes.contains(hash){continue}
-            let dest=uniqueDestination(folder:wlanArchive,name:file.lastPathComponent)
+            let isUSB=file.path.contains("/USB Kamera Eingang/")
+            let archiveFolder=isUSB
+                ? URL(fileURLWithPath:activation.folderPath).appendingPathComponent("Kamera Original/USB",isDirectory:true)
+                : wlanArchive
+            try fm.createDirectory(at:archiveFolder,withIntermediateDirectories:true)
+            let originalName=isUSB ? usbOriginalFilename(file.lastPathComponent) : file.lastPathComponent
+            let dest=uniqueDestination(folder:archiveFolder,name:originalName)
             try fm.copyItem(at:file,to:dest)
             let item=V80MediaItem(
                 id:hash,sha256:hash,sourcePath:file.path,importedPath:dest.path,
                 designedPath:nil,designSignature:nil,
-                originalName:file.lastPathComponent,sourceType:"WIFI",sourceLabel:"W",
+                originalName:originalName,sourceType:isUSB ? "USB":"WIFI",sourceLabel:isUSB ? "USB":"W",
                 cardUUID:nil,cameraID:cameraIdentity(file),importedAt:Date()
             )
             manifest.items.append(item)
@@ -1355,6 +1403,14 @@ final class MediaIngestV80: ObservableObject {
         let raw=seeds.joined(separator:"\n")
         let digest=SHA256.hash(data:Data(raw.utf8))
         return digest.map{String(format:"%02x",$0)}.joined()
+    }
+
+
+    nonisolated private static func usbOriginalFilename(_ stagedName:String)->String {
+        guard stagedName.hasPrefix("ftsusb-"),
+              let range=stagedName.range(of:"__") else{return stagedName}
+        let original=String(stagedName[range.upperBound...])
+        return original.isEmpty ? stagedName : original
     }
 
     nonisolated private static func mediaFiles(on volume:URL) -> [URL] {

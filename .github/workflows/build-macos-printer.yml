@@ -31,19 +31,19 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.55-text-designer.zip
-            dist/FTS-Printer-macOS-v0.3.55-text-designer.dmg
+            dist/FTS-Printer-macOS-v0.3.56-usb-camera-direct.zip
+            dist/FTS-Printer-macOS-v0.3.56-usb-camera-direct.dmg
           if-no-files-found: error
       - name: Publish downloadable release
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.55-text-designer"
+          TAG="fts-printer-mac-v0.3.56-usb-camera-direct"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.55-text-designer.zip dist/FTS-Printer-macOS-v0.3.55-text-designer.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.56-usb-camera-direct.zip dist/FTS-Printer-macOS-v0.3.56-usb-camera-direct.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.55-text-designer.zip dist/FTS-Printer-macOS-v0.3.55-text-designer.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.55 · Text Designer" --notes "Build 145: Erweitert den gemeinsamen FTS-Fotodesigner für manuelle Printer-Events und das Selfie-Studio. Der 148-mm-Balken bleibt maximal 15 mm hoch, kann nun aber zwischen 6 und 15 mm kleiner eingestellt werden. Abstand Titel-Unteritel und Untertitel-Zeile 3 ist numerisch einstellbar. Titel, Untertitel und dritte Zeile erhalten jeweils unabhängig über 20 gemeinsame Schriftarten, frei wählbare Grundfarbe, Buchstaben-Farbmodus (einfarbig, jeder Buchstabe, je 2 oder je 3 Buchstaben), sechs frei wählbare Palettenfarben sowie optionale Kontur/Außenfarbe mit Stärke. Größe ist zusätzlich numerisch editierbar. ProductionRendererV76 und Web-Fotoengine verwenden dieselben studio_config-Felder; bestehende MySelfie- und manuelle Events bleiben rückwärtskompatibel. Canon, SD-A-Z, WLAN, Green Screen, Material, Archiv, QR, Druckwarteschlange und Kamera-Original bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.56-usb-camera-direct.zip dist/FTS-Printer-macOS-v0.3.56-usb-camera-direct.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.56 · USB Camera Direct" --notes "Build 146: Ergänzt direkten USB/PTP-Kameraimport über Apples ImageCaptureCore, ohne den bestehenden Canon-Druckpfad oder SD/WLAN-Import zu verändern. Eine per Kabel erkannte Kamera wird als USB-Kamera angezeigt; bei freigegebenen Kamera-/Print-Only-Events kann das aktuelle Tagesalbum automatisch aktiviert werden. Eventrelevante neue Fotos werden read-only von der Kamera in einen lokalen USB-Eingang übertragen, anschließend in Kamera Original/USB übernommen und erscheinen als eigene Quelle USB-Kamera im bestehenden Foto-, Green-Screen-, Vorschau-, Archiv- und Druckablauf. Kamera-Dateien werden auf dem Gerät nie gelöscht. RAW+JPEG-Paare bevorzugen weiterhin JPEG/HEIC/PNG. Bestehende SD-A-Z-, WLAN-, Green-Screen-, Textdesigner-, Material-, Archiv-, QR-, Remote-Admin- und Canon-Spooler-Logik bleibt unverändert."
           fi
 
       - name: Remove obsolete macOS releases
@@ -51,7 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.55-text-designer"
+          CURRENT="fts-printer-mac-v0.3.56-usb-camera-direct"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)

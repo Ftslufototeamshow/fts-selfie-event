@@ -766,12 +766,12 @@ final class AppState: ObservableObject {
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
     static let appVersion: String = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.55"
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.56"
         let value=raw.trimmingCharacters(in:.whitespacesAndNewlines)
-        return value.isEmpty ? "0.3.55" : value
+        return value.isEmpty ? "0.3.56" : value
     }()
     static let appBuild: Int = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "145"
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "146"
         return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 145
     }()
     static var userAgent:String { "FTS Printer macOS \(appVersion) Build \(appBuild)" }
@@ -1536,6 +1536,12 @@ struct MainView: View {
             await state.production.discoverPrinters()
             if let e=state.selectedEvent {
                 state.mediaIngest.load(event:e)
+                state.mediaIngest.refreshUSBCameraPresence()
+                if e.operation_mode=="print_only" || e.local_camera_photos==true {
+                    if state.mediaIngest.activateForUSBCameraIfNeeded(event:e) {
+                        state.production.loadLocalQueue(folderPath:state.mediaIngest.activation?.folderPath)
+                    }
+                }
                 state.production.loadLocalQueue(folderPath:state.mediaIngest.activation?.folderPath)
             }
             await state.production.checkUpdate(platform:"macos")
@@ -1547,6 +1553,17 @@ struct MainView: View {
             while !Task.isCancelled {
                 await state.refreshSelected()
                 await state.production.refresh(state:state)
+
+                if let current=state.selectedEvent,
+                   current.operation_mode=="print_only" || current.local_camera_photos==true {
+                    state.mediaIngest.refreshUSBCameraPresence()
+                    if state.mediaIngest.activateForUSBCameraIfNeeded(event:current) {
+                        state.production.loadLocalQueue(folderPath:state.mediaIngest.activation?.folderPath)
+                    }
+                    if state.mediaIngest.usbCameraActive,state.mediaIngest.activation != nil {
+                        await state.mediaIngest.scan(event:current)
+                    }
+                }
 
                 let active = printingActive || state.production.hasDispatchableWork
                 let delay:Double = active ? 3 : 6

@@ -12,7 +12,7 @@ mkdir -p "$RES"
 rm -f "$MACOS/FTS Printer"
 SDK="$(xcrun --sdk macosx --show-sdk-path)"
 mkdir -p "$DIST/build"
-COMMON=(-parse-as-library -O -sdk "$SDK" -framework SwiftUI -framework AppKit -framework Foundation -framework Security -framework CryptoKit -framework ImageIO)
+COMMON=(-parse-as-library -O -sdk "$SDK" -framework SwiftUI -framework AppKit -framework Foundation -framework Security -framework CryptoKit -framework ImageIO -framework ImageCaptureCore)
 xcrun swiftc "${SOURCES[@]}" "${COMMON[@]}" -target arm64-apple-macos13.0 -o "$DIST/build/fts-printer-arm64"
 xcrun swiftc "${SOURCES[@]}" "${COMMON[@]}" -target x86_64-apple-macos13.0 -o "$DIST/build/fts-printer-x86_64"
 lipo -create "$DIST/build/fts-printer-arm64" "$DIST/build/fts-printer-x86_64" -output "$MACOS/FTS Printer"
@@ -88,9 +88,9 @@ test -s "$RES/FTSPrinter.icns"
 
 chmod +x "$MACOS/FTS Printer"
 codesign --force --deep --sign - "$APP"
-rm -f "$DIST/FTS-Printer-macOS-v0.3.55-text-designer.zip" "$DIST/FTS-Printer-macOS-v0.3.55-text-designer.dmg"
-ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/FTS-Printer-macOS-v0.3.55-text-designer.zip"
-DMG="$DIST/FTS-Printer-macOS-v0.3.55-text-designer.dmg"
+rm -f "$DIST/FTS-Printer-macOS-v0.3.56-usb-camera-direct.zip" "$DIST/FTS-Printer-macOS-v0.3.56-usb-camera-direct.dmg"
+ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/FTS-Printer-macOS-v0.3.56-usb-camera-direct.zip"
+DMG="$DIST/FTS-Printer-macOS-v0.3.56-usb-camera-direct.dmg"
 rm -f "$DMG"
 for attempt in 1 2 3; do
   if hdiutil create -volname "FTS Printer" -srcfolder "$APP" -ov -format UDZO "$DMG"; then
