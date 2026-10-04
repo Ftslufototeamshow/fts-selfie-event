@@ -1050,12 +1050,13 @@ enum V80MacSpooler {
         let selphyMirrorCompensation =
             lowerPrinterName.contains("selphy") || lowerPrinterName.contains("cp1500")
 
-        let preserveComposedFrame = layout?.frameMode != nil && layout?.frameMode != .borderless
+        let frameMode = layout?.frameMode ?? .borderless
+        let preserveComposedFrame = frameMode != .borderless
         let frameBackground:NSColor
-        switch layout?.frameMode {
+        switch frameMode {
         case .white: frameBackground = .white
         case .color: frameBackground = NSColor(hex:layout?.borderColorHex ?? "#FFFFFF")
-        default: frameBackground = .white
+        case .borderless: frameBackground = .white
         }
 
         let view=V80BorderlessPrintView(
