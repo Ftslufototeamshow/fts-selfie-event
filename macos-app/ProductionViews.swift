@@ -950,7 +950,8 @@ struct V80PhotoPrintPreviewSheet: View {
                     cropOffsetX:CGFloat(layout.cropOffsetX),
                     cropOffsetY:CGFloat(layout.cropOffsetY),
                     photoEffect:layout.photoEffect,
-                    greenScreenSettings:liveGreenSettings
+                    greenScreenSettings:liveGreenSettings,
+                    previewMode:true
                 )
             } else {
                 let path=(item.designedPath?.isEmpty == false) ? item.designedPath! : item.importedPath
