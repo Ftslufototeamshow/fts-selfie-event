@@ -95,6 +95,8 @@ Dieser Bereich ist für die professionellen Kamera-/Fotobox-Fotos vorgesehen. Di
 - Bereits bekannte/importierte Fotos werden nicht noch einmal angelegt.
 - Neue Fotos werden automatisch in das lokale Event-Album übernommen und erscheinen anschließend automatisch in der FTS Printer App.
 - Die Übertragung zwischen Album und Printer-App erfolgt lokal. Kamera-/Fotobox-Dateien werden nicht unnötig über Supabase oder die öffentliche Selfie-Galerie geleitet.
+- Verbindliche Speicherregel: Kamera-/Fotobox-Originale und fertig gerenderte Fotos mit Eventdesign werden ausschließlich im lokalen Eventordner des Print-Macs gespeichert. Supabase speichert für diesen Workflow nur Konfigurationen, Design-/Branding-Assets, Metadaten, Status und Statistik – niemals die eigentlichen Kamera-/Fotobox-Bilddateien.
+- Lokale Ordnerstruktur pro Event: `Fotobox Eingang` → `Kamera Original` → `Bearbeitet` → `Druckbereit`.
 - Die App zeigt neue Fotos fortlaufend in einer übersichtlichen Galerie; das neueste Foto steht sichtbar an erster Stelle bzw. wird deutlich hervorgehoben.
 
 
