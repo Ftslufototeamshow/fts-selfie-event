@@ -361,6 +361,7 @@ final class LocalImportManager: ObservableObject {
         let code = sanitize(event.short_code ?? event.event_token)
         let name = sanitize(event.event_title)
         let folder = root.appendingPathComponent("\(code) - \(name)", isDirectory: true)
+        try fm.createDirectory(at: folder.appendingPathComponent("Fotobox Eingang", isDirectory: true), withIntermediateDirectories: true)
         try fm.createDirectory(at: folder.appendingPathComponent("Kamera Original", isDirectory: true), withIntermediateDirectories: true)
         try fm.createDirectory(at: folder.appendingPathComponent("Bearbeitet", isDirectory: true), withIntermediateDirectories: true)
         try fm.createDirectory(at: folder.appendingPathComponent("Druckbereit", isDirectory: true), withIntermediateDirectories: true)
@@ -380,13 +381,32 @@ final class LocalImportManager: ObservableObject {
         NSWorkspace.shared.open(URL(fileURLWithPath: activation.folderPath))
     }
 
+    func revealInboxFolder() {
+        guard let activation else { return }
+        let inbox = URL(fileURLWithPath: activation.folderPath).appendingPathComponent("Fotobox Eingang", isDirectory: true)
+        try? FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(inbox)
+    }
+
+    func savePrintReady(_ image: NSImage, originalName: String) throws -> URL {
+        guard let activation else {
+            throw NSError(domain: "FTSPrinter", code: -20, userInfo: [NSLocalizedDescriptionKey: "Lokaler Eventordner ist nicht aktiviert."])
+        }
+        let folder = URL(fileURLWithPath: activation.folderPath).appendingPathComponent("Druckbereit", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let base = (originalName as NSString).deletingPathExtension
+        let dest = Self.uniqueDestination(folder: folder, name: "\(base)_FTS.jpg")
+        try LocalRenderer.writeJPEG(image, to: dest)
+        return dest
+    }
+
     func scan(event: EventRow) async {
         guard let activation, !scanning else { return }
         scanning = true
         status = "Speicherkarten werden geprüft …"
         do {
             let result = try await Task.detached(priority: .utility) {
-                try Self.scanSync(activation: activation)
+                try Self.scanSync(activation: activation, event: event)
             }.value
             imported = result.records.sorted { $0.importedAt > $1.importedAt }
             lastSource = result.lastSource
@@ -406,16 +426,69 @@ final class LocalImportManager: ObservableObject {
         imported = m.records.sorted { $0.importedAt > $1.importedAt }
     }
 
-    nonisolated private static func scanSync(activation: LocalActivation) throws -> (records: [ImportRecord], newCount: Int, lastSource: String) {
+    nonisolated private static func scanSync(activation: LocalActivation, event: EventRow) throws -> (records: [ImportRecord], newCount: Int, lastSource: String) {
         let fm = FileManager.default
         let eventFolder = URL(fileURLWithPath: activation.folderPath)
+        let inboxFolder = eventFolder.appendingPathComponent("Fotobox Eingang", isDirectory: true)
         let originalFolder = eventFolder.appendingPathComponent("Kamera Original", isDirectory: true)
+        let editedFolder = eventFolder.appendingPathComponent("Bearbeitet", isDirectory: true)
         let manifestURL = eventFolder.appendingPathComponent(".fts-import-index.json")
+        try fm.createDirectory(at: inboxFolder, withIntermediateDirectories: true)
+        try fm.createDirectory(at: originalFolder, withIntermediateDirectories: true)
+        try fm.createDirectory(at: editedFolder, withIntermediateDirectories: true)
+
         var manifest = (try? Data(contentsOf: manifestURL)).flatMap { try? JSONDecoder().decode(ImportManifest.self, from: $0) } ?? ImportManifest()
         var hashes = Set(manifest.records.map(\.sha256))
         var newCount = 0
         var sourceLabel = ""
 
+        func importFile(_ file: URL, sourceID: String, cameraID: String?) throws {
+            let ext = file.pathExtension.lowercased()
+            guard ["jpg","jpeg","heic","png"].contains(ext) else { return }
+            let values = try? file.resourceValues(forKeys: [.isRegularFileKey,.contentModificationDateKey])
+            guard values?.isRegularFile == true else { return }
+            if let mod = values?.contentModificationDate, mod < activation.activatedAt.addingTimeInterval(-300) { return }
+
+            let hash = try sha256(file)
+            if hashes.contains(hash) { return }
+
+            let dest = uniqueDestination(folder: originalFolder, name: file.lastPathComponent)
+            try fm.copyItem(at: file, to: dest)
+
+            // Create the finished event design locally. No camera/fotobox photo is
+            // uploaded to Supabase by this local Printer workflow.
+            let rendered = try LocalRenderer.renderedImage(sourceURL: dest, event: event)
+            let base = (file.lastPathComponent as NSString).deletingPathExtension
+            let editedDest = uniqueDestination(folder: editedFolder, name: "\(base)_FTS.jpg")
+            try LocalRenderer.writeJPEG(rendered, to: editedDest)
+
+            let rec = ImportRecord(
+                sha256: hash,
+                sourcePath: file.path,
+                importedPath: dest.path,
+                originalName: file.lastPathComponent,
+                cardID: sourceID,
+                cameraID: cameraID,
+                importedAt: Date()
+            )
+            manifest.records.append(rec)
+            hashes.insert(hash)
+            newCount += 1
+        }
+
+        // 1) Local Fotobox / Canon EOS Utility inbox on the print Mac.
+        if let localFiles = fm.enumerator(
+            at: inboxFolder,
+            includingPropertiesForKeys: [.isRegularFileKey,.contentModificationDateKey],
+            options: [.skipsHiddenFiles,.skipsPackageDescendants]
+        ) {
+            for case let file as URL in localFiles {
+                try importFile(file, sourceID: "Fotobox Eingang · lokal", cameraID: cameraIdentity(file))
+            }
+            if newCount > 0 { sourceLabel = "Fotobox Eingang · lokal" }
+        }
+
+        // 2) Removable camera cards remain supported.
         let keys: Set<URLResourceKey> = [.volumeIsRemovableKey, .volumeIsEjectableKey, .volumeIsInternalKey, .volumeNameKey, .volumeIdentifierKey]
         let volumes = fm.mountedVolumeURLs(includingResourceValuesForKeys: Array(keys), options: [.skipHiddenVolumes]) ?? []
         for volume in volumes {
@@ -425,35 +498,14 @@ final class LocalImportManager: ObservableObject {
             if !removable || internalVol { continue }
             let volumeName = rv?.volumeName ?? volume.lastPathComponent
             let volumeID = rv?.volumeIdentifier.map { String(describing: $0) } ?? volumeName
-            sourceLabel = "\(volumeName) · \(volumeID)"
             let dcim = volume.appendingPathComponent("DCIM", isDirectory: true)
             let start = fm.fileExists(atPath: dcim.path) ? dcim : volume
             guard let en = fm.enumerator(at: start, includingPropertiesForKeys: [.isRegularFileKey,.contentModificationDateKey], options: [.skipsHiddenFiles,.skipsPackageDescendants]) else { continue }
 
             for case let file as URL in en {
-                let ext = file.pathExtension.lowercased()
-                guard ["jpg","jpeg","heic","png"].contains(ext) else { continue }
-                let values = try? file.resourceValues(forKeys: [.isRegularFileKey,.contentModificationDateKey])
-                guard values?.isRegularFile == true else { continue }
-                if let mod = values?.contentModificationDate, mod < activation.activatedAt.addingTimeInterval(-300) { continue }
-
-                let hash = try sha256(file)
-                if hashes.contains(hash) { continue }
-
-                let dest = uniqueDestination(folder: originalFolder, name: file.lastPathComponent)
-                try fm.copyItem(at: file, to: dest)
-                let rec = ImportRecord(
-                    sha256: hash,
-                    sourcePath: file.path,
-                    importedPath: dest.path,
-                    originalName: file.lastPathComponent,
-                    cardID: volumeID,
-                    cameraID: cameraIdentity(file),
-                    importedAt: Date()
-                )
-                manifest.records.append(rec)
-                hashes.insert(hash)
-                newCount += 1
+                let before = newCount
+                try importFile(file, sourceID: volumeID, cameraID: cameraIdentity(file))
+                if newCount > before { sourceLabel = "\(volumeName) · \(volumeID)" }
             }
         }
         let data = try JSONEncoder().encode(manifest)
@@ -571,6 +623,15 @@ enum LocalRenderer {
         return out
     }
 
+    static func writeJPEG(_ image: NSImage, to url: URL, quality: CGFloat = 0.94) throws {
+        guard let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let data = rep.representation(using: .jpeg, properties: [.compressionFactor: quality]) else {
+            throw NSError(domain: "FTSPrinter", code: -21, userInfo: [NSLocalizedDescriptionKey: "Fertiges Foto konnte nicht als JPEG gespeichert werden."])
+        }
+        try data.write(to: url, options: .atomic)
+    }
+
     private static func drawAspectFill(_ image: NSImage, in rect: NSRect) {
         let iw=max(image.size.width,1), ih=max(image.size.height,1)
         let scale=max(rect.width/iw,rect.height/ih)
@@ -622,7 +683,7 @@ final class AppState: ObservableObject {
     private let api = FTSAPI.shared
     private var liveDeviceToken: String?
     private var liveSessionToken: String?
-    static let appVersion = "0.1.4"
+    static let appVersion = "0.1.5"
 
     var deviceToken: String? { liveDeviceToken ?? Keychain.get("deviceToken") }
     var sessionToken: String? { liveSessionToken ?? Keychain.get("staffSession") }
@@ -858,6 +919,7 @@ final class AppState: ObservableObject {
         busy=true;defer{busy=false}
         do {
             let rendered=try LocalRenderer.renderedImage(sourceURL:URL(fileURLWithPath:record.importedPath),event:event)
+            _ = try localImport.savePrintReady(rendered, originalName: record.originalName)
             let ok=Printer.printImage(rendered,copies:1,title:"FTS Kamera · \(record.originalName)")
             if !ok{return}
             let day=event.event_date ?? ISO8601DateFormatter().string(from:Date()).prefix(10).description
@@ -1104,8 +1166,9 @@ struct CameraImportContent:View{
                         do{try manager.activate(event:event)}catch{state.errorMessage=error.localizedDescription}
                     }.buttonStyle(.borderedProminent)
                 }else{
-                    Button("Ordner öffnen"){manager.revealFolder()}
-                    Button(manager.scanning ? "Prüfe …":"Karten jetzt prüfen"){Task{await manager.scan(event:event)}}.disabled(manager.scanning)
+                    Button("Eventordner öffnen"){manager.revealFolder()}
+                    Button("Fotobox-Eingang öffnen"){manager.revealInboxFolder()}
+                    Button(manager.scanning ? "Prüfe …":"Jetzt prüfen"){Task{await manager.scan(event:event)}}.disabled(manager.scanning)
                 }
             }
             Divider()
@@ -1128,7 +1191,7 @@ struct CameraImportContent:View{
             manager.load(event:event)
             while !Task.isCancelled{
                 if manager.activation != nil{await manager.scan(event:event)}
-                try? await Task.sleep(for:.seconds(4))
+                try? await Task.sleep(for:.seconds(8))
             }
         }
     }
