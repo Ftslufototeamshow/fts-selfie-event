@@ -57,6 +57,7 @@ jobs:
             PY
             rm -f /tmp/foliora-build22-source.json
             grep -F "version: 1.0.0+22" pubspec.yaml
+            echo "Validation retry with corrected PDF font fallback"
 
         - name: Set up Flutter
           uses: subosito/flutter-action@v2
