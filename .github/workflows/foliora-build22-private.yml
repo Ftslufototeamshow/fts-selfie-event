@@ -1,0 +1,76 @@
+name: FOLIORA Build 22 Secure CI
+
+on:
+  push:
+    branches:
+      - foliora-build22-ci
+    paths:
+      - .github/workflows/foliora-build22-private.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+        - name: Fetch private FOLIORA Build 22 source
+          env:
+            SUPABASE_URL: https://hivmiqktbaatghuaxfvg.supabase.co
+          run: |
+            set -euo pipefail
+            OIDC_RESPONSE="$(curl -fsSL \
+              -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=foliora-build22-source")"
+            OIDC_TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$OIDC_RESPONSE")"
+            curl -fsSL \
+              "$SUPABASE_URL/functions/v1/foliora-build22-source" \
+              -H "Authorization: Bearer $OIDC_TOKEN" \
+              -o /tmp/foliora-build22-source.json
+            python3 - <<'PY'
+            import hashlib
+            import json
+            from pathlib import Path
+
+            data = json.loads(Path("/tmp/foliora-build22-source.json").read_text())
+            if data.get("version") != "1.0.0+22":
+                raise SystemExit("Unexpected source version: " + str(data.get("version")))
+            files = data.get("files") or []
+            if len(files) != 65:
+                raise SystemExit(f"Unexpected source file count: {len(files)}")
+
+            for item in files:
+                path = Path(item["path"])
+                content = item["content"].encode("utf-8")
+                expected = item["sha"]
+                actual = hashlib.sha1(
+                    f"blob {len(content)}\0".encode("utf-8") + content
+                ).hexdigest()
+                if actual != expected:
+                    raise SystemExit(f"Git blob verification failed for {path}")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+
+            print(f"Restored and verified {len(files)} private FOLIORA source files.")
+            PY
+            rm -f /tmp/foliora-build22-source.json
+            grep -F "version: 1.0.0+22" pubspec.yaml
+
+        - name: Set up Flutter
+          uses: subosito/flutter-action@v2
+          with:
+            channel: stable
+            cache: true
+
+        - name: Install dependencies
+          run: flutter pub get
+
+        - name: Analyze
+          run: flutter analyze --no-fatal-infos
+
+        - name: Run tests
+          run: flutter test
+
+
