@@ -1,0 +1,1015 @@
+name: FOLIORA Build 21 Secure CI
+
+on:
+  push:
+    branches:
+      - foliora-build21-ci
+    paths:
+      - .github/workflows/foliora-build21-private.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+        - name: Fetch private FOLIORA Build 21 source
+          env:
+            SUPABASE_URL: https://hivmiqktbaatghuaxfvg.supabase.co
+          run: |
+            set -euo pipefail
+            OIDC_RESPONSE="$(curl -fsSL \
+              -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=foliora-build21-source")"
+            OIDC_TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$OIDC_RESPONSE")"
+            curl -fsSL \
+              "$SUPABASE_URL/functions/v1/foliora-build21-source" \
+              -H "Authorization: Bearer $OIDC_TOKEN" \
+              -o /tmp/foliora-build21-source.json
+            python3 - <<'PY'
+            import hashlib
+            import json
+            from pathlib import Path
+
+            data = json.loads(Path("/tmp/foliora-build21-source.json").read_text())
+            if data.get("version") != "1.0.0+21":
+                raise SystemExit("Unexpected source version: " + str(data.get("version")))
+            files = data.get("files") or []
+            if len(files) != 65:
+                raise SystemExit(f"Unexpected source file count: {len(files)}")
+
+            for item in files:
+                path = Path(item["path"])
+                content = item["content"].encode("utf-8")
+                expected = item["sha"]
+                actual = hashlib.sha1(
+                    f"blob {len(content)}\0".encode("utf-8") + content
+                ).hexdigest()
+                if actual != expected:
+                    raise SystemExit(f"Git blob verification failed for {path}")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+
+            print(f"Restored and verified {len(files)} private FOLIORA source files.")
+            PY
+            rm -f /tmp/foliora-build21-source.json
+            grep -F "version: 1.0.0+21" pubspec.yaml
+
+        - name: Set up Flutter
+          uses: subosito/flutter-action@v2
+          with:
+            channel: stable
+            cache: true
+
+        - name: Install dependencies
+          run: flutter pub get
+
+        - name: Analyze
+          run: flutter analyze --no-fatal-infos
+
+        - name: Run tests
+          run: flutter test
+
+
+  macos:
+    needs: validate
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+        - name: Fetch private FOLIORA Build 21 source
+          env:
+            SUPABASE_URL: https://hivmiqktbaatghuaxfvg.supabase.co
+          run: |
+            set -euo pipefail
+            OIDC_RESPONSE="$(curl -fsSL \
+              -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=foliora-build21-source")"
+            OIDC_TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$OIDC_RESPONSE")"
+            curl -fsSL \
+              "$SUPABASE_URL/functions/v1/foliora-build21-source" \
+              -H "Authorization: Bearer $OIDC_TOKEN" \
+              -o /tmp/foliora-build21-source.json
+            python3 - <<'PY'
+            import hashlib
+            import json
+            from pathlib import Path
+
+            data = json.loads(Path("/tmp/foliora-build21-source.json").read_text())
+            if data.get("version") != "1.0.0+21":
+                raise SystemExit("Unexpected source version: " + str(data.get("version")))
+            files = data.get("files") or []
+            if len(files) != 65:
+                raise SystemExit(f"Unexpected source file count: {len(files)}")
+
+            for item in files:
+                path = Path(item["path"])
+                content = item["content"].encode("utf-8")
+                expected = item["sha"]
+                actual = hashlib.sha1(
+                    f"blob {len(content)}\0".encode("utf-8") + content
+                ).hexdigest()
+                if actual != expected:
+                    raise SystemExit(f"Git blob verification failed for {path}")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+
+            print(f"Restored and verified {len(files)} private FOLIORA source files.")
+            PY
+            rm -f /tmp/foliora-build21-source.json
+            grep -F "version: 1.0.0+21" pubspec.yaml
+
+        - name: Set up Flutter
+          uses: subosito/flutter-action@v2
+          with:
+            channel: stable
+            cache: true
+
+        - name: Generate macOS shell
+          run: |
+            rm -rf /tmp/foliora_macos_shell
+            flutter create --platforms=macos --org lu.fts --project-name foliora /tmp/foliora_macos_shell
+            cp -R /tmp/foliora_macos_shell/macos ./macos
+
+            python3 - <<'PY'
+            from pathlib import Path
+            import plistlib
+
+            cfg = Path("macos/Runner/Configs/AppInfo.xcconfig")
+            text = cfg.read_text()
+            text = text.replace("PRODUCT_NAME = foliora", "PRODUCT_NAME = FOLIORA")
+            text = text.replace("PRODUCT_BUNDLE_IDENTIFIER = lu.fts.foliora", "PRODUCT_BUNDLE_IDENTIFIER = lu.fts.foliora")
+            cfg.write_text(text)
+
+            info_path = Path("macos/Runner/Info.plist")
+            info = plistlib.loads(info_path.read_bytes())
+            info["NSDownloadsFolderUsageDescription"] = (
+                "FOLIORA benötigt Zugriff auf ausgewählte Bilder aus dem Downloads-Ordner."
+            )
+            info["NSDocumentsFolderUsageDescription"] = (
+                "FOLIORA benötigt Zugriff auf ausgewählte Bilder aus dem Dokumente-Ordner."
+            )
+            info["NSDesktopFolderUsageDescription"] = (
+                "FOLIORA benötigt Zugriff auf ausgewählte Bilder vom Schreibtisch."
+            )
+            info["NSPhotoLibraryUsageDescription"] = (
+                "FOLIORA benötigt Zugriff auf ausgewählte Fotos für Ihre Buch- und Designprojekte."
+            )
+            info_path.write_bytes(plistlib.dumps(info))
+
+            debug_path = Path("macos/Runner/DebugProfile.entitlements")
+            debug_data = plistlib.loads(debug_path.read_bytes())
+            debug_data["com.apple.security.app-sandbox"] = True
+            debug_data["com.apple.security.network.client"] = True
+            debug_data["com.apple.security.files.user-selected.read-write"] = True
+            debug_path.write_bytes(plistlib.dumps(debug_data))
+
+            release_path = Path("macos/Runner/Release.entitlements")
+            release_data = plistlib.loads(release_path.read_bytes())
+            for key in [
+                "com.apple.security.app-sandbox",
+                "com.apple.security.network.client",
+                "com.apple.security.files.user-selected.read-write",
+                "com.apple.security.get-task-allow",
+            ]:
+                release_data.pop(key, None)
+            release_path.write_bytes(plistlib.dumps(release_data))
+
+            release_cfg = Path("macos/Runner/Configs/Release.xcconfig")
+            release_text = release_cfg.read_text()
+            for setting in [
+                "CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO",
+                "ENABLE_HARDENED_RUNTIME = NO",
+            ]:
+                if setting not in release_text:
+                    release_text += "\n" + setting
+            release_cfg.write_text(release_text + "\n")
+            PY
+
+        - name: Generate FOLIORA macOS icon
+          run: |
+            python3 -m venv /tmp/foliora-icon-venv
+            source /tmp/foliora-icon-venv/bin/activate
+            python -m pip install --quiet pillow
+            python - <<'PY'
+            from PIL import Image, ImageDraw
+            from pathlib import Path
+
+            master = 1024
+            img = Image.new("RGBA", (master, master), (0,0,0,0))
+            d = ImageDraw.Draw(img)
+            pad = 44
+            d.rounded_rectangle(
+                (pad, pad, master-pad, master-pad),
+                radius=220,
+                fill="#075A57",
+            )
+
+            sx = master / 100.0
+            def pts(values):
+                return [(int(x*sx), int(y*sx)) for x, y in values]
+
+            d.polygon(
+                pts([
+                    (31,77),(31,37),(34,27),(42,21),
+                    (74,15),(72,28),(64,35),(48,39),
+                    (43,42),(41,49),(41,80)
+                ]),
+                fill="#F7F1E7",
+            )
+            d.polygon(
+                pts([
+                    (41,49),(45,39),(53,34),(72,31),
+                    (69,44),(61,51),(48,54),(43,59)
+                ]),
+                fill="#F7F1E7",
+            )
+            d.polygon(
+                pts([
+                    (45,80),(45,59),(49,53),(58,49),
+                    (70,47),(68,59),(61,66),(51,68),
+                    (49,72),(49,81)
+                ]),
+                fill="#C69A56",
+            )
+
+            iconset = Path("macos/Runner/Assets.xcassets/AppIcon.appiconset")
+            iconset.mkdir(parents=True, exist_ok=True)
+            specs = {
+                "app_icon_16.png": 16,
+                "app_icon_32.png": 32,
+                "app_icon_64.png": 64,
+                "app_icon_128.png": 128,
+                "app_icon_256.png": 256,
+                "app_icon_512.png": 512,
+                "app_icon_1024.png": 1024,
+            }
+            for name, size in specs.items():
+                img.resize((size,size), Image.Resampling.LANCZOS).save(iconset / name)
+            PY
+
+        - name: Install dependencies
+          run: flutter pub get
+
+        - name: Build FOLIORA Version 1 for macOS
+          run: |
+            VERSION_LINE="$(awk '/^version:/ {print $2}' pubspec.yaml)"
+            APP_VERSION="${VERSION_LINE%%+*}"
+            APP_BUILD="${VERSION_LINE##*+}"
+            echo "Building FOLIORA ${APP_VERSION} build ${APP_BUILD}"
+            flutter build macos --release \
+              --dart-define=FOLIORA_VERSION="$APP_VERSION" \
+              --dart-define=FOLIORA_BUILD_NUMBER="$APP_BUILD"
+
+        - name: Repair and validate embedded Flutter frameworks
+          run: |
+            set -euo pipefail
+
+            APP_PATH="build/macos/Build/Products/Release/FOLIORA.app"
+            if [ ! -d "$APP_PATH" ]; then
+              APP_PATH="$(find build/macos/Build/Products/Release -maxdepth 1 -name '*.app' -print -quit)"
+            fi
+            test -n "$APP_PATH"
+            test -d "$APP_PATH"
+
+            FRAMEWORKS_DIR="$APP_PATH/Contents/Frameworks"
+            mkdir -p "$FRAMEWORKS_DIR"
+
+            echo "Framework candidates produced by Xcode:"
+            find build/macos/Build/Products/Release -maxdepth 6 \
+              \( -name 'FlutterMacOS.framework' -o -name 'App.framework' \) -print || true
+
+            ensure_framework() {
+              FW_NAME="$1"
+              BIN_NAME="$2"
+              DEST="$FRAMEWORKS_DIR/$FW_NAME"
+              DEST_BIN="$DEST/Versions/A/$BIN_NAME"
+
+              if [ ! -f "$DEST_BIN" ]; then
+                echo "$FW_NAME is missing or incomplete in the app bundle; repairing it."
+                SRC="$(find build/macos/Build/Products/Release -maxdepth 6 \
+                  -name "$FW_NAME" ! -path "$APP_PATH/*" -print -quit)"
+                if [ -z "$SRC" ]; then
+                  echo "ERROR: Could not find a built $FW_NAME outside the app bundle."
+                  exit 1
+                fi
+                rm -rf "$DEST"
+                /usr/bin/ditto "$SRC" "$DEST"
+              fi
+
+              test -f "$DEST_BIN"
+              chmod +x "$DEST_BIN" || true
+              echo "Validated $FW_NAME:"
+              ls -l "$DEST_BIN"
+              lipo -info "$DEST_BIN"
+            }
+
+            ensure_framework "FlutterMacOS.framework" "FlutterMacOS"
+            ensure_framework "App.framework" "App"
+
+            EXECUTABLE="$APP_PATH/Contents/MacOS/FOLIORA"
+            if [ ! -f "$EXECUTABLE" ]; then
+              EXECUTABLE="$(find "$APP_PATH/Contents/MacOS" -maxdepth 1 -type f -perm +111 -print -quit)"
+            fi
+            test -f "$EXECUTABLE"
+
+            echo "Dynamic dependencies of FOLIORA:"
+            otool -L "$EXECUTABLE"
+
+            while IFS= read -r DEP; do
+              case "$DEP" in
+                @rpath/*)
+                  REL="${DEP#@rpath/}"
+                  if [ ! -e "$FRAMEWORKS_DIR/$REL" ]; then
+                    echo "ERROR: Missing embedded runtime dependency: $DEP"
+                    exit 1
+                  fi
+                  ;;
+              esac
+            done < <(otool -L "$EXECUTABLE" | awk 'NR > 1 {print $1}')
+
+            echo "Re-signing every embedded framework with the same ad-hoc identity..."
+            while IFS= read -r FW; do
+              echo "Signing: $FW"
+              /usr/bin/codesign --force --sign - --timestamp=none "$FW"
+            done < <(find "$FRAMEWORKS_DIR" -depth -type d -name '*.framework' -print)
+
+            while IFS= read -r DYLIB; do
+              echo "Signing dylib: $DYLIB"
+              /usr/bin/codesign --force --sign - --timestamp=none "$DYLIB"
+            done < <(find "$FRAMEWORKS_DIR" -type f -name '*.dylib' -print)
+
+            # Sign the outer app last, with the explicit Release entitlements.
+            # Do NOT enable Hardened Runtime for this ad-hoc private distribution:
+            # library validation would reject Flutter's embedded framework Team ID.
+            /usr/bin/codesign --force --sign - --timestamp=none \
+              --entitlements macos/Runner/Release.entitlements \
+              "$APP_PATH"
+
+            /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+            APP_TEAM="$(/usr/bin/codesign -dv --verbose=4 "$APP_PATH" 2>&1 | sed -n 's/^TeamIdentifier=//p' | head -1)"
+            FLUTTER_TEAM="$(/usr/bin/codesign -dv --verbose=4 "$FRAMEWORKS_DIR/FlutterMacOS.framework" 2>&1 | sed -n 's/^TeamIdentifier=//p' | head -1)"
+            APP_TEAM="${APP_TEAM:-not set}"
+            FLUTTER_TEAM="${FLUTTER_TEAM:-not set}"
+            echo "Outer app TeamIdentifier: $APP_TEAM"
+            echo "FlutterMacOS TeamIdentifier: $FLUTTER_TEAM"
+            if [ "$APP_TEAM" != "$FLUTTER_TEAM" ]; then
+              echo "ERROR: App and FlutterMacOS.framework still have different Team IDs."
+              exit 1
+            fi
+
+        - name: Verify macOS architectures
+          run: |
+            APP_PATH="build/macos/Build/Products/Release/FOLIORA.app"
+            if [ ! -d "$APP_PATH" ]; then
+              APP_PATH="$(find build/macos/Build/Products/Release -maxdepth 1 -name '*.app' -print -quit)"
+            fi
+            test -n "$APP_PATH"
+            EXECUTABLE="$APP_PATH/Contents/MacOS/FOLIORA"
+            if [ ! -f "$EXECUTABLE" ]; then
+              EXECUTABLE="$(find "$APP_PATH/Contents/MacOS" -maxdepth 1 -type f -perm +111 -print -quit)"
+            fi
+            test -n "$EXECUTABLE"
+            lipo -info "$EXECUTABLE"
+
+        - name: Verify and package macOS app
+          run: |
+            APP_PATH="build/macos/Build/Products/Release/FOLIORA.app"
+            if [ ! -d "$APP_PATH" ]; then
+              APP_PATH="$(find build/macos/Build/Products/Release -maxdepth 1 -name '*.app' -print -quit)"
+            fi
+            test -n "$APP_PATH"
+
+            EXECUTABLE="$APP_PATH/Contents/MacOS/FOLIORA"
+            if [ ! -f "$EXECUTABLE" ]; then
+              EXECUTABLE="$(find "$APP_PATH/Contents/MacOS" -maxdepth 1 -type f -perm +111 -print -quit)"
+            fi
+            test -n "$EXECUTABLE"
+            test -x "$EXECUTABLE"
+
+            VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")"
+            BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Contents/Info.plist")"
+            echo "FOLIORA macOS version: $VERSION"
+            echo "FOLIORA macOS build number: $BUILD_NUMBER"
+            lipo -info "$EXECUTABLE"
+            ls -ld "$APP_PATH" "$APP_PATH/Contents" "$EXECUTABLE"
+
+            # Do not re-sign the completed Flutter bundle with --deep here.
+            # Re-signing the final bundle was preserving/injecting debug entitlements.
+            /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+            /usr/bin/codesign -d --verbose=4 "$APP_PATH" 2>&1 || true
+            /usr/bin/codesign -d --entitlements :- "$APP_PATH" > /tmp/foliora-release-entitlements.plist
+            plutil -p /tmp/foliora-release-entitlements.plist
+
+            python3 - <<'PY'
+            import plistlib
+            from pathlib import Path
+
+            p = Path("/tmp/foliora-release-entitlements.plist")
+            data = plistlib.loads(p.read_bytes())
+            if data.get("com.apple.security.get-task-allow"):
+                raise SystemExit("ERROR: Release app still contains com.apple.security.get-task-allow=true")
+
+            if data.get("com.apple.security.app-sandbox"):
+                raise SystemExit("ERROR: Release app is still sandboxed; self-update would be blocked.")
+            print("Release entitlements are correct for the updater-enabled private build.")
+            PY
+
+            set +e
+            /usr/sbin/spctl --assess --type execute --verbose=4 "$APP_PATH"
+            SPCTL_STATUS=$?
+            set -e
+            echo "Gatekeeper assessment exit code: $SPCTL_STATUS"
+            if [ "$SPCTL_STATUS" -ne 0 ]; then
+              echo "Gatekeeper rejection is expected until the app is Developer-ID signed and notarized."
+            fi
+
+            mkdir -p dist
+            ZIP_PATH="dist/FOLIORA-Version-1-Build-${BUILD_NUMBER}-macOS.zip"
+            DMG_PATH="dist/FOLIORA-Version-1-Build-${BUILD_NUMBER}-macOS.dmg"
+            echo "MAC_ZIP_PATH=$ZIP_PATH" >> "$GITHUB_ENV"
+            echo "MAC_DMG_PATH=$DMG_PATH" >> "$GITHUB_ENV"
+            echo "MAC_VERSION=$VERSION" >> "$GITHUB_ENV"
+            echo "MAC_BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+
+            ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_PATH"
+            hdiutil create \
+              -volname "FOLIORA Version 1" \
+              -srcfolder "$APP_PATH" \
+              -ov \
+              -format UDZO \
+              "$DMG_PATH"
+
+            hdiutil verify "$DMG_PATH"
+            shasum -a 256 "$DMG_PATH" "$ZIP_PATH"
+
+            echo "Validating the packaged ZIP after extraction..."
+            rm -rf /tmp/foliora-build-zip-check
+            mkdir -p /tmp/foliora-build-zip-check
+            /usr/bin/ditto -x -k "$ZIP_PATH" /tmp/foliora-build-zip-check
+            ZIP_APP="$(find /tmp/foliora-build-zip-check -maxdepth 2 -name 'FOLIORA.app' -type d -print -quit)"
+            test -n "$ZIP_APP"
+            test -f "$ZIP_APP/Contents/Frameworks/FlutterMacOS.framework/Versions/A/FlutterMacOS"
+            test -f "$ZIP_APP/Contents/Frameworks/App.framework/Versions/A/App"
+            ZIP_EXEC="$ZIP_APP/Contents/MacOS/FOLIORA"
+            test -x "$ZIP_EXEC"
+            otool -L "$ZIP_EXEC"
+            while IFS= read -r DEP; do
+              case "$DEP" in
+                @rpath/*)
+                  REL="${DEP#@rpath/}"
+                  test -e "$ZIP_APP/Contents/Frameworks/$REL" || {
+                    echo "ERROR: ZIP is missing runtime dependency $DEP"
+                    exit 1
+                  }
+                  ;;
+              esac
+            done < <(otool -L "$ZIP_EXEC" | awk 'NR > 1 {print $1}')
+            lipo -info "$ZIP_EXEC"
+            lipo -info "$ZIP_APP/Contents/Frameworks/FlutterMacOS.framework/Versions/A/FlutterMacOS"
+            /usr/bin/codesign --verify --deep --strict --verbose=2 "$ZIP_APP"
+            echo "Packaged ZIP contains all required Flutter runtime frameworks."
+
+            echo "Running a short launch smoke test on the extracted packaged app..."
+            set +e
+            "$ZIP_EXEC" >/tmp/foliora-update-smoke.log 2>&1 &
+            SMOKE_PID=$!
+            sleep 5
+            if kill -0 "$SMOKE_PID" 2>/dev/null; then
+              echo "FOLIORA stayed running for 5 seconds; dynamic loading succeeded."
+              kill "$SMOKE_PID" 2>/dev/null || true
+              wait "$SMOKE_PID" 2>/dev/null || true
+              SMOKE_STATUS=0
+            else
+              wait "$SMOKE_PID"
+              SMOKE_STATUS=$?
+              cat /tmp/foliora-update-smoke.log || true
+            fi
+            set -e
+            if [ "$SMOKE_STATUS" -ne 0 ]; then
+              echo "ERROR: Packaged FOLIORA failed the launch smoke test."
+              exit 1
+            fi
+
+
+
+        - name: Publish macOS automatic update
+          run: |
+            set -euo pipefail
+            SUPABASE_URL="$(grep -o "https://[^']*supabase.co" lib/data/supabase_config.dart | head -1)"
+            SUPABASE_PUBLISHABLE_KEY="$(grep -o "sb_publishable_[A-Za-z0-9_-]*" lib/data/supabase_config.dart | head -1)"
+            test -n "$SUPABASE_URL"
+            test -n "$SUPABASE_PUBLISHABLE_KEY"
+            test -f "$MAC_ZIP_PATH"
+
+            UPDATE_SHA="$(shasum -a 256 "$MAC_ZIP_PATH" | awk '{print $1}')"
+            UPDATE_URL="$SUPABASE_URL/storage/v1/object/public/foliora-updates/macos/FOLIORA-latest.zip?build=$MAC_BUILD_NUMBER"
+
+            cat > /tmp/foliora-macos-latest.json <<JSON
+            {
+              "platform": "macos",
+              "version": "$MAC_VERSION",
+              "build_number": $MAC_BUILD_NUMBER,
+              "download_url": "$UPDATE_URL",
+              "sha256": "$UPDATE_SHA",
+              "mandatory": false,
+              "notes": "Neue FOLIORA Version 1 mit aktuellen Funktionen und Verbesserungen."
+            }
+            JSON
+
+            OIDC_RESPONSE="$(curl -fsSL \
+              -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=foliora-supabase-update-upload")"
+            OIDC_TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$OIDC_RESPONSE")"
+            export OIDC_TOKEN SUPABASE_URL SUPABASE_PUBLISHABLE_KEY
+
+            upload_update_file() {
+              OBJECT_PATH="$1"
+              FILE_PATH="$2"
+              CONTENT_TYPE="$3"
+
+              TICKET="$(curl -fsSL \
+                -X POST "$SUPABASE_URL/functions/v1/foliora-update-upload-ticket" \
+                -H "Authorization: Bearer $OIDC_TOKEN" \
+                -H "Content-Type: application/json" \
+                --data "$(python3 -c 'import json,sys; print(json.dumps({"path":sys.argv[1]}))' "$OBJECT_PATH")")"
+
+              SIGNED_URL="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["signedUrl"])' <<<"$TICKET")"
+              test -n "$SIGNED_URL"
+
+              curl -fsSL \
+                -X PUT "$SIGNED_URL" \
+                -H "x-upsert: true" \
+                -H "Content-Type: $CONTENT_TYPE" \
+                -H "Cache-Control: max-age=0" \
+                --data-binary @"$FILE_PATH"
+              echo
+            }
+
+            upload_update_file \
+              "macos/FOLIORA-latest.zip" \
+              "$MAC_ZIP_PATH" \
+              "application/zip"
+
+            upload_update_file \
+              "macos/latest.json" \
+              "/tmp/foliora-macos-latest.json" \
+              "application/json"
+
+        - name: Attach macOS downloads to workflow
+          continue-on-error: true
+          uses: actions/upload-artifact@v4
+          with:
+            name: FOLIORA-Version-1-macOS-downloads
+            path: |
+              ${{ env.MAC_DMG_PATH }}
+              ${{ env.MAC_ZIP_PATH }}
+            if-no-files-found: error
+            retention-days: 7
+
+
+  android:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+        - name: Fetch private FOLIORA Build 21 source
+          env:
+            SUPABASE_URL: https://hivmiqktbaatghuaxfvg.supabase.co
+          run: |
+            set -euo pipefail
+            OIDC_RESPONSE="$(curl -fsSL \
+              -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=foliora-build21-source")"
+            OIDC_TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$OIDC_RESPONSE")"
+            curl -fsSL \
+              "$SUPABASE_URL/functions/v1/foliora-build21-source" \
+              -H "Authorization: Bearer $OIDC_TOKEN" \
+              -o /tmp/foliora-build21-source.json
+            python3 - <<'PY'
+            import hashlib
+            import json
+            from pathlib import Path
+
+            data = json.loads(Path("/tmp/foliora-build21-source.json").read_text())
+            if data.get("version") != "1.0.0+21":
+                raise SystemExit("Unexpected source version: " + str(data.get("version")))
+            files = data.get("files") or []
+            if len(files) != 65:
+                raise SystemExit(f"Unexpected source file count: {len(files)}")
+
+            for item in files:
+                path = Path(item["path"])
+                content = item["content"].encode("utf-8")
+                expected = item["sha"]
+                actual = hashlib.sha1(
+                    f"blob {len(content)}\0".encode("utf-8") + content
+                ).hexdigest()
+                if actual != expected:
+                    raise SystemExit(f"Git blob verification failed for {path}")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+
+            print(f"Restored and verified {len(files)} private FOLIORA source files.")
+            PY
+            rm -f /tmp/foliora-build21-source.json
+            grep -F "version: 1.0.0+21" pubspec.yaml
+
+        - name: Set up Flutter
+          uses: subosito/flutter-action@v2
+          with:
+            channel: stable
+            cache: true
+
+        - name: Generate Android shell
+          run: |
+            rm -rf /tmp/foliora_shell
+            flutter create --platforms=android --org lu.fts --project-name foliora /tmp/foliora_shell
+            cp -R /tmp/foliora_shell/android ./android
+            sed -i 's/android:label="foliora"/android:label="FOLIORA"/g' android/app/src/main/AndroidManifest.xml
+            python3 - <<'PY'
+            from pathlib import Path
+
+            manifest = Path("android/app/src/main/AndroidManifest.xml")
+            text = manifest.read_text()
+
+            permissions = [
+                '    <uses-permission android:name="android.permission.INTERNET"/>',
+                '    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>',
+            ]
+            for permission in permissions:
+                if permission not in text:
+                    text = text.replace(
+                        '    <application',
+                        permission + '\n\n    <application',
+                        1,
+                    )
+
+            provider = '''
+                    <provider
+                        android:name="androidx.core.content.FileProvider"
+                        android:authorities="${applicationId}.fileprovider"
+                        android:exported="false"
+                        android:grantUriPermissions="true">
+                        <meta-data
+                            android:name="android.support.FILE_PROVIDER_PATHS"
+                            android:resource="@xml/foliora_file_paths" />
+                    </provider>
+            '''
+
+            if 'foliora_file_paths' not in text:
+                text = text.replace(
+                    '    </application>',
+                    provider + '\n    </application>',
+                    1,
+                )
+
+            manifest.write_text(text)
+
+            paths = Path("android/app/src/main/res/xml/foliora_file_paths.xml")
+            paths.parent.mkdir(parents=True, exist_ok=True)
+            paths.write_text('''<?xml version="1.0" encoding="utf-8"?>
+            <paths xmlns:android="http://schemas.android.com/apk/res/android">
+                <cache-path name="cache" path="." />
+                <external-cache-path name="external_cache" path="." />
+            </paths>
+            ''')
+
+            activity = Path(
+                "android/app/src/main/kotlin/lu/fts/foliora/MainActivity.kt"
+            )
+            activity.parent.mkdir(parents=True, exist_ok=True)
+            activity.write_text(r'''package lu.fts.foliora
+
+            import android.content.Intent
+            import android.net.Uri
+            import android.os.Build
+            import android.provider.Settings
+            import androidx.core.content.FileProvider
+            import io.flutter.embedding.android.FlutterActivity
+            import io.flutter.embedding.engine.FlutterEngine
+            import io.flutter.plugin.common.MethodChannel
+            import java.io.File
+
+            class MainActivity : FlutterActivity() {
+                private val updateChannel = "lu.fts.foliora/updater"
+
+                override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                    super.configureFlutterEngine(flutterEngine)
+
+                    MethodChannel(
+                        flutterEngine.dartExecutor.binaryMessenger,
+                        updateChannel
+                    ).setMethodCallHandler { call, result ->
+                        if (call.method != "installApk") {
+                            result.notImplemented()
+                            return@setMethodCallHandler
+                        }
+
+                        val path = call.argument<String>("path")
+                        if (path.isNullOrBlank()) {
+                            result.error("missing_path", "APK path fehlt.", null)
+                            return@setMethodCallHandler
+                        }
+
+                        val apk = File(path)
+                        if (!apk.exists()) {
+                            result.error("missing_apk", "APK wurde nicht gefunden.", null)
+                            return@setMethodCallHandler
+                        }
+
+                        if (
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                            !packageManager.canRequestPackageInstalls()
+                        ) {
+                            val settingsIntent = Intent(
+                                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                Uri.parse("package:$packageName")
+                            )
+                            startActivity(settingsIntent)
+                            result.error(
+                                "permission_required",
+                                "Bitte FOLIORA einmal die Installation unbekannter Apps erlauben.",
+                                null
+                            )
+                            return@setMethodCallHandler
+                        }
+
+                        try {
+                            val uri = FileProvider.getUriForFile(
+                                this,
+                                "$packageName.fileprovider",
+                                apk
+                            )
+                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(
+                                    uri,
+                                    "application/vnd.android.package-archive"
+                                )
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (error: Exception) {
+                            result.error(
+                                "install_failed",
+                                error.message ?: "APK konnte nicht geöffnet werden.",
+                                null
+                            )
+                        }
+                    }
+                }
+            }
+            ''')
+            PY
+
+        - name: Configure stable FOLIORA Android signing
+          run: |
+            base64 -d .github/foliora-version-1-release.jks.b64 > android/foliora-version-1-release.jks
+            python3 - <<'PY'
+            from pathlib import Path
+
+            path = Path("android/app/build.gradle.kts")
+            text = path.read_text()
+
+            signing = '''
+                signingConfigs {
+                    create("folioraRelease") {
+                        storeFile = file("../foliora-version-1-release.jks")
+                        storePassword = "FOLIORA-Internal-2026-v1-7Qx9K2pR"
+                        keyAlias = "foliora-version-1"
+                        keyPassword = "FOLIORA-Internal-2026-v1-7Qx9K2pR"
+                    }
+                }
+            '''
+
+            marker = "    buildTypes {"
+            if 'create("folioraRelease")' not in text:
+                text = text.replace(
+                    marker,
+                    signing + "\n" + marker,
+                    1,
+                )
+
+            text = text.replace(
+                'signingConfig = signingConfigs.getByName("debug")',
+                'signingConfig = signingConfigs.getByName("folioraRelease")',
+            )
+
+            path.write_text(text)
+            PY
+
+        - name: Generate FOLIORA launcher icons
+          run: |
+            python3 -m pip install --quiet pillow
+            python3 - <<'PY'
+            from PIL import Image, ImageDraw
+            from pathlib import Path
+
+            sizes = {
+                "mdpi": 48,
+                "hdpi": 72,
+                "xhdpi": 96,
+                "xxhdpi": 144,
+                "xxxhdpi": 192,
+            }
+
+            for density, size in sizes.items():
+                img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+                d = ImageDraw.Draw(img)
+
+                pad = max(2, size // 24)
+                d.rounded_rectangle(
+                    (pad, pad, size-pad, size-pad),
+                    radius=size//5,
+                    fill="#075A57",
+                )
+
+                sx = size / 100.0
+                def pts(values):
+                    return [(int(x*sx), int(y*sx)) for x, y in values]
+
+                d.polygon(
+                    pts([
+                        (31, 77), (31, 37), (34, 27), (42, 21),
+                        (74, 15), (72, 28), (64, 35), (48, 39),
+                        (43, 42), (41, 49), (41, 80)
+                    ]),
+                    fill="#F7F1E7",
+                )
+                d.polygon(
+                    pts([
+                        (41, 49), (45, 39), (53, 34), (72, 31),
+                        (69, 44), (61, 51), (48, 54), (43, 59)
+                    ]),
+                    fill="#F7F1E7",
+                )
+                d.polygon(
+                    pts([
+                        (45, 80), (45, 59), (49, 53), (58, 49),
+                        (70, 47), (68, 59), (61, 66), (51, 68),
+                        (49, 72), (49, 81)
+                    ]),
+                    fill="#C69A56",
+                )
+
+                out = Path(f"android/app/src/main/res/mipmap-{density}/ic_launcher.png")
+                out.parent.mkdir(parents=True, exist_ok=True)
+                img.save(out)
+
+            print("FOLIORA icons generated")
+            PY
+
+        - name: Install dependencies
+          run: flutter pub get
+
+        - name: Build FOLIORA Version 1 APK
+          run: |
+            VERSION_LINE="$(awk '/^version:/ {print $2}' pubspec.yaml)"
+            APP_VERSION="${VERSION_LINE%%+*}"
+            APP_BUILD="${VERSION_LINE##*+}"
+            echo "ANDROID_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+            echo "ANDROID_BUILD_NUMBER=$APP_BUILD" >> "$GITHUB_ENV"
+            flutter build apk --release \
+              --build-name="$APP_VERSION" \
+              --build-number="$APP_BUILD" \
+              --dart-define=FOLIORA_VERSION="$APP_VERSION" \
+              --dart-define=FOLIORA_BUILD_NUMBER="$APP_BUILD"
+
+        - name: Verify Android APK signature
+          run: |
+            APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+            test -n "$APKSIGNER"
+            "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
+
+        - name: Publish Android automatic update
+          run: |
+            set -euo pipefail
+            APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
+            test -f "$APK_PATH"
+
+            SUPABASE_URL="$(grep -o "https://[^']*supabase.co" lib/data/supabase_config.dart | head -1)"
+            SUPABASE_PUBLISHABLE_KEY="$(grep -o "sb_publishable_[A-Za-z0-9_-]*" lib/data/supabase_config.dart | head -1)"
+            test -n "$SUPABASE_URL"
+            test -n "$SUPABASE_PUBLISHABLE_KEY"
+
+            UPDATE_SHA="$(sha256sum "$APK_PATH" | awk '{print $1}')"
+            export SUPABASE_URL ANDROID_VERSION ANDROID_BUILD_NUMBER UPDATE_SHA
+
+            rm -f /tmp/foliora-apk-part-*
+            split -b 24m -d -a 2 "$APK_PATH" /tmp/foliora-apk-part-
+
+            python3 - <<'PY'
+            from pathlib import Path
+            import hashlib, json, os
+
+            base = os.environ["SUPABASE_URL"]
+            build = os.environ["ANDROID_BUILD_NUMBER"]
+            parts = []
+            files = sorted(Path("/tmp").glob("foliora-apk-part-*"))
+
+            if not files:
+                raise SystemExit("No Android update chunks were created.")
+
+            for index, path in enumerate(files):
+                sha = hashlib.sha256(path.read_bytes()).hexdigest()
+                name = f"android/FOLIORA-latest.apk.part-{index:02d}"
+                url = (
+                    f"{base}/storage/v1/object/public/"
+                    f"foliora-updates/{name}?build={build}"
+                )
+                parts.append({
+                    "path": str(path),
+                    "object": name,
+                    "url": url,
+                    "sha256": sha,
+                })
+
+            Path("/tmp/foliora-android-parts.json").write_text(
+                json.dumps(parts, ensure_ascii=False)
+            )
+            PY
+
+            python3 - <<'PY'
+            from pathlib import Path
+            import json, os
+
+            parts = json.loads(
+                Path("/tmp/foliora-android-parts.json").read_text()
+            )
+
+            manifest = {
+                "platform": "android",
+                "version": os.environ["ANDROID_VERSION"],
+                "build_number": int(os.environ["ANDROID_BUILD_NUMBER"]),
+                "download_url": "",
+                "download_parts": [
+                    {
+                        "url": part["url"],
+                        "sha256": part["sha256"],
+                    }
+                    for part in parts
+                ],
+                "sha256": os.environ["UPDATE_SHA"],
+                "mandatory": False,
+                "notes": "Neue FOLIORA Version 1 mit aktuellen Funktionen und Verbesserungen.",
+            }
+
+            Path("/tmp/foliora-android-latest.json").write_text(
+                json.dumps(
+                    manifest,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            PY
+
+            PART_COUNT="$(python3 - <<'PY'
+            from pathlib import Path
+            import json
+            print(len(json.loads(Path("/tmp/foliora-android-parts.json").read_text())))
+            PY
+            )"
+            echo "Publishing $PART_COUNT Android update chunks."
+
+            python3 - <<'PY' > /tmp/foliora-android-upload-list.txt
+            from pathlib import Path
+            import json
+            for part in json.loads(
+                Path("/tmp/foliora-android-parts.json").read_text()
+            ):
+                print(part["path"] + "|" + part["object"])
+            PY
+
+            while IFS='|' read -r PART_PATH OBJECT_NAME; do
+              test -f "$PART_PATH"
+              curl --fail-with-body --show-error --silent \
+                -X POST "$SUPABASE_URL/storage/v1/object/foliora-updates/$OBJECT_NAME" \
+                -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+                -H "x-upsert: true" \
+                -H "Content-Type: application/vnd.android.package-archive" \
+                --data-binary @"$PART_PATH"
+              echo
+            done < /tmp/foliora-android-upload-list.txt
+
+            curl --fail-with-body --show-error --silent \
+              -X POST "$SUPABASE_URL/storage/v1/object/foliora-updates/android/latest.json" \
+              -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+              -H "x-upsert: true" \
+              -H "Content-Type: application/json" \
+              --data-binary @/tmp/foliora-android-latest.json
+            echo
+
+        - name: Attach Android download to workflow
+          continue-on-error: true
+          uses: actions/upload-artifact@v4
+          with:
+            name: FOLIORA-Version-1-Android
+            path: build/app/outputs/flutter-apk/app-release.apk
+            if-no-files-found: error
+            retention-days: 30
+
