@@ -1,4 +1,4 @@
-name: FOLIORA Build 26 Secure CI
+name: FOLIORA Build 27 Secure CI
 # Build 26 release authorization restored in Supabase upload-ticket function.
 
 on:
@@ -36,7 +36,7 @@ jobs:
             from pathlib import Path
 
             data = json.loads(Path("/tmp/foliora-build26-source.json").read_text())
-            if data.get("version") != "1.0.0+26":
+            if data.get("version") != "1.0.0+27":
                 raise SystemExit("Unexpected source version: " + str(data.get("version")))
             files = data.get("files") or []
             if len(files) != 66:
@@ -57,7 +57,7 @@ jobs:
             print(f"Restored and verified {len(files)} private FOLIORA source files.")
             PY
             rm -f /tmp/foliora-build26-source.json
-            grep -F "version: 1.0.0+26" pubspec.yaml
+            grep -F "version: 1.0.0+27" pubspec.yaml
 
         - name: Set up Flutter
           uses: subosito/flutter-action@v2
@@ -99,7 +99,7 @@ jobs:
             from pathlib import Path
 
             data = json.loads(Path("/tmp/foliora-build26-source.json").read_text())
-            if data.get("version") != "1.0.0+26":
+            if data.get("version") != "1.0.0+27":
                 raise SystemExit("Unexpected source version: " + str(data.get("version")))
             files = data.get("files") or []
             if len(files) != 66:
@@ -120,7 +120,7 @@ jobs:
             print(f"Restored and verified {len(files)} private FOLIORA source files.")
             PY
             rm -f /tmp/foliora-build26-source.json
-            grep -F "version: 1.0.0+26" pubspec.yaml
+            grep -F "version: 1.0.0+27" pubspec.yaml
 
         - name: Set up Flutter
           uses: subosito/flutter-action@v2
@@ -564,7 +564,7 @@ jobs:
           continue-on-error: true
           uses: actions/upload-artifact@v4
           with:
-            name: FOLIORA-Build-26-macOS-downloads
+            name: FOLIORA-Build-27-macOS-downloads
             path: |
               ${{ env.MAC_DMG_PATH }}
               ${{ env.MAC_ZIP_PATH }}
