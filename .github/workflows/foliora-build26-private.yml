@@ -571,3 +571,5 @@ jobs:
             if-no-files-found: error
             retention-days: 7
 
+
+# Re-run Build 26 validation with blank-page preflight correction.
