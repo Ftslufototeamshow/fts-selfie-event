@@ -21,11 +21,11 @@ jobs:
             SUPABASE_URL: https://hivmiqktbaatghuaxfvg.supabase.co
           run: |
             set -euo pipefail
-            OIDC_RESPONSE="$(curl -fsSL \
+            OIDC_RESPONSE="$(curl --retry 6 --retry-all-errors --retry-delay 3 --connect-timeout 20 --max-time 240 -fsSL \
               -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
               "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=foliora-build26-source")"
             OIDC_TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$OIDC_RESPONSE")"
-            curl -fsSL \
+            curl --retry 6 --retry-all-errors --retry-delay 3 --connect-timeout 20 --max-time 240 -fsSL \
               "$SUPABASE_URL/functions/v1/foliora-build26-source" \
               -H "Authorization: Bearer $OIDC_TOKEN" \
               -o /tmp/foliora-build26-source.json
@@ -84,11 +84,11 @@ jobs:
             SUPABASE_URL: https://hivmiqktbaatghuaxfvg.supabase.co
           run: |
             set -euo pipefail
-            OIDC_RESPONSE="$(curl -fsSL \
+            OIDC_RESPONSE="$(curl --retry 6 --retry-all-errors --retry-delay 3 --connect-timeout 20 --max-time 240 -fsSL \
               -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
               "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=foliora-build26-source")"
             OIDC_TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$OIDC_RESPONSE")"
-            curl -fsSL \
+            curl --retry 6 --retry-all-errors --retry-delay 3 --connect-timeout 20 --max-time 240 -fsSL \
               "$SUPABASE_URL/functions/v1/foliora-build26-source" \
               -H "Authorization: Bearer $OIDC_TOKEN" \
               -o /tmp/foliora-build26-source.json
@@ -520,7 +520,7 @@ jobs:
             }
             JSON
 
-            OIDC_RESPONSE="$(curl -fsSL \
+            OIDC_RESPONSE="$(curl --retry 6 --retry-all-errors --retry-delay 3 --connect-timeout 20 --max-time 240 -fsSL \
               -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
               "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=foliora-supabase-update-upload")"
             OIDC_TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$OIDC_RESPONSE")"
@@ -531,7 +531,7 @@ jobs:
               FILE_PATH="$2"
               CONTENT_TYPE="$3"
 
-              TICKET="$(curl -fsSL \
+              TICKET="$(curl --retry 6 --retry-all-errors --retry-delay 3 --connect-timeout 20 --max-time 240 -fsSL \
                 -X POST "$SUPABASE_URL/functions/v1/foliora-update-upload-ticket" \
                 -H "Authorization: Bearer $OIDC_TOKEN" \
                 -H "Content-Type: application/json" \
@@ -540,7 +540,7 @@ jobs:
               SIGNED_URL="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["signedUrl"])' <<<"$TICKET")"
               test -n "$SIGNED_URL"
 
-              curl -fsSL \
+              curl --retry 6 --retry-all-errors --retry-delay 3 --connect-timeout 20 --max-time 240 -fsSL \
                 -X PUT "$SIGNED_URL" \
                 -H "x-upsert: true" \
                 -H "Content-Type: $CONTENT_TYPE" \
