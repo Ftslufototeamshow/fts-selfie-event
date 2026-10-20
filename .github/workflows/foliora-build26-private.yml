@@ -573,3 +573,5 @@ jobs:
 
 
 # Re-run Build 26 validation with blank-page preflight correction.
+
+# Build 27: source manifest synchronized; run release validation.
