@@ -1,4 +1,5 @@
 name: FOLIORA Build 26 Secure CI
+# Build 26 release authorization restored in Supabase upload-ticket function.
 
 on:
   push:
