@@ -554,8 +554,11 @@ extension AppState {
                 throw NSError(domain:"FTSPrinter",code:310,userInfo:[NSLocalizedDescriptionKey:"Manuelles Event konnte nicht angelegt werden."])
             }
             let _:JSONValue=try await FTSAPI.shared.rpc(
-                "fts_admin_set_event_storage_mode_v150",
-                body:["p_admin_code":Keychain.get("offlineAdminCode") ?? "","p_event_token":token,"p_storage_mode":storageMode.rawValue]
+                "fts_printer_set_event_storage_mode_v150",
+                body:[
+                    "p_device_token":dev,"p_session_token":session,
+                    "p_event_token":token,"p_storage_mode":storageMode.rawValue
+                ]
             )
             _=await loadEvents()
             if storageMode == .hybrid,let localRootPath,!localRootPath.isEmpty,let event=events.first(where:{$0.event_token==token}) {
