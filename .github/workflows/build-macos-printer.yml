@@ -9,7 +9,7 @@ on:
       - 'android-app/**'
       - '.github/workflows/**'
   push:
-    branches: [main, printer-core-v1]
+    branches: [main, printer-core-v1, feature/printer-offline-hybrid-20261022]
     paths:
       - 'macos-app/**'
       - '.github/workflows/build-macos-printer.yml'
