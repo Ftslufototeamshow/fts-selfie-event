@@ -576,13 +576,18 @@ extension AppState {
         }
     }
 
-    func updateManualPrinterEvent(event:EventRow,draft:FTSManualPrinterDesignDraft) async -> Bool {
+    func updateManualPrinterEvent(event:EventRow,draft:FTSManualPrinterDesignDraft,storageMode:FTSStorageMode,localRootPath:String?) async -> Bool {
         guard event.isManualPrinterEvent else {
             errorMessage="MySelfie-Events werden im Printer nicht überschrieben."
             return false
         }
         guard currentUser?.role=="printer_admin" else{return false}
-        if event.storageMode == .local {
+        let isPureLocal=event.event_token.hasPrefix("local_")
+        if isPureLocal {
+            guard storageMode == .local else {
+                errorMessage="Dieses Event wurde vollständig offline angelegt. Für Online/Hybrid bitte bei bestehender Internetverbindung ein servergestütztes Event anlegen; vorhandene lokale Fotos bleiben dabei unverändert."
+                return false
+            }
             do {
                 let updated=localUpdatedManualEvent(event:event,draft:draft)
                 try FTSLocalEventStore.upsert(updated)
@@ -593,6 +598,13 @@ extension AppState {
             } catch {
                 errorMessage=error.localizedDescription;return false
             }
+        }
+        if storageMode != .online {
+            guard let localRootPath,!localRootPath.isEmpty else {
+                errorMessage="Für Nur Laptop oder Laptop und Online zuerst einen lokalen Speicherordner auswählen."
+                return false
+            }
+            FTSLocalStoragePaths.setRoot(URL(fileURLWithPath:localRootPath,isDirectory:true),eventToken:event.event_token)
         }
         guard let dev=deviceToken,let session=sessionToken else{return false}
 
@@ -616,11 +628,27 @@ extension AppState {
             guard result.ok==true else {
                 throw NSError(domain:"FTSPrinter",code:311,userInfo:[NSLocalizedDescriptionKey:"Manuelles Event konnte nicht gespeichert werden."])
             }
+            if storageMode != event.storageMode {
+                let _:JSONValue=try await FTSAPI.shared.rpc(
+                    "fts_printer_set_event_storage_mode_v150",
+                    body:[
+                        "p_device_token":dev,"p_session_token":session,
+                        "p_event_token":event.event_token,"p_storage_mode":storageMode.rawValue
+                    ]
+                )
+            }
             _=await loadEvents()
+            if storageMode == .online {
+                try? FTSLocalEventStore.remove(event.event_token)
+            } else if let current=events.first(where:{$0.event_token==event.event_token}) {
+                try? FTSLocalEventStore.upsert(current)
+                if mediaIngest.activation == nil { try? mediaIngest.activate(event:current) }
+            }
             if let current=selectedEvent,mediaIngest.activation != nil {
                 await mediaIngest.refreshDesign(event:current)
             }
-            status="Manuelles Event und Fotodesign gespeichert."
+            updatePrintSignalSubscription()
+            status="Manuelles Event und Fotodesign gespeichert · \(storageMode.label)."
             return true
         } catch {
             if !(await recoverAuthentication(from:error)) { errorMessage=error.localizedDescription }
@@ -796,11 +824,15 @@ struct FTSManualPrinterEventEditor:View {
     @Environment(\.dismiss) private var dismiss
     @State private var saving=false
     @State private var message=""
+    @State private var storageMode:FTSStorageMode
+    @State private var localRootPath:String
 
     init(state:AppState,event:EventRow) {
         self.state=state
         self.event=event
         _draft=StateObject(wrappedValue:FTSManualPrinterDesignDraft(event:event))
+        _storageMode=State(initialValue:event.storageMode)
+        _localRootPath=State(initialValue:FTSLocalStoragePaths.configuredRoot(eventToken:event.event_token)?.path ?? "")
     }
 
     private var previewPhoto:NSImage? {
@@ -830,6 +862,32 @@ struct FTSManualPrinterEventEditor:View {
                             TextField("Eventname",text:$draft.eventTitle).textFieldStyle(.roundedBorder)
                             DatePicker("Datum",selection:$draft.eventDate,displayedComponents:.date)
                             TextField("Ort",text:$draft.location).textFieldStyle(.roundedBorder)
+                        }.padding(.vertical,3)
+                    }
+
+                    GroupBox("Speicherort") {
+                        VStack(alignment:.leading,spacing:9) {
+                            Picker("Speichermodus",selection:$storageMode) {
+                                Text("Nur Laptop").tag(FTSStorageMode.local)
+                                Text("Nur Online").tag(FTSStorageMode.online)
+                                Text("Laptop und Online").tag(FTSStorageMode.hybrid)
+                            }
+                            .pickerStyle(.segmented)
+                            .disabled(event.event_token.hasPrefix("local_"))
+                            if event.event_token.hasPrefix("local_") {
+                                Text("Dieses Event wurde vollständig offline erstellt und behält seine lokale Event-ID. Es wird nicht automatisch als zweites Online-Event dupliziert.")
+                                    .font(.caption2).foregroundStyle(FTSTheme.muted)
+                            }
+                            if storageMode != .online {
+                                HStack {
+                                    Text(localRootPath.isEmpty ? "Noch kein lokaler Ordner gewählt" : localRootPath)
+                                        .font(.caption).foregroundStyle(FTSTheme.muted).lineLimit(1)
+                                    Spacer()
+                                    Button("Ordner auswählen"){chooseStorageFolder()}
+                                }
+                                Text("Originale, Druckbilder, Layout/Banner und Eventeinstellungen bleiben dauerhaft im gewählten Mac-Ordner.")
+                                    .font(.caption2).foregroundStyle(FTSTheme.muted)
+                            }
                         }.padding(.vertical,3)
                     }
 
@@ -1012,20 +1070,31 @@ struct FTSManualPrinterEventEditor:View {
                         saving=true
                         message=""
                         Task {
-                            let ok=await state.updateManualPrinterEvent(event:event,draft:draft)
+                            let ok=await state.updateManualPrinterEvent(event:event,draft:draft,storageMode:storageMode,localRootPath:storageMode == .online ? nil:localRootPath)
                             saving=false
                             if ok { dismiss() }
                             else { message=state.errorMessage ?? "Speichern fehlgeschlagen." }
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(saving || draft.eventTitle.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
+                    .disabled(saving || draft.eventTitle.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || (storageMode != .online && localRootPath.isEmpty))
                 }
             }
             .padding(18)
             .frame(width:570)
         }
         .frame(minWidth:1180,minHeight:760)
+    }
+
+    private func chooseStorageFolder() {
+        let panel=NSOpenPanel()
+        panel.title="FTS Selfie Event Speicherordner"
+        panel.message="Wähle den Hauptordner für lokale Originale, Druckbilder, Layout und Eventeinstellungen."
+        panel.canChooseFiles=false
+        panel.canChooseDirectories=true
+        panel.allowsMultipleSelection=false
+        panel.canCreateDirectories=true
+        if panel.runModal() == .OK, let url=panel.url { localRootPath=url.path }
     }
 
     @ViewBuilder
