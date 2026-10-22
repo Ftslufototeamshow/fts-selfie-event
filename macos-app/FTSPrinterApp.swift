@@ -1837,6 +1837,13 @@ struct MainView: View {
                 .frame(width:300,alignment:.leading)
             }
             Spacer(minLength:6)
+            Text(event.storageMode.label)
+                .font(.caption.bold())
+                .foregroundStyle(event.storageMode == .local ? Color.orange : (event.storageMode == .hybrid ? FTSTheme.gold : FTSTheme.cyan))
+                .padding(.horizontal,9).padding(.vertical,5)
+                .background(Color.black.opacity(0.28))
+                .clipShape(Capsule())
+                .help(event.storageMode == .local ? "Event arbeitet vollständig lokal ohne Supabase." : (event.storageMode == .hybrid ? "Lokale Speicherung mit kontrollierter Online-Synchronisierung." : "Online-Speicherung über Supabase."))
             FTSTopOperationalStatus(core:state.production)
             StockPill(stock:state.stock)
             if state.currentUser?.role=="printer_admin" {
