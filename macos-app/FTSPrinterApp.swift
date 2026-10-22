@@ -156,6 +156,37 @@ enum FTSLocalEventStore {
         var rows=load();rows.removeAll{$0.event_token==token};try save(rows)
     }
 }
+enum FTSLocalStoragePaths {
+    private static func key(_ token:String)->String { "fts.local.root.v150."+token }
+
+    static func setRoot(_ root:URL,eventToken:String) {
+        UserDefaults.standard.set(root.path,forKey:key(eventToken))
+    }
+
+    static func configuredRoot(eventToken:String)->URL? {
+        guard let path=UserDefaults.standard.string(forKey:key(eventToken)),!path.isEmpty else{return nil}
+        return URL(fileURLWithPath:path,isDirectory:true)
+    }
+
+    static func baseRoot(eventToken:String)->URL {
+        if let configured=configuredRoot(eventToken:eventToken) { return configured }
+        let fm=FileManager.default
+        let pictures=fm.urls(for:.picturesDirectory,in:.userDomainMask).first
+            ?? fm.homeDirectoryForCurrentUser.appendingPathComponent("Pictures")
+        return pictures.appendingPathComponent("FTS Selfie Events",isDirectory:true)
+    }
+
+    static func eventRoot(_ event:EventRow)->URL {
+        let illegal=CharacterSet(charactersIn:"/:\\?%*|\"<>")
+        func safe(_ value:String)->String {
+            value.components(separatedBy:illegal).joined(separator:"-").replacingOccurrences(of:"  ",with:" ")
+        }
+        let code=safe(event.short_code ?? event.event_token)
+        let name=safe(event.event_title)
+        return baseRoot(eventToken:event.event_token).appendingPathComponent("\(code) - \(name)",isDirectory:true)
+    }
+}
+
 enum FTSOfflineAdminAuth {
     static let choiceID="fts-offline-admin"
     static var configured:Bool { Keychain.get("offlineAdminCode")?.isEmpty == false }
