@@ -854,7 +854,7 @@ final class FTSPrintSignalRealtime {
 
     init() {
         pathMonitor.pathUpdateHandler={ [weak self] path in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self else{return}
                 let satisfied=path.status == .satisfied
                 let restored=satisfied && !self.networkSatisfied
@@ -963,7 +963,9 @@ final class FTSPrintSignalRealtime {
     private func sendJSON(_ object:[String:Any]) async throws {
         guard let socket else{throw URLError(.notConnectedToInternet)}
         let data=try JSONSerialization.data(withJSONObject:object)
-        guard let text=String(data:data,encoding:.utf8) else{throw URLError(.cannotEncodeContentData)}
+        guard let text=String(data:data,encoding:.utf8) else {
+            throw NSError(domain:"FTSRealtime",code:1,userInfo:[NSLocalizedDescriptionKey:"Realtime-Payload konnte nicht als UTF-8 gesendet werden."])
+        }
         try await socket.send(.string(text))
     }
 
