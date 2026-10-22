@@ -1918,10 +1918,12 @@ struct MainView: View {
                     await state.production.refreshLocalRuntime(state:state)
                 }
             }
-            await state.production.checkUpdate(platform:"macos")
-            if state.production.updateAvailable,
-               state.production.updateRelease?.build_number != postponedUpdateBuild,
-               !printingActive { updatePrompt=true }
+            if state.selectedEvent?.usesOnlineStorage == true {
+                await state.production.checkUpdate(platform:"macos")
+                if state.production.updateAvailable,
+                   state.production.updateRelease?.build_number != postponedUpdateBuild,
+                   !printingActive { updatePrompt=true }
+            }
 
             var printerDiscoveryElapsed:Double = 0
             while !Task.isCancelled {
