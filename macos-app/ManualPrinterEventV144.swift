@@ -604,7 +604,9 @@ extension AppState {
                 errorMessage="Für Nur Laptop oder Laptop und Online zuerst einen lokalen Speicherordner auswählen."
                 return false
             }
-            FTSLocalStoragePaths.setRoot(URL(fileURLWithPath:localRootPath,isDirectory:true),eventToken:event.event_token)
+            if FTSLocalStoragePaths.configuredRoot(eventToken:event.event_token) == nil {
+                FTSLocalStoragePaths.setRoot(URL(fileURLWithPath:localRootPath,isDirectory:true),eventToken:event.event_token)
+            }
         }
         guard let dev=deviceToken,let session=sessionToken else{return false}
 
@@ -883,9 +885,13 @@ struct FTSManualPrinterEventEditor:View {
                                     Text(localRootPath.isEmpty ? "Noch kein lokaler Ordner gewählt" : localRootPath)
                                         .font(.caption).foregroundStyle(FTSTheme.muted).lineLimit(1)
                                     Spacer()
-                                    Button("Ordner auswählen"){chooseStorageFolder()}
+                                    if FTSLocalStoragePaths.configuredRoot(eventToken:event.event_token) == nil {
+                                        Button("Ordner auswählen"){chooseStorageFolder()}
+                                    }
                                 }
-                                Text("Originale, Druckbilder, Layout/Banner und Eventeinstellungen bleiben dauerhaft im gewählten Mac-Ordner.")
+                                Text(FTSLocalStoragePaths.configuredRoot(eventToken:event.event_token) == nil
+                                     ? "Originale, Druckbilder, Layout/Banner und Eventeinstellungen werden dauerhaft in diesem Mac-Ordner gespeichert."
+                                     : "Der bestehende lokale Eventordner bleibt fest, damit bereits importierte Originale und Druckdateien nicht getrennt werden.")
                                     .font(.caption2).foregroundStyle(FTSTheme.muted)
                             }
                         }.padding(.vertical,3)
