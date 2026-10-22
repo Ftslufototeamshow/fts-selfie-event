@@ -195,18 +195,18 @@ final class MediaIngestV80: ObservableObject {
         if selectedDay.isEmpty { selectedDay=preferredDay(for:event) }
         try createDailyAlbums(event:event)
         load(event:event)
-        status="Tagesalbum \(selectedDay) aktiv. SD-Karten können A–Z zugeordnet werden."
+        status="Tagesalbum \(selectedDay) aktiv · \(event.storageMode.label). SD-Karten können A–Z zugeordnet werden."
     }
 
     private func createDailyAlbums(event:EventRow) throws {
         let fm=FileManager.default
-        let pictures=fm.urls(for:.picturesDirectory,in:.userDomainMask).first
-            ?? fm.homeDirectoryForCurrentUser.appendingPathComponent("Pictures")
-        let root=pictures.appendingPathComponent("FTS Print Events",isDirectory:true)
-        let code=sanitize(event.short_code ?? event.event_token)
-        let name=sanitize(event.event_title)
-        let eventRoot=root.appendingPathComponent("\(code) - \(name)",isDirectory:true)
+        let eventRoot=FTSLocalStoragePaths.eventRoot(event)
         try fm.createDirectory(at:eventRoot,withIntermediateDirectories:true)
+        try fm.createDirectory(at:eventRoot.appendingPathComponent("Layout und Banner",isDirectory:true),withIntermediateDirectories:true)
+        let settingsDir=eventRoot.appendingPathComponent("Veranstaltungseinstellungen",isDirectory:true)
+        try fm.createDirectory(at:settingsDir,withIntermediateDirectories:true)
+        let settingsURL=settingsDir.appendingPathComponent("event.json")
+        try JSONEncoder().encode(event).write(to:settingsURL,options:.atomic)
 
         var days=eventDays(event)
         if days.isEmpty { days=[selectedDay.isEmpty ? todayString() : selectedDay] }
