@@ -1751,21 +1751,15 @@ struct ProductionMediaContent: View {
         guard let initial=event else{return}
         ingest.load(event:initial)
         core.loadLocalQueue(folderPath:ingest.activation?.folderPath)
-        var designRefreshTicks=5
         while !Task.isCancelled {
             displayClock=Date()
             normalizeSource()
-            if designRefreshTicks>=5 {
-                _=await state.refreshSelectedEventDefinition()
-                designRefreshTicks=0
-            }
-            // Never keep the EventRow captured at screen-open time. Studio changes
-            // must flow into the very next design pass without re-opening the app.
+            // Karten-/WLAN-/USB-Erkennung bleibt lokal schnell. Die Eventdefinition
+            // wird nicht mehr alle fünf Sekunden vom Server nachgeladen.
             if let current=state.selectedEvent,ingest.activation != nil {
                 await ingest.scan(event:current)
             }
             try? await Task.sleep(for:.seconds(1))
-            designRefreshTicks += 1
         }
     }
 
