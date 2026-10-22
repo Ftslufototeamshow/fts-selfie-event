@@ -163,7 +163,8 @@ enum FTSLocalStoragePaths {
 
     static func setRoot(_ root:URL,eventToken:String) {
         UserDefaults.standard.set(root.path,forKey:key(eventToken))
-        UserDefaults.standard.removeObject(forKey:eventRootKey(eventToken))
+        // An event folder is intentionally stable once created. Changing title/date
+        // must never split originals, layouts and print files across two folders.
     }
 
     static func configuredRoot(eventToken:String)->URL? {
