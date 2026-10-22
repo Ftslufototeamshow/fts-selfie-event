@@ -1604,8 +1604,11 @@ navigator.serviceWorker?.addEventListener?.('message',e=>{if(e.data?.type==='FTS
 window.addEventListener('offline',updateNet);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)processQueue()});
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=78',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(console.warn);boot();
 </script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js"></script>
 <script src="./print-pickup-guest-v57.js"></script>
-<script src="./camera-live.js">async function resumeSumUpHostedCheckout(){
+<script src="./camera-live.js"></script>
+<script>
+async function resumeSumUpHostedCheckout(){
   const q=new URLSearchParams(location.search);
   if(q.get('sumup_return')!=='1')return;
   const orderId=q.get('print_order_id')||'';

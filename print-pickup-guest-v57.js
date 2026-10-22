@@ -6,7 +6,23 @@
     en:{title:'Your photo print',waiting:'Paid · your photo is being prepared',ready:'Your photo is ready ✓',readySub:'Please collect it at the FTS stand and show this code.',picked:'Photo collected ✓',pickedSub:'Thank you — enjoy your photo.',code:'Pickup code',test:'TEST · PayPal Sandbox',prints:'prints'},
     fr:{title:'Votre tirage photo',waiting:'Payé · votre photo est en préparation',ready:'Votre photo est prête ✓',readySub:'Retirez-la au stand FTS et montrez ce code.',picked:'Photo retirée ✓',pickedSub:'Merci et profitez bien de votre photo.',code:'Code de retrait',test:'TEST · PayPal Sandbox',prints:'tirages'}
   };
-  let timer=null,busy=false,last='';
+  let signalClient=null,signalChannel=null,signalTimer=null,busy=false,last='';
+  function installPrintSignal(){
+    if(signalChannel||!window.supabase?.createClient||!window.FTS_CONFIG)return;
+    try{
+      signalClient=window.supabase.createClient(
+        FTS_CONFIG.supabaseUrl,FTS_CONFIG.publishableKey,
+        {auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}}
+      );
+      signalChannel=signalClient
+        .channel('fts-guest-print-signal-v150')
+        .on('postgres_changes',{event:'UPDATE',schema:'public',table:'fts_selfie_print_signal_v150',filter:'id=eq.1'},()=>{
+          clearTimeout(signalTimer);
+          signalTimer=setTimeout(()=>{if(document.visibilityState==='visible')refresh()},650);
+        })
+        .subscribe();
+    }catch(e){console.warn('Abholstatus Realtime nicht verfügbar',e)}
+  }
   const txt=k=>L[(typeof lang!=='undefined'&&L[lang])?lang:'de'][k]||k;
   function css(){
     if(document.getElementById('ftsPickupCss57'))return;
@@ -48,7 +64,7 @@
   }
   css();
   const mo=new MutationObserver(()=>{host();void refresh()});mo.observe(document.body,{childList:true,subtree:true});
-  setTimeout(refresh,800);timer=setInterval(refresh,10000);
+  setTimeout(refresh,800);installPrintSignal();
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh()});
-  window.addEventListener('online',refresh);
+  window.addEventListener('online',()=>{installPrintSignal();refresh()});
 })();

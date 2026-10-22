@@ -151,15 +151,15 @@
     computeMetrics(orders.filter(o=>!o.is_test));
     if(launchOrder){const el=document.querySelector('[data-order-card="'+CSS.escape(launchOrder)+'"]');if(el){el.classList.remove('collapsed');setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'center'}),120)}}
   };
-  loadCore=async function(showStatus=true){
+  loadCore=async function(showStatus=true,includeYears=false){
     if(showStatus)$('#statusText').textContent='Aktualisiere …';
     try{
-      const [e,o,y]=await Promise.all([
+      const [e,o]=await Promise.all([
         rpc('fts_admin_print_station_events_v47',{p_admin_code:credential()}),
-        rpc('fts_admin_print_station_orders_v57',{p_admin_code:credential(),p_event_token:null}),
-        rpc('fts_admin_print_year_summary_v57',{p_admin_code:credential()})
+        rpc('fts_admin_print_station_orders_v57',{p_admin_code:credential(),p_event_token:null})
       ]);
-      events=e||[];orders=o||[];years=y||[];
+      events=e||[];orders=o||[];
+      if(includeYears||!years.length)years=await rpc('fts_admin_print_year_summary_v57',{p_admin_code:credential()})||[];
       eventOptions($('#eventFilter'),false);eventOptions($('#archiveEventFilter'),true);
       const savedState=readStationState58();
       if(launchEvent)$('#eventFilter').value=launchEvent;
@@ -168,15 +168,14 @@
       if(savedState)onlyReady=!!savedState.onlyReady;
       $('#onlyReadyBtn').textContent=onlyReady?'Alle Aufträge anzeigen':'Nur druckbereit';
       if(savedState?.tab&&['live','archive','revenue'].includes(savedState.tab))setTab(savedState.tab);
-      renderOrders();renderYears();await loadStock70(true);$('#statusText').textContent='Aktuell · '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+      renderOrders();renderYears();await loadStock70(true);lastCoreLoadAt=Date.now();$('#statusText').textContent='Aktuell · '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
       const targetOrder=launchOrder||savedState?.openOrder||'';
       if(targetOrder){
         const el=document.querySelector('[data-order-card="'+CSS.escape(String(targetOrder))+'"]');
         if(el){el.classList.remove('collapsed');el.querySelector('.orderToggle,.orderToggleLegacy')?.setAttribute('aria-expanded','true')}
       }
       if(savedState&&Number.isFinite(Number(savedState.scrollY)))setTimeout(()=>window.scrollTo({top:Number(savedState.scrollY),behavior:'auto'}),80);
-      if(!timer)timer=setInterval(()=>{if(activeTab==='live')loadCore(false)},5000);
-    }catch(e){console.error(e);$('#statusText').textContent='Verbindung wird erneut versucht';if(isCredentialError(e)){localStorage.removeItem(DEVICE_KEY);setLoggedIn(false)}}
+    }catch(e){console.error(e);$('#statusText').textContent=navigator.onLine?'Online-Daten konnten nicht geladen werden':'Offline · lokale Funktionen bleiben unberührt';if(isCredentialError(e)){localStorage.removeItem(DEVICE_KEY);setLoggedIn(false)}}
   };
   loadReceipts=async function(year){
     selectedYear=year;$('#receiptList').innerHTML='<div class="empty">Belege werden geladen …</div>';
