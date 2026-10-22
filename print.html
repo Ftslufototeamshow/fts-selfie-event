@@ -102,6 +102,7 @@ button,input,select{font:inherit}.shell{width:min(1100px,calc(100% - 24px));marg
 <div class="toast" id="toast"></div>
 
 <script src="./config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script>
@@ -109,6 +110,7 @@ const cfg=window.FTS_CONFIG;
 const DEVICE_KEY='fts_device_token_v1',LEGACY_CODE_KEY='fts_cockpit_admin_code';
 const params=new URLSearchParams(location.search),launchEvent=params.get('event')||'',launchOrder=params.get('order')||'';
 let events=[],orders=[],years=[],receipts=[],activeTab='live',onlyReady=false,deferredInstallPrompt=null,selectedYear=null,lastCoreLoadAt=0;
+let printSignalClient=null,printSignalChannel=null,printSignalTimer=null;
 const $=s=>document.querySelector(s);
 function headers(){return {'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':'application/json'}}
 async function rpc(name,body){const r=await fetch(cfg.supabaseUrl+'/rest/v1/rpc/'+name,{method:'POST',headers:headers(),body:JSON.stringify(body)});if(!r.ok){const e=new Error((await r.text())||('HTTP '+r.status));e.status=r.status;throw e}const t=await r.text();return t?JSON.parse(t):null}
@@ -176,6 +178,31 @@ async function loadCore(showStatus=true,includeYears=false){
 function refreshAfterReconnect(){
   if(!credential()||document.visibilityState==='hidden')return;
   loadCore(false,false);
+}
+function installPrintSignal(){
+  if(printSignalChannel||!credential()||!window.supabase?.createClient||!window.FTS_CONFIG)return;
+  try{
+    printSignalClient=window.supabase.createClient(
+      FTS_CONFIG.supabaseUrl,
+      FTS_CONFIG.publishableKey,
+      {auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}}
+    );
+    printSignalChannel=printSignalClient
+      .channel('fts-print-signal-v150')
+      .on('postgres_changes',{
+        event:'UPDATE',schema:'public',table:'fts_selfie_print_signal_v150',filter:'id=eq.1'
+      },()=>{
+        clearTimeout(printSignalTimer);
+        printSignalTimer=setTimeout(()=>{
+          if(document.visibilityState==='visible'&&credential())loadCore(false,false);
+        },650);
+      })
+      .subscribe(status=>{
+        if(status==='SUBSCRIBED'&&lastCoreLoadAt&&Date.now()-lastCoreLoadAt>10000){
+          loadCore(false,false);
+        }
+      });
+  }catch(e){console.warn('Print-Signal nicht verfügbar',e)}
 }
 async function signedPath(path,name){try{const j=await adminFiles('signed-photo-url',{path,filename:name});if(j?.url)return j.url}catch(e){console.warn('Signed print URL',e)}return photoUrl(path)}
 function ensurePhotoPrintStyle(){
@@ -341,7 +368,7 @@ async function downloadYearZip(year,btn){
 }
 async function printYear(year){let rows=[];try{rows=await rpc('fts_admin_print_receipts_v46',{p_admin_code:credential(),p_year:year,p_event_token:null})||[]}catch(e){return alert(e.message)}const sum=years.find(y=>Number(y.year)===Number(year));const w=window.open('','_blank');if(!w)return alert('Bitte Pop-ups erlauben.');w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>FTS Selfie '+year+'</title><style>body{font-family:system-ui;margin:18mm;color:#17201f}h1{font-size:30px;margin:4px 0}.ey{letter-spacing:.15em;font-size:10px;color:#826a39;font-weight:800}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:22px 0}.s{border:1px solid #ddd;padding:10px}.s b{display:block;font-size:18px}.s span{font-size:10px;color:#666}table{width:100%;border-collapse:collapse;font-size:11px}th,td{padding:7px;border-bottom:1px solid #ddd;text-align:left}th:last-child,td:last-child{text-align:right}@media print{body{margin:12mm}}</style></head><body><div class="ey">FTS.LU · SELFIE UMSATZ</div><h1>Jahresübersicht '+year+'</h1><div class="stats"><div class="s"><b>'+Number(sum?.orders||0)+'</b><span>AUFTRÄGE</span></div><div class="s"><b>'+Number(sum?.prints||0)+'</b><span>PRINTS</span></div><div class="s"><b>'+euro(sum?.gross_cents||0)+'</b><span>BRUTTO</span></div><div class="s"><b>'+euro(sum?.net_cents||0)+'</b><span>NACH ERSTATTUNGEN</span></div></div><table><thead><tr><th>Beleg</th><th>Event</th><th>Datum</th><th>Prints</th><th>Betrag</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+esc(r.receipt_number)+'</td><td>'+esc(r.event_title)+'</td><td>'+dt(r.paid_at)+'</td><td>'+Number(r.quantity_total)+'</td><td>'+euro(r.net_cents)+'</td></tr>').join('')+'</tbody></table><script>window.onload=()=>setTimeout(()=>window.print(),250)<\/script></body></html>');w.document.close()}
 function setTab(tab){activeTab=tab;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));$('#liveView').classList.toggle('hidden',tab!=='live');$('#archiveView').classList.toggle('hidden',tab!=='archive');$('#revenueView').classList.toggle('hidden',tab!=='revenue');if(tab==='revenue'){loadCore(false,true).then(()=>{if(!selectedYear&&years[0])loadReceipts(Number(years[0].year))})}}
-$('#loginBtn').onclick=async()=>{const code=$('#adminCode').value.trim();if(!code)return;try{$('#loginBtn').disabled=true;await registerDevice(code);setLoggedIn(true);await loadCore()}catch(e){alert('Freischaltung fehlgeschlagen: '+e.message)}finally{$('#loginBtn').disabled=false}};
+$('#loginBtn').onclick=async()=>{const code=$('#adminCode').value.trim();if(!code)return;try{$('#loginBtn').disabled=true;await registerDevice(code);setLoggedIn(true);await loadCore();installPrintSignal()}catch(e){alert('Freischaltung fehlgeschlagen: '+e.message)}finally{$('#loginBtn').disabled=false}};
 $('#logoutBtn').onclick=()=>{localStorage.removeItem(DEVICE_KEY);location.reload()};
 $('#refreshBtn').onclick=()=>loadCore();$('#archiveRefreshBtn').onclick=()=>loadCore();$('#eventFilter').onchange=renderOrders;$('#archiveEventFilter').onchange=renderOrders;$('#onlyReadyBtn').onclick=()=>{onlyReady=!onlyReady;$('#onlyReadyBtn').textContent=onlyReady?'Alle Aufträge anzeigen':'Nur druckbereit';renderOrders()};
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
@@ -366,7 +393,7 @@ $('#installBtn').onclick=async()=>{
   }
   alert('Android/Samsung: Browser-Menü → Zum Startbildschirm hinzufügen. iPhone: Teilen → Zum Home-Bildschirm.');
 };
-(async()=>{refreshInstallButton();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=76',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(()=>{});if(await ensureDevice())await loadCore();refreshInstallButton()})();
+(async()=>{refreshInstallButton();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=76',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});const w=reg.active||reg.waiting||reg.installing;w?.postMessage?.({type:'FTS_PURGE_OLD_CACHES'});return reg}).catch(()=>{});if(await ensureDevice()){await loadCore();installPrintSignal()}refreshInstallButton()})();
 </script>
 <script src="./print-pickup-station-v57.js"></script>
 </body>
