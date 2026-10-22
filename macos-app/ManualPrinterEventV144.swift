@@ -484,6 +484,7 @@ private func localManualEvent(
     )
 }
 
+@MainActor
 private func localUpdatedManualEvent(event:EventRow,draft:FTSManualPrinterDesignDraft)->EventRow {
     EventRow(
         event_token:event.event_token,short_code:event.short_code,event_title:draft.eventTitle.trimmingCharacters(in:.whitespacesAndNewlines),
@@ -781,7 +782,7 @@ struct FTSManualPrinterEventCreateSheet:View {
         panel.canChooseDirectories=true
         panel.allowsMultipleSelection=false
         panel.canCreateDirectories=true
-        if panel.runModal()==.OK,let url=panel.url { localRootPath=url.path }
+        if panel.runModal() == .OK, let url=panel.url { localRootPath=url.path }
     }
 }
 
