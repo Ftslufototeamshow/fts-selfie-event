@@ -432,6 +432,11 @@ final class FTSManualPrinterDesignDraft:ObservableObject {
 enum FTSManualPrinterAssets {
     static func root(eventToken:String)throws->URL {
         let fm=FileManager.default
+        if let event=FTSLocalEventStore.load().first(where:{$0.event_token==eventToken}),event.usesLocalStorage {
+            let folder=FTSLocalStoragePaths.eventRoot(event).appendingPathComponent("Layout und Banner",isDirectory:true)
+            try fm.createDirectory(at:folder,withIntermediateDirectories:true)
+            return folder
+        }
         let pictures=fm.urls(for:.picturesDirectory,in:.userDomainMask).first
             ?? fm.homeDirectoryForCurrentUser.appendingPathComponent("Pictures")
         let folder=pictures
@@ -451,30 +456,96 @@ enum FTSManualPrinterAssets {
     }
 }
 
+private func ftsJSONValue(_ value:Any)->JSONValue? {
+    guard JSONSerialization.isValidJSONObject(value),
+          let data=try? JSONSerialization.data(withJSONObject:value),
+          let decoded=try? JSONDecoder().decode(JSONValue.self,from:data) else{return nil}
+    return decoded
+}
+
+private func localManualEvent(
+    token:String,
+    title:String,
+    date:Date,
+    location:String,
+    storageMode:FTSStorageMode
+)->EventRow {
+    let day=FTSManualEventDate.string(date)
+    let cleanTitle=title.trimmingCharacters(in:.whitespacesAndNewlines)
+    let code="LOCAL-"+token.suffix(8).uppercased()
+    return EventRow(
+        event_token:token,short_code:String(code),event_title:cleanTitle,
+        subtitle:nil,overlay_text:nil,organizer_name:"FTS",location:location.trimmingCharacters(in:.whitespacesAndNewlines),
+        event_date:day,expires_at:nil,print_enabled:false,print_starts_at:nil,print_ends_at:nil,print_window_active:true,
+        operation_mode:"print_only",local_camera_photos:true,event_days:.array([.string(day)]),
+        accent:"#d9b56d",photo_branding:"none",logo_items:.array([]),decoration_items:.array([]),
+        studio_config:.object(["printer_manual":.bool(true),"version":.number(150)]),stock:nil,
+        storage_mode:storageMode.rawValue
+    )
+}
+
+private func localUpdatedManualEvent(event:EventRow,draft:FTSManualPrinterDesignDraft)->EventRow {
+    EventRow(
+        event_token:event.event_token,short_code:event.short_code,event_title:draft.eventTitle.trimmingCharacters(in:.whitespacesAndNewlines),
+        subtitle:event.subtitle,overlay_text:event.overlay_text,organizer_name:event.organizer_name,
+        location:draft.location.trimmingCharacters(in:.whitespacesAndNewlines),event_date:FTSManualEventDate.string(draft.eventDate),
+        expires_at:event.expires_at,print_enabled:event.print_enabled,print_starts_at:event.print_starts_at,print_ends_at:event.print_ends_at,
+        print_window_active:event.print_window_active,operation_mode:event.operation_mode,local_camera_photos:event.local_camera_photos,
+        event_days:.array([.string(FTSManualEventDate.string(draft.eventDate))]),accent:event.accent,
+        photo_branding:draft.showFTSBranding ? "bottom":"none",
+        logo_items:ftsJSONValue(draft.logoItemsPayload()) ?? .array([]),decoration_items:event.decoration_items,
+        studio_config:ftsJSONValue(draft.studioConfigPayload()) ?? event.studio_config,stock:event.stock,
+        storage_mode:event.storage_mode
+    )
+}
+
 // MARK: - App actions
 
 extension AppState {
-    func createManualPrinterEvent(title:String,date:Date,location:String) async -> String? {
+    func createManualPrinterEvent(
+        title:String,
+        date:Date,
+        location:String,
+        storageMode:FTSStorageMode,
+        localRootPath:String?
+    ) async -> String? {
         guard currentUser?.role=="printer_admin" else {
-            errorMessage="Nur Printer-Administratoren können manuelle Events anlegen."
-            return nil
+            errorMessage="Nur Printer-Administratoren können manuelle Events anlegen.";return nil
         }
-        guard let dev=deviceToken,let session=sessionToken else{return nil}
         let clean=title.trimmingCharacters(in:.whitespacesAndNewlines)
-        guard !clean.isEmpty else {
-            errorMessage="Bitte einen Eventnamen eingeben."
-            return nil
+        guard !clean.isEmpty else { errorMessage="Bitte einen Eventnamen eingeben.";return nil }
+
+        if storageMode == .local {
+            guard let localRootPath,!localRootPath.isEmpty else {
+                errorMessage="Bitte einen lokalen Speicherordner auswählen.";return nil
+            }
+            let token="local_"+UUID().uuidString.replacingOccurrences(of:"-",with:"").lowercased()
+            let event=localManualEvent(token:token,title:clean,date:date,location:location,storageMode:.local)
+            do {
+                FTSLocalStoragePaths.setRoot(URL(fileURLWithPath:localRootPath,isDirectory:true),eventToken:token)
+                try FTSLocalEventStore.upsert(event)
+                try mediaIngest.activate(event:event)
+                events=FTSLocalEventStore.load()
+                selectedEventToken=token
+                production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
+                status="Nur Laptop · Event lokal angelegt und gespeichert."
+                errorMessage=nil
+                return token
+            } catch {
+                errorMessage="Lokales Event konnte nicht angelegt werden: \(error.localizedDescription)";return nil
+            }
         }
 
-        busy=true
-        defer{busy=false}
+        guard let dev=deviceToken,let session=sessionToken else {
+            errorMessage="Für Online oder Laptop und Online ist beim Anlegen eine FTS-Serververbindung erforderlich.";return nil
+        }
+
+        busy=true;defer{busy=false}
         do {
             let result:FTSManualEventRPCResult=try await FTSAPI.shared.rpc(
                 "fts_printer_manual_event_create_v144",
                 body:[
-                    "p_device_token":dev,
-                    "p_session_token":session,
-                    "p_title":clean,
+                    "p_device_token":dev,"p_session_token":session,"p_title":clean,
                     "p_event_date":FTSManualEventDate.string(date),
                     "p_location":location.trimmingCharacters(in:.whitespacesAndNewlines)
                 ]
@@ -482,9 +553,18 @@ extension AppState {
             guard result.ok==true,let token=result.event_token else {
                 throw NSError(domain:"FTSPrinter",code:310,userInfo:[NSLocalizedDescriptionKey:"Manuelles Event konnte nicht angelegt werden."])
             }
+            let _:JSONValue=try await FTSAPI.shared.rpc(
+                "fts_admin_set_event_storage_mode_v150",
+                body:["p_admin_code":Keychain.get("offlineAdminCode") ?? "","p_event_token":token,"p_storage_mode":storageMode.rawValue]
+            )
             _=await loadEvents()
+            if storageMode == .hybrid,let localRootPath,!localRootPath.isEmpty,let event=events.first(where:{$0.event_token==token}) {
+                FTSLocalStoragePaths.setRoot(URL(fileURLWithPath:localRootPath,isDirectory:true),eventToken:token)
+                try? FTSLocalEventStore.upsert(event)
+                try? mediaIngest.activate(event:event)
+            }
             await selectEvent(token)
-            status="Manuelles Printer-Event angelegt."
+            status=storageMode == .hybrid ? "Laptop und Online · Event angelegt." : "Nur Online · Event angelegt."
             return token
         } catch {
             if !(await recoverAuthentication(from:error)) { errorMessage=error.localizedDescription }
@@ -497,8 +577,20 @@ extension AppState {
             errorMessage="MySelfie-Events werden im Printer nicht überschrieben."
             return false
         }
-        guard currentUser?.role=="printer_admin",
-              let dev=deviceToken,let session=sessionToken else{return false}
+        guard currentUser?.role=="printer_admin" else{return false}
+        if event.storageMode == .local {
+            do {
+                let updated=localUpdatedManualEvent(event:event,draft:draft)
+                try FTSLocalEventStore.upsert(updated)
+                if let i=events.firstIndex(where:{$0.event_token==event.event_token}) { events[i]=updated }
+                if mediaIngest.activation != nil { await mediaIngest.refreshDesign(event:updated) }
+                status="Manuelles Event und Fotodesign lokal gespeichert."
+                return true
+            } catch {
+                errorMessage=error.localizedDescription;return false
+            }
+        }
+        guard let dev=deviceToken,let session=sessionToken else{return false}
 
         busy=true
         defer{busy=false}
@@ -596,6 +688,8 @@ struct FTSManualPrinterEventCreateSheet:View {
     @State private var title=""
     @State private var date=Date()
     @State private var location=""
+    @State private var storageMode:FTSStorageMode = .local
+    @State private var localRootPath=""
     @State private var saving=false
 
     var body:some View {
@@ -620,6 +714,26 @@ struct FTSManualPrinterEventCreateSheet:View {
                 }.padding(.vertical,4)
             }
 
+            GroupBox("Speicherort") {
+                VStack(alignment:.leading,spacing:10) {
+                    Picker("Speichermodus",selection:$storageMode) {
+                        Text("Nur Laptop").tag(FTSStorageMode.local)
+                        Text("Nur Online").tag(FTSStorageMode.online)
+                        Text("Laptop und Online").tag(FTSStorageMode.hybrid)
+                    }.pickerStyle(.segmented)
+                    if storageMode != .online {
+                        HStack {
+                            Text(localRootPath.isEmpty ? "Noch kein lokaler Ordner gewählt" : localRootPath)
+                                .font(.caption).foregroundStyle(FTSTheme.muted).lineLimit(1)
+                            Spacer()
+                            Button("Ordner auswählen"){chooseStorageFolder()}
+                        }
+                        Text("Originalfotos, Druckbilder, Layout/Banner und Eventeinstellungen werden in diesem Ordner dauerhaft gespeichert.")
+                            .font(.caption2).foregroundStyle(FTSTheme.muted)
+                    }
+                }.padding(.vertical,4)
+            }
+
             Label(
                 "Das Event wird als echtes Printer-only-Event angelegt. SD/WLAN, Canon, Material, Archiv, Green Screen und Druckwarteschlange benutzen danach den vorhandenen Produktionsweg.",
                 systemImage:"checkmark.shield.fill"
@@ -633,7 +747,11 @@ struct FTSManualPrinterEventCreateSheet:View {
                 Button(saving ? "Wird angelegt …":"Event erstellen") {
                     saving=true
                     Task {
-                        if let token=await state.createManualPrinterEvent(title:title,date:date,location:location) {
+                        if let token=await state.createManualPrinterEvent(
+                            title:title,date:date,location:location,
+                            storageMode:storageMode,
+                            localRootPath:storageMode == .online ? nil:localRootPath
+                        ) {
                             onCreated(token)
                             dismiss()
                         }
@@ -641,11 +759,26 @@ struct FTSManualPrinterEventCreateSheet:View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(saving || title.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
+                .disabled(
+                    saving ||
+                    title.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty ||
+                    (storageMode != .online && localRootPath.isEmpty)
+                )
             }
         }
         .padding(20)
-        .frame(width:620)
+        .frame(width:680)
+    }
+
+    private func chooseStorageFolder() {
+        let panel=NSOpenPanel()
+        panel.title="FTS Selfie Event Speicherordner"
+        panel.message="Wähle den Hauptordner, in dem die lokalen Eventordner angelegt werden."
+        panel.canChooseFiles=false
+        panel.canChooseDirectories=true
+        panel.allowsMultipleSelection=false
+        panel.canCreateDirectories=true
+        if panel.runModal()==.OK,let url=panel.url { localRootPath=url.path }
     }
 }
 
