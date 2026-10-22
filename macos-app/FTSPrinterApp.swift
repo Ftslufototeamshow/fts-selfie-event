@@ -1454,10 +1454,7 @@ struct DeviceSetupView: View {
         .onAppear{if selected.isEmpty{selected=state.deviceAdmins.first?.user_id ?? ""}}
         .onChange(of:state.deviceAdmins){_ in if !state.deviceAdmins.contains(where:{$0.user_id==selected}){selected=state.deviceAdmins.first?.user_id ?? ""}}
         .task {
-            while !Task.isCancelled && state.phase == .deviceSetup && state.deviceAdmins.isEmpty {
-                await state.loadDeviceAdmins()
-                try? await Task.sleep(for:.seconds(8))
-            }
+            if state.phase == .deviceSetup && state.deviceAdmins.isEmpty { await state.loadDeviceAdmins() }
         }
     }
 }
@@ -1512,10 +1509,7 @@ struct StaffLoginView: View {
             }
         }
         .task {
-            while !Task.isCancelled && state.phase == .staffLogin && state.staffChoices.isEmpty {
-                await state.loadChoices()
-                try? await Task.sleep(for:.seconds(8))
-            }
+            if state.phase == .staffLogin && state.staffChoices.isEmpty { await state.loadChoices() }
         }
         .alert("Mac-Kopplung wirklich zurücksetzen?",isPresented:$showResetDevice) {
             Button("Abbrechen",role:.cancel){}
@@ -1690,16 +1684,22 @@ struct MainView: View {
                     }
                 }
                 state.production.loadLocalQueue(folderPath:state.mediaIngest.activation?.folderPath)
+
+                if e.usesOnlineStorage {
+                    await state.refreshSelected()
+                    await state.production.refresh(state:state)
+                } else {
+                    await state.production.refreshLocalRuntime(state:state)
+                }
             }
             await state.production.checkUpdate(platform:"macos")
             if state.production.updateAvailable,
                state.production.updateRelease?.build_number != postponedUpdateBuild,
                !printingActive { updatePrompt=true }
-            var updateElapsed:Double = 0
+
             var printerDiscoveryElapsed:Double = 0
             while !Task.isCancelled {
-                await state.refreshSelected()
-                await state.production.refresh(state:state)
+                await state.production.refreshLocalRuntime(state:state)
 
                 if let current=state.selectedEvent,
                    current.operation_mode=="print_only" || current.local_camera_photos==true {
@@ -1712,22 +1712,12 @@ struct MainView: View {
                     }
                 }
 
-                let active = printingActive || state.production.hasDispatchableWork
-                let delay:Double = active ? 3 : 6
-                updateElapsed += delay
+                let delay:Double = (printingActive || state.production.localWaitingCount>0) ? 2 : 4
                 printerDiscoveryElapsed += delay
-
                 if printerDiscoveryElapsed >= 12 {
                     printerDiscoveryElapsed = 0
                     await state.production.discoverPrinters()
                 }
-                if updateElapsed >= 900 {
-                    updateElapsed = 0
-                    await state.production.checkUpdate(platform:"macos")
-                }
-                if state.production.updateAvailable,
-                   state.production.updateRelease?.build_number != postponedUpdateBuild,
-                   !printingActive,!updatePrompt,!updateInstalling { updatePrompt=true }
                 try? await Task.sleep(for:.seconds(delay))
             }
         }
@@ -2058,7 +2048,7 @@ struct FTSEventOverviewView:View {
                     }.ftsCard()
                 }
 
-                Button("Eventdaten aktualisieren"){Task{await state.refreshSelected()}}
+                Button("Eventdaten aktualisieren"){Task{await state.refreshSelected();await state.production.refresh(state:state)}}
                     .buttonStyle(.borderedProminent)
             }.padding(16)
         }
@@ -2750,10 +2740,7 @@ struct FTSPrinterApp: App {
             .tint(FTSTheme.cyan)
             .task {
                 if state.phase == .boot { await state.bootstrap() }
-                while !Task.isCancelled {
-                    if state.phase != .main { await state.checkPreLoginUpdate() }
-                    try? await Task.sleep(for:.seconds(30))
-                }
+                if state.phase != .main { await state.checkPreLoginUpdate() }
             }
         }
         .windowStyle(.titleBar)
