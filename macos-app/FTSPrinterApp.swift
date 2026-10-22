@@ -6,6 +6,7 @@ import CryptoKit
 import ImageIO
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import Network
 
 // MARK: - Configuration
 
@@ -110,7 +111,108 @@ struct EventRow: Codable, Identifiable, Hashable {
     let decoration_items: JSONValue?
     let studio_config: JSONValue?
     let stock: JSONValue?
+    let storage_mode: String?
     var id: String { event_token }
+}
+
+enum FTSStorageMode: String, Codable, CaseIterable {
+    case local, online, hybrid
+    var label:String {
+        switch self {
+        case .local: return "Nur Laptop"
+        case .online: return "Nur Online"
+        case .hybrid: return "Laptop und Online"
+        }
+    }
+}
+extension EventRow {
+    var storageMode:FTSStorageMode { FTSStorageMode(rawValue:storage_mode ?? "online") ?? .online }
+    var usesLocalStorage:Bool { storageMode != .online }
+    var usesOnlineStorage:Bool { storageMode != .local }
+}
+enum FTSLocalEventStore {
+    private static var fileURL:URL {
+        let fm=FileManager.default
+        let base=fm.urls(for:.applicationSupportDirectory,in:.userDomainMask).first
+            ?? fm.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+        let dir=base.appendingPathComponent("FTS Printer",isDirectory:true)
+        try? fm.createDirectory(at:dir,withIntermediateDirectories:true)
+        return dir.appendingPathComponent("local-events-v150.json")
+    }
+    static func load()->[EventRow] {
+        guard let data=try? Data(contentsOf:fileURL),
+              let rows=try? JSONDecoder().decode([EventRow].self,from:data) else{return []}
+        return rows
+    }
+    static func save(_ rows:[EventRow]) throws {
+        try JSONEncoder().encode(rows).write(to:fileURL,options:.atomic)
+    }
+    static func upsert(_ event:EventRow) throws {
+        var rows=load()
+        if let i=rows.firstIndex(where:{$0.event_token==event.event_token}) { rows[i]=event }
+        else { rows.append(event) }
+        try save(rows)
+    }
+    static func remove(_ token:String) throws {
+        var rows=load();rows.removeAll{$0.event_token==token};try save(rows)
+    }
+}
+enum FTSLocalStoragePaths {
+    private static func key(_ token:String)->String { "fts.local.root.v150."+token }
+    private static func eventRootKey(_ token:String)->String { "fts.local.event-root.v150."+token }
+
+    static func setRoot(_ root:URL,eventToken:String) {
+        UserDefaults.standard.set(root.path,forKey:key(eventToken))
+        // An event folder is intentionally stable once created. Changing title/date
+        // must never split originals, layouts and print files across two folders.
+    }
+
+    static func configuredRoot(eventToken:String)->URL? {
+        guard let path=UserDefaults.standard.string(forKey:key(eventToken)),!path.isEmpty else{return nil}
+        return URL(fileURLWithPath:path,isDirectory:true)
+    }
+
+    static func baseRoot(eventToken:String)->URL {
+        if let configured=configuredRoot(eventToken:eventToken) { return configured }
+        let fm=FileManager.default
+        let pictures=fm.urls(for:.picturesDirectory,in:.userDomainMask).first
+            ?? fm.homeDirectoryForCurrentUser.appendingPathComponent("Pictures")
+        return pictures.appendingPathComponent("FTS Selfie Events",isDirectory:true)
+    }
+
+    static func eventRoot(_ event:EventRow)->URL {
+        if let saved=UserDefaults.standard.string(forKey:eventRootKey(event.event_token)),!saved.isEmpty {
+            return URL(fileURLWithPath:saved,isDirectory:true)
+        }
+        let illegal=CharacterSet(charactersIn:"/:\\?%*|\"<>")
+        func safe(_ value:String)->String {
+            value.components(separatedBy:illegal).joined(separator:"-").replacingOccurrences(of:"  ",with:" ")
+        }
+        let code=safe(event.short_code ?? event.event_token)
+        let name=safe(event.event_title)
+        let url=baseRoot(eventToken:event.event_token).appendingPathComponent("\(code) - \(name)",isDirectory:true)
+        UserDefaults.standard.set(url.path,forKey:eventRootKey(event.event_token))
+        return url
+    }
+}
+
+enum FTSOfflineAdminAuth {
+    static let choiceID="fts-offline-admin"
+    static var configured:Bool { Keychain.get("offlineAdminCode")?.isEmpty == false }
+    static func configure(user:SessionInfo,code:String) {
+        guard user.role=="printer_admin",!code.isEmpty else{return}
+        _=Keychain.set(code,key:"offlineAdminCode")
+        _=Keychain.set(user.display_name ?? "FTS Administrator",key:"offlineAdminName")
+        _=Keychain.set(user.user_id ?? "",key:"offlineAdminUserID")
+    }
+    static func choice()->StaffChoice? {
+        guard configured else{return nil}
+        return StaffChoice(user_id:choiceID,display_name:(Keychain.get("offlineAdminName") ?? "FTS Administrator")+" · Offline",role:"printer_admin")
+    }
+    static func verify(_ code:String)->Bool {
+        guard let saved=Keychain.get("offlineAdminCode"),!saved.isEmpty else{return false}
+        return saved==code
+    }
 }
 
 struct OrderItem: Codable, Hashable, Identifiable {
@@ -738,6 +840,202 @@ extension NSColor {
     }
 }
 
+// MARK: - Minimal Realtime signal
+// Only a revision counter is subscribed. Order/customer/photo data is still
+// fetched through the existing authenticated RPCs after a real change.
+
+@MainActor
+final class FTSPrintSignalRealtime {
+    private var socket:URLSessionWebSocketTask?
+    private var receiveTask:Task<Void,Never>?
+    private var heartbeatTask:Task<Void,Never>?
+    private var reconnectTask:Task<Void,Never>?
+    private var debounceTask:Task<Void,Never>?
+    private var wanted=false
+    private var reconnectAttempt=0
+    private var refCounter=1
+    private var joinedOnce=false
+    private var onChange:(() async -> Void)?
+    private let pathMonitor=NWPathMonitor()
+    private let pathQueue=DispatchQueue(label:"lu.fts.printer.realtime-network")
+    private var networkSatisfied=true
+
+    init() {
+        pathMonitor.pathUpdateHandler={ [weak self] path in
+            Task { @MainActor [weak self] in
+                guard let self else{return}
+                let satisfied=path.status == .satisfied
+                let restored=satisfied && !self.networkSatisfied
+                self.networkSatisfied=satisfied
+                if !satisfied {
+                    self.closeSocket()
+                } else if restored && self.wanted {
+                    self.reconnectAttempt=0
+                    self.connectIfNeeded()
+                }
+            }
+        }
+        pathMonitor.start(queue:pathQueue)
+    }
+
+    deinit { pathMonitor.cancel() }
+
+    func start(onChange:@escaping () async -> Void) {
+        self.onChange=onChange
+        wanted=true
+        reconnectAttempt=0
+        connectIfNeeded()
+    }
+
+    func stop() {
+        wanted=false
+        reconnectTask?.cancel();reconnectTask=nil
+        debounceTask?.cancel();debounceTask=nil
+        closeSocket()
+    }
+
+    func restart() {
+        guard wanted else{return}
+        reconnectAttempt=0
+        closeSocket()
+        connectIfNeeded()
+    }
+
+    private func connectIfNeeded() {
+        guard wanted,networkSatisfied,socket == nil else{return}
+        var components=URLComponents(url:FTSConfig.supabaseURL,resolvingAgainstBaseURL:false)!
+        components.scheme="wss"
+        components.path="/realtime/v1/websocket"
+        components.queryItems=[
+            URLQueryItem(name:"apikey",value:FTSConfig.publishableKey),
+            URLQueryItem(name:"vsn",value:"1.0.0")
+        ]
+        guard let url=components.url else{return}
+
+        let ws=URLSession.shared.webSocketTask(with:url)
+        socket=ws
+        ws.resume()
+
+        receiveTask=Task { [weak self] in
+            guard let self else{return}
+            do {
+                try await self.sendJoin()
+                try await self.receiveLoop()
+            } catch {
+                self.connectionFailed()
+            }
+        }
+        heartbeatTask=Task { [weak self] in
+            guard let self else{return}
+            while !Task.isCancelled,self.wanted,self.socket != nil {
+                try? await Task.sleep(for:.seconds(20))
+                guard !Task.isCancelled,self.wanted,self.socket != nil else{return}
+                do { try await self.sendHeartbeat() }
+                catch { self.connectionFailed();return }
+            }
+        }
+    }
+
+    private func nextRef()->String {
+        defer{refCounter += 1}
+        return String(refCounter)
+    }
+
+    private func sendJoin() async throws {
+        let ref=nextRef()
+        let object:[String:Any]=[
+            "topic":"realtime:fts-print-signal-v150",
+            "event":"phx_join",
+            "payload":[
+                "config":[
+                    "broadcast":["ack":false,"self":false],
+                    "presence":["enabled":false],
+                    "postgres_changes":[[
+                        "event":"UPDATE","schema":"public",
+                        "table":"fts_selfie_print_signal_v150",
+                        "filter":"id=eq.1",
+                        "select":["id","revision","changed_at"]
+                    ]],
+                    "private":false
+                ]
+            ],
+            "ref":ref,"join_ref":ref
+        ]
+        try await sendJSON(object)
+    }
+
+    private func sendHeartbeat() async throws {
+        try await sendJSON(["topic":"phoenix","event":"heartbeat","payload":[:],"ref":nextRef()])
+    }
+
+    private func sendJSON(_ object:[String:Any]) async throws {
+        guard let socket else{throw URLError(.notConnectedToInternet)}
+        let data=try JSONSerialization.data(withJSONObject:object)
+        guard let text=String(data:data,encoding:.utf8) else {
+            throw NSError(domain:"FTSRealtime",code:1,userInfo:[NSLocalizedDescriptionKey:"Realtime-Payload konnte nicht als UTF-8 gesendet werden."])
+        }
+        try await socket.send(.string(text))
+    }
+
+    private func receiveLoop() async throws {
+        while wanted,!Task.isCancelled,let socket {
+            let message=try await socket.receive()
+            let text:String
+            switch message {
+            case .string(let value): text=value
+            case .data(let data): text=String(data:data,encoding:.utf8) ?? ""
+            @unknown default: text=""
+            }
+            guard !text.isEmpty,
+                  let data=text.data(using:.utf8),
+                  let object=try? JSONSerialization.jsonObject(with:data) as? [String:Any],
+                  let event=object["event"] as? String else{continue}
+
+            if event=="phx_reply",
+               let payload=object["payload"] as? [String:Any],
+               (payload["status"] as? String)=="ok" {
+                reconnectAttempt=0
+                if joinedOnce { scheduleChangeRefresh() }
+                joinedOnce=true
+            } else if event=="postgres_changes" {
+                scheduleChangeRefresh()
+            } else if event=="phx_error" || event=="phx_close" {
+                throw URLError(.networkConnectionLost)
+            }
+        }
+    }
+
+    private func scheduleChangeRefresh() {
+        debounceTask?.cancel()
+        debounceTask=Task { [weak self] in
+            try? await Task.sleep(for:.milliseconds(650))
+            guard let self,!Task.isCancelled,self.wanted else{return}
+            await self.onChange?()
+        }
+    }
+
+    private func closeSocket() {
+        heartbeatTask?.cancel();heartbeatTask=nil
+        receiveTask?.cancel();receiveTask=nil
+        socket?.cancel(with:.goingAway,reason:nil);socket=nil
+    }
+
+    private func connectionFailed() {
+        guard wanted else{return}
+        heartbeatTask?.cancel();heartbeatTask=nil
+        socket?.cancel(with:.goingAway,reason:nil);socket=nil
+        guard networkSatisfied,reconnectAttempt < 6 else{return}
+        reconnectAttempt += 1
+        let delay=min(30.0,pow(2.0,Double(reconnectAttempt)))
+        reconnectTask?.cancel()
+        reconnectTask=Task { [weak self] in
+            try? await Task.sleep(for:.seconds(delay))
+            guard let self,!Task.isCancelled,self.wanted else{return}
+            self.connectIfNeeded()
+        }
+    }
+}
+
 // MARK: - App State
 
 @MainActor
@@ -761,18 +1059,19 @@ final class AppState: ObservableObject {
     let mediaIngest = MediaIngestV80()
     let production = ProductionCore()
     private let api = FTSAPI.shared
+    private let printSignalRealtime=FTSPrintSignalRealtime()
     private var liveDeviceToken: String?
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
     private var preLoginUpdateOpenedBuild: Int?
     static let appVersion: String = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.3.59"
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String) ?? "0.4.0"
         let value=raw.trimmingCharacters(in:.whitespacesAndNewlines)
-        return value.isEmpty ? "0.3.59" : value
+        return value.isEmpty ? "0.4.0" : value
     }()
     static let appBuild: Int = {
-        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "149"
-        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 149
+        let raw=(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String) ?? "150"
+        return Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) ?? 150
     }()
     static var userAgent:String { "FTS Printer macOS \(appVersion) Build \(appBuild)" }
 
@@ -811,7 +1110,14 @@ final class AppState: ObservableObject {
         if liveDeviceToken == nil { liveDeviceToken = Keychain.get("deviceToken") }
         if liveSessionToken == nil { liveSessionToken = Keychain.get("staffSession") }
         guard let dev = deviceToken, !dev.isEmpty else {
-            await loadDeviceAdmins()
+            if let offline=FTSOfflineAdminAuth.choice() {
+                staffChoices=[offline]
+                status="Offline-Administrator verfügbar · keine Serververbindung erforderlich."
+                errorMessage=nil
+                phase = .staffLogin
+            } else {
+                await loadDeviceAdmins()
+            }
             return
         }
         if let session = sessionToken, !session.isEmpty {
@@ -870,22 +1176,51 @@ final class AppState: ObservableObject {
     }
 
     func loadChoices() async {
-        guard let dev=deviceToken,!dev.isEmpty else { await loadDeviceAdmins(); return }
+        let offline=FTSOfflineAdminAuth.choice()
+        guard let dev=deviceToken,!dev.isEmpty else {
+            if let offline {
+                staffChoices=[offline]
+                errorMessage=nil
+                status="Offline-Administrator verfügbar · keine Serververbindung erforderlich."
+                phase = .staffLogin
+            } else {
+                await loadDeviceAdmins()
+            }
+            return
+        }
         do {
-            let rows:[StaffChoice] = try await api.rpc("fts_printer_login_choices_v72",body:["p_device_token":dev])
+            var rows:[StaffChoice] = try await api.rpc("fts_printer_login_choices_v72",body:["p_device_token":dev])
+            if let offline { rows.append(offline) }
             staffChoices=rows
             errorMessage=nil
             phase = .staffLogin
         } catch {
             if !(await recoverAuthentication(from:error)) {
-                // A network error is not a lost device activation.
-                errorMessage="Mitarbeiterliste konnte nicht geladen werden: \(error.localizedDescription)"
+                if let offline {
+                    staffChoices=[offline]
+                    errorMessage="FTS-Server nicht erreichbar. Offline-Administrator kann lokale Events öffnen."
+                } else {
+                    errorMessage="Mitarbeiterliste konnte nicht geladen werden: \(error.localizedDescription)"
+                }
                 phase = .staffLogin
             }
         }
     }
 
     func login(user: StaffChoice, code: String) async {
+        if user.user_id == FTSOfflineAdminAuth.choiceID {
+            guard FTSOfflineAdminAuth.verify(code) else {
+                errorMessage="Offline-Administrator-Code ist nicht korrekt.";return
+            }
+            currentUser=SessionInfo(
+                session_token:nil,user_id:Keychain.get("offlineAdminUserID"),
+                display_name:Keychain.get("offlineAdminName") ?? "FTS Offline-Administrator",
+                role:"printer_admin",expires_at:nil,logged_in_at:nil,avatar_path:nil,valid:true
+            )
+            _=await loadEvents()
+            errorMessage=nil;status="Offline-Modus · lokale Events";phase = .main
+            return
+        }
         guard let dev=deviceToken else{return}
         busy=true;defer{busy=false}
         do {
@@ -898,6 +1233,7 @@ final class AppState: ObservableObject {
             liveSessionToken=session
             _ = Keychain.set(session,key:"staffSession")
             currentUser=info
+            if info.role=="printer_admin" { FTSOfflineAdminAuth.configure(user:info,code:code) }
             if await loadEvents() {
                 phase = .main
             } else {
@@ -1021,29 +1357,71 @@ final class AppState: ObservableObject {
         preLoginUpdateInFlight=false
     }
 
+    func updatePrintSignalSubscription() {
+        guard selectedEvent?.usesOnlineStorage == true,sessionToken != nil else {
+            printSignalRealtime.stop()
+            return
+        }
+        printSignalRealtime.start { [weak self] in
+            guard let self,self.selectedEvent?.usesOnlineStorage == true else{return}
+            await self.refreshSelected()
+            await self.production.refresh(state:self)
+        }
+    }
+
+    func restartPrintSignalSubscription() {
+        updatePrintSignalSubscription()
+        printSignalRealtime.restart()
+    }
+
     @discardableResult
     func loadEvents() async -> Bool {
-        guard let dev=deviceToken,let session=sessionToken else{return false}
+        let localRows=FTSLocalEventStore.load()
+        guard let dev=deviceToken,let session=sessionToken else {
+            events=localRows
+            if !events.contains(where:{$0.event_token==selectedEventToken}) { selectedEventToken=events.first?.event_token ?? "" }
+            if let e=selectedEvent {
+                localImport.load(event:e);mediaIngest.load(event:e)
+                production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
+            }
+            orders=[];stock=nil
+            printSignalRealtime.stop()
+            status=events.isEmpty ? "Offline · noch kein lokales Event gespeichert." : "Offline · lokale Events geladen."
+            return !events.isEmpty
+        }
+
         busy=true;defer{busy=false}
         do {
-            let rows:[EventRow]=try await api.rpc("fts_printer_events_v74",body:["p_device_token":dev,"p_session_token":session])
-            events=rows
-            if !rows.contains(where:{$0.event_token==selectedEventToken}) { selectedEventToken=rows.first?.event_token ?? "" }
+            let onlineRows:[EventRow]=try await api.rpc("fts_printer_events_v150",body:["p_device_token":dev,"p_session_token":session])
+            for row in onlineRows where row.usesLocalStorage { try? FTSLocalEventStore.upsert(row) }
+            var merged=onlineRows
+            for local in FTSLocalEventStore.load() where !merged.contains(where:{$0.event_token==local.event_token}) { merged.append(local) }
+            events=merged
+            if !events.contains(where:{$0.event_token==selectedEventToken}) { selectedEventToken=events.first?.event_token ?? "" }
             if let e=selectedEvent {
-                localImport.load(event:e)
-                mediaIngest.load(event:e)
+                localImport.load(event:e);mediaIngest.load(event:e)
                 production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
             }
             if selectedEventToken.isEmpty {
-                orders=[]
-                stock=nil
-                status="Kein freigegebenes Printer-Event gefunden."
+                orders=[];stock=nil;status="Kein freigegebenes Printer-Event gefunden."
+                printSignalRealtime.stop()
             } else {
+                updatePrintSignalSubscription()
                 await refreshSelected()
             }
             return true
         } catch {
             if await recoverAuthentication(from:error) { return false }
+            if !localRows.isEmpty {
+                events=localRows
+                if !events.contains(where:{$0.event_token==selectedEventToken}) { selectedEventToken=events.first?.event_token ?? "" }
+                if let e=selectedEvent {
+                    localImport.load(event:e);mediaIngest.load(event:e)
+                    production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
+                }
+                orders=[];stock=nil;printSignalRealtime.stop();status="Offline · lokale Events geladen.";errorMessage=nil
+                return true
+            }
             errorMessage="Events konnten nicht geladen werden: "+error.localizedDescription
             return false
         }
@@ -1052,19 +1430,22 @@ final class AppState: ObservableObject {
     func selectEvent(_ token:String) async {
         selectedEventToken=token
         if let e=selectedEvent {
-                localImport.load(event:e)
-                mediaIngest.load(event:e)
-                production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
-            }
+            localImport.load(event:e)
+            mediaIngest.load(event:e)
+            production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
+        }
+        updatePrintSignalSubscription()
         await refreshSelected()
     }
 
     @discardableResult
     func refreshSelectedEventDefinition() async -> Bool {
-        guard let dev=deviceToken,let session=sessionToken,!selectedEventToken.isEmpty else{return false}
+        guard let selected=selectedEvent,!selectedEventToken.isEmpty else{return false}
+        if selected.storageMode == .local { return false }
+        guard let dev=deviceToken,let session=sessionToken else{return false}
         do {
             let rows:[EventRow]=try await api.rpc(
-                "fts_printer_events_v74",
+                "fts_printer_events_v150",
                 body:["p_device_token":dev,"p_session_token":session]
             )
             guard let fresh=rows.first(where:{$0.event_token==selectedEventToken}) else{return false}
@@ -1100,7 +1481,13 @@ final class AppState: ObservableObject {
     }
 
     func refreshSelected() async {
-        guard let dev=deviceToken,let session=sessionToken,!selectedEventToken.isEmpty else{return}
+        guard let event=selectedEvent,!selectedEventToken.isEmpty else{return}
+        if event.storageMode == .local {
+            orders=[];stock=nil;status="Nur Laptop · lokal gespeichert";return
+        }
+        guard let dev=deviceToken,let session=sessionToken else {
+            status="Offline · lokale Daten bleiben verfügbar";return
+        }
         do {
             async let o:[PrintOrder]=api.rpc("fts_printer_orders_v73",body:["p_device_token":dev,"p_session_token":session,"p_event_token":selectedEventToken])
             async let s:StockSnapshot=api.rpc("fts_printer_stock_v73",body:["p_device_token":dev,"p_session_token":session,"p_event_token":selectedEventToken])
@@ -1174,18 +1561,22 @@ final class AppState: ObservableObject {
     }
 
     func printLocalPhoto(_ record:ImportRecord) async {
-        guard let event=selectedEvent,let dev=deviceToken,let session=sessionToken else{return}
+        guard let event=selectedEvent else{return}
         busy=true;defer{busy=false}
         do {
             let rendered=try LocalRenderer.renderedImage(sourceURL:URL(fileURLWithPath:record.importedPath),event:event)
             let ok=Printer.printImage(rendered,copies:1,title:"FTS Kamera · \(record.originalName)")
             if !ok{return}
-            let day=event.event_date ?? ISO8601DateFormatter().string(from:Date()).prefix(10).description
-            let s:StockSnapshot=try await api.rpc("fts_printer_log_camera_print_v73",body:[
-                "p_device_token":dev,"p_session_token":session,"p_event_token":event.event_token,
-                "p_event_day":day,"p_quantity":1,"p_file_name":record.originalName
-            ])
-            stock=s
+            if event.usesOnlineStorage,let dev=deviceToken,let session=sessionToken {
+                let day=event.event_date ?? ISO8601DateFormatter().string(from:Date()).prefix(10).description
+                let s:StockSnapshot=try await api.rpc("fts_printer_log_camera_print_v73",body:[
+                    "p_device_token":dev,"p_session_token":session,"p_event_token":event.event_token,
+                    "p_event_day":day,"p_quantity":1,"p_file_name":record.originalName
+                ])
+                stock=s
+            } else {
+                status="Gedruckt · lokal"
+            }
         } catch {
             if !(await recoverAuthentication(from:error)) { errorMessage=error.localizedDescription }
         }
@@ -1307,10 +1698,7 @@ struct DeviceSetupView: View {
         .onAppear{if selected.isEmpty{selected=state.deviceAdmins.first?.user_id ?? ""}}
         .onChange(of:state.deviceAdmins){_ in if !state.deviceAdmins.contains(where:{$0.user_id==selected}){selected=state.deviceAdmins.first?.user_id ?? ""}}
         .task {
-            while !Task.isCancelled && state.phase == .deviceSetup && state.deviceAdmins.isEmpty {
-                await state.loadDeviceAdmins()
-                try? await Task.sleep(for:.seconds(8))
-            }
+            if state.phase == .deviceSetup && state.deviceAdmins.isEmpty { await state.loadDeviceAdmins() }
         }
     }
 }
@@ -1365,10 +1753,7 @@ struct StaffLoginView: View {
             }
         }
         .task {
-            while !Task.isCancelled && state.phase == .staffLogin && state.staffChoices.isEmpty {
-                await state.loadChoices()
-                try? await Task.sleep(for:.seconds(8))
-            }
+            if state.phase == .staffLogin && state.staffChoices.isEmpty { await state.loadChoices() }
         }
         .alert("Mac-Kopplung wirklich zurücksetzen?",isPresented:$showResetDevice) {
             Button("Abbrechen",role:.cancel){}
@@ -1543,16 +1928,24 @@ struct MainView: View {
                     }
                 }
                 state.production.loadLocalQueue(folderPath:state.mediaIngest.activation?.folderPath)
+
+                if e.usesOnlineStorage {
+                    await state.refreshSelected()
+                    await state.production.refresh(state:state)
+                } else {
+                    await state.production.refreshLocalRuntime(state:state)
+                }
             }
-            await state.production.checkUpdate(platform:"macos")
-            if state.production.updateAvailable,
-               state.production.updateRelease?.build_number != postponedUpdateBuild,
-               !printingActive { updatePrompt=true }
-            var updateElapsed:Double = 0
+            if state.selectedEvent?.usesOnlineStorage == true {
+                await state.production.checkUpdate(platform:"macos")
+                if state.production.updateAvailable,
+                   state.production.updateRelease?.build_number != postponedUpdateBuild,
+                   !printingActive { updatePrompt=true }
+            }
+
             var printerDiscoveryElapsed:Double = 0
             while !Task.isCancelled {
-                await state.refreshSelected()
-                await state.production.refresh(state:state)
+                await state.production.refreshLocalRuntime(state:state)
 
                 if let current=state.selectedEvent,
                    current.operation_mode=="print_only" || current.local_camera_photos==true {
@@ -1565,22 +1958,12 @@ struct MainView: View {
                     }
                 }
 
-                let active = printingActive || state.production.hasDispatchableWork
-                let delay:Double = active ? 3 : 6
-                updateElapsed += delay
+                let delay:Double = (printingActive || state.production.localWaitingCount>0) ? 2 : 4
                 printerDiscoveryElapsed += delay
-
                 if printerDiscoveryElapsed >= 12 {
                     printerDiscoveryElapsed = 0
                     await state.production.discoverPrinters()
                 }
-                if updateElapsed >= 900 {
-                    updateElapsed = 0
-                    await state.production.checkUpdate(platform:"macos")
-                }
-                if state.production.updateAvailable,
-                   state.production.updateRelease?.build_number != postponedUpdateBuild,
-                   !printingActive,!updatePrompt,!updateInstalling { updatePrompt=true }
                 try? await Task.sleep(for:.seconds(delay))
             }
         }
@@ -1700,6 +2083,13 @@ struct MainView: View {
                 .frame(width:300,alignment:.leading)
             }
             Spacer(minLength:6)
+            Text(event.storageMode.label)
+                .font(.caption.bold())
+                .foregroundStyle(event.storageMode == .local ? Color.orange : (event.storageMode == .hybrid ? FTSTheme.gold : FTSTheme.cyan))
+                .padding(.horizontal,9).padding(.vertical,5)
+                .background(Color.black.opacity(0.28))
+                .clipShape(Capsule())
+                .help(event.storageMode == .local ? "Event arbeitet vollständig lokal ohne Supabase." : (event.storageMode == .hybrid ? "Lokale Speicherung mit kontrollierter Online-Synchronisierung." : "Online-Speicherung über Supabase."))
             FTSTopOperationalStatus(core:state.production)
             StockPill(stock:state.stock)
             if state.currentUser?.role=="printer_admin" {
@@ -1911,7 +2301,7 @@ struct FTSEventOverviewView:View {
                     }.ftsCard()
                 }
 
-                Button("Eventdaten aktualisieren"){Task{await state.refreshSelected()}}
+                Button("Eventdaten aktualisieren"){Task{state.restartPrintSignalSubscription();await state.refreshSelected();await state.production.refresh(state:state)}}
                     .buttonStyle(.borderedProminent)
             }.padding(16)
         }
@@ -2603,10 +2993,7 @@ struct FTSPrinterApp: App {
             .tint(FTSTheme.cyan)
             .task {
                 if state.phase == .boot { await state.bootstrap() }
-                while !Task.isCancelled {
-                    if state.phase != .main { await state.checkPreLoginUpdate() }
-                    try? await Task.sleep(for:.seconds(30))
-                }
+                if state.phase != .main { await state.checkPreLoginUpdate() }
             }
         }
         .windowStyle(.titleBar)

@@ -195,18 +195,24 @@ final class MediaIngestV80: ObservableObject {
         if selectedDay.isEmpty { selectedDay=preferredDay(for:event) }
         try createDailyAlbums(event:event)
         load(event:event)
-        status="Tagesalbum \(selectedDay) aktiv. SD-Karten können A–Z zugeordnet werden."
+        status="Tagesalbum \(selectedDay) aktiv · \(event.storageMode.label). SD-Karten können A–Z zugeordnet werden."
+    }
+
+    private func persistEventDefinition(_ event:EventRow) throws {
+        let fm=FileManager.default
+        let eventRoot=FTSLocalStoragePaths.eventRoot(event)
+        try fm.createDirectory(at:eventRoot,withIntermediateDirectories:true)
+        try fm.createDirectory(at:eventRoot.appendingPathComponent("Layout und Banner",isDirectory:true),withIntermediateDirectories:true)
+        let settingsDir=eventRoot.appendingPathComponent("Veranstaltungseinstellungen",isDirectory:true)
+        try fm.createDirectory(at:settingsDir,withIntermediateDirectories:true)
+        let settingsURL=settingsDir.appendingPathComponent("event.json")
+        try JSONEncoder().encode(event).write(to:settingsURL,options:.atomic)
     }
 
     private func createDailyAlbums(event:EventRow) throws {
         let fm=FileManager.default
-        let pictures=fm.urls(for:.picturesDirectory,in:.userDomainMask).first
-            ?? fm.homeDirectoryForCurrentUser.appendingPathComponent("Pictures")
-        let root=pictures.appendingPathComponent("FTS Print Events",isDirectory:true)
-        let code=sanitize(event.short_code ?? event.event_token)
-        let name=sanitize(event.event_title)
-        let eventRoot=root.appendingPathComponent("\(code) - \(name)",isDirectory:true)
-        try fm.createDirectory(at:eventRoot,withIntermediateDirectories:true)
+        let eventRoot=FTSLocalStoragePaths.eventRoot(event)
+        try persistEventDefinition(event)
 
         var days=eventDays(event)
         if days.isEmpty { days=[selectedDay.isEmpty ? todayString() : selectedDay] }
@@ -216,6 +222,7 @@ final class MediaIngestV80: ObservableObject {
             let wlan=folder.appendingPathComponent("WLAN Kamera Eingang",isDirectory:true)
             try fm.createDirectory(at:original,withIntermediateDirectories:true)
             try fm.createDirectory(at:folder.appendingPathComponent("Druckbereit",isDirectory:true),withIntermediateDirectories:true)
+            try fm.createDirectory(at:folder.appendingPathComponent("Druckfotos mit Design",isDirectory:true),withIntermediateDirectories:true)
             let archive=folder.appendingPathComponent("Archiv",isDirectory:true)
             try fm.createDirectory(at:archive.appendingPathComponent("Produziert",isDirectory:true),withIntermediateDirectories:true)
             try fm.createDirectory(at:archive.appendingPathComponent("Fehler",isDirectory:true),withIntermediateDirectories:true)
@@ -388,6 +395,8 @@ final class MediaIngestV80: ObservableObject {
         scanning=true
         status="Aktuelles Veranstalter-Design wird geladen …"
         defer{scanning=false}
+        do { try persistEventDefinition(event) }
+        catch { status="Eventeinstellungen konnten lokal nicht gespeichert werden: \(error.localizedDescription)";return }
         let designed=await ensureDesignedCopies(event:event,activation:a,items:items)
         items=designed.items.sorted{$0.importedAt>$1.importedAt}
         if designed.failed>0 {

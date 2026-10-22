@@ -1315,19 +1315,41 @@ struct ProductionMediaContent: View {
         )
     }
 
-    func statusText(for item:V80MediaItem)->String {
-        switch item.effectiveWorkflow {
-        case .active: return "Neu"
-        case .queued: return "Im Druck / Warteschlange"
-        case .error: return "Druckproblem"
-        case .produced:
-            guard let updated=item.workflowUpdatedAt else{return "Fertig"}
-            let seconds=max(0,recentFinishedWindow-displayClock.timeIntervalSince(updated))
-            let left=max(1,Int((seconds/60.0).rounded(.up)))
-            return "Fertig · noch \(left) Min sichtbar"
-        case .delivered: return "Archiv"
-        case .hidden: return "Ausgeblendet"
+    func storageStatus(for item:V80MediaItem)->String {
+        guard let event else{return "Speicherstatus unbekannt"}
+        switch event.storageMode {
+        case .local:
+            return "Lokal gespeichert"
+        case .online:
+            return "Online-Event · lokale Arbeitskopie"
+        case .hybrid:
+            let related=core.localQueue.jobs.filter { job in job.units.contains(where:{$0.mediaID==item.id}) }
+            if related.contains(where:{$0.syncPending == true}) {
+                return "Lokal gespeichert · Online-Abgleich ausstehend"
+            }
+            if related.contains(where:{$0.serverRegistered == true}) {
+                return "Lokal gespeichert · Online-Abgleich bestätigt"
+            }
+            return "Lokal gespeichert · Online-Abgleich noch offen"
         }
+    }
+
+    func statusText(for item:V80MediaItem)->String {
+        let work:String
+        switch item.effectiveWorkflow {
+        case .active: work="Neu"
+        case .queued: work="Im Druck / Warteschlange"
+        case .error: work="Druckproblem"
+        case .produced:
+            if let updated=item.workflowUpdatedAt {
+                let seconds=max(0,recentFinishedWindow-displayClock.timeIntervalSince(updated))
+                let left=max(1,Int((seconds/60.0).rounded(.up)))
+                work="Fertig · noch \(left) Min sichtbar"
+            } else { work="Fertig" }
+        case .delivered: work="Archiv"
+        case .hidden: work="Ausgeblendet"
+        }
+        return work+" · "+storageStatus(for:item)
     }
 
     func statusColor(for item:V80MediaItem)->Color {
@@ -1751,21 +1773,15 @@ struct ProductionMediaContent: View {
         guard let initial=event else{return}
         ingest.load(event:initial)
         core.loadLocalQueue(folderPath:ingest.activation?.folderPath)
-        var designRefreshTicks=5
         while !Task.isCancelled {
             displayClock=Date()
             normalizeSource()
-            if designRefreshTicks>=5 {
-                _=await state.refreshSelectedEventDefinition()
-                designRefreshTicks=0
-            }
-            // Never keep the EventRow captured at screen-open time. Studio changes
-            // must flow into the very next design pass without re-opening the app.
+            // Karten-/WLAN-/USB-Erkennung bleibt lokal schnell. Die Eventdefinition
+            // wird nicht mehr alle fünf Sekunden vom Server nachgeladen.
             if let current=state.selectedEvent,ingest.activation != nil {
                 await ingest.scan(event:current)
             }
             try? await Task.sleep(for:.seconds(1))
-            designRefreshTicks += 1
         }
     }
 
@@ -2954,7 +2970,7 @@ struct ProductionSystemContent:View {
         }
         .task{
             await core.discoverPrinters()
-            await core.checkUpdate(platform:"macos")
+            if state.selectedEvent?.usesOnlineStorage == true { await core.checkUpdate(platform:"macos") }
             await core.refresh(state:state)
             while !Task.isCancelled {
                 try? await Task.sleep(for:.seconds(30))

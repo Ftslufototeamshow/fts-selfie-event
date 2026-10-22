@@ -9,13 +9,17 @@ on:
       - 'android-app/**'
       - '.github/workflows/**'
   push:
-    branches: [main, printer-core-v1]
+    branches: [main, printer-core-v1, feature/printer-offline-hybrid-20261022]
     paths:
       - 'macos-app/**'
       - '.github/workflows/build-macos-printer.yml'
 
 permissions:
   contents: write
+
+concurrency:
+  group: build-macos-printer-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -31,27 +35,27 @@ jobs:
         with:
           name: FTS-Printer-macOS
           path: |
-            dist/FTS-Printer-macOS-v0.3.59-green-room-speed.zip
-            dist/FTS-Printer-macOS-v0.3.59-green-room-speed.dmg
+            dist/FTS-Printer-macOS-v0.4.0-offline-hybrid.zip
+            dist/FTS-Printer-macOS-v0.4.0-offline-hybrid.dmg
           if-no-files-found: error
       - name: Publish downloadable release
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
+        if: github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="fts-printer-mac-v0.3.59-green-room-speed"
+          TAG="fts-printer-mac-v0.4.0-offline-hybrid"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.3.59-green-room-speed.zip dist/FTS-Printer-macOS-v0.3.59-green-room-speed.dmg --clobber
+            gh release upload "$TAG" dist/FTS-Printer-macOS-v0.4.0-offline-hybrid.zip dist/FTS-Printer-macOS-v0.4.0-offline-hybrid.dmg --clobber
           else
-            gh release create "$TAG" dist/FTS-Printer-macOS-v0.3.59-green-room-speed.zip dist/FTS-Printer-macOS-v0.3.59-green-room-speed.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.3.59 · Green Room + Speed" --notes "Build 149: Enthält den Rahmen-Fix aus Build 148 und ergänzt zwei Green-Screen-Verbesserungen. Erstens erkennt FTS jetzt auch Event-Cubes mit klar grüner Rückwand und weißen oder neutralen Seitenwänden als Green-Screen-Raum; nach sicherer Rückwanderkennung ersetzt die Personensegmentierung den kompletten Raum außerhalb der Personen, also auch nicht-grüne Seitenwände und Boden. Zweitens arbeitet die kleine und große interaktive Vorschau schneller: Vorschauen verwenden ein begrenztes Arbeitsbild und Vision Balanced, während der physische Druck weiterhin die volle Originalauflösung und Vision Accurate verwendet. Canon-Druckpfad, SD/WLAN/USB, Archiv, Material, QR, Remote-Admin und Druckwarteschlange bleiben unverändert."
+            gh release create "$TAG" dist/FTS-Printer-macOS-v0.4.0-offline-hybrid.zip dist/FTS-Printer-macOS-v0.4.0-offline-hybrid.dmg --target "$GITHUB_SHA" --title "FTS Printer macOS v0.4.0 · Offline + Hybrid" --notes "Build 150: Drei Event-Speichermodi Nur Laptop, Nur Online und Laptop und Online. Lokale Events speichern Originale, fertige Druckbilder, Layout/Banner und Eventeinstellungen dauerhaft auf dem Mac und bleiben ohne Supabase druckfähig. Offline-Administratorzugang wird sicher im macOS-Schlüsselbund eingerichtet. Hybrid-Aufträge bleiben bei Verbindungsausfall lokal verfügbar und werden kontrolliert nachsynchronisiert. Online-Aktualisierungen sind ereignisgesteuert statt dauerhaftem Polling. Bestehender Canon-SELPHY-Druck, SD A-Z, WLAN/USB-Kamera, Archiv, Material, Green Screen, MySelfie und QR-/Online-Funktionen bleiben erhalten."
           fi
 
       - name: Remove obsolete macOS releases
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/printer-core-v1'
+        if: github.ref == 'refs/heads/printer-core-v1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT="fts-printer-mac-v0.3.59-green-room-speed"
+          CURRENT="fts-printer-mac-v0.4.0-offline-hybrid"
           gh release list --limit 100 --json tagName --jq '.[].tagName' | while read TAG; do
             case "$TAG" in
               fts-printer-mac-v*)
