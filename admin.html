@@ -102,6 +102,15 @@
             <b style="color:#f0ce82">Nur Druck / Kamera-Print:</b> Kein öffentlicher Selfie-Link, keine Selfie-Galerie und kein Upload der Kamerafotos. Das Design-Studio und die spätere native Print-App verwenden nur die Event-/Design-Einstellungen.
           </div>
         </div>
+        <div class="operationModeBox" id="storageModeBox" style="margin-top:12px">
+          <label>Speicherort der Veranstaltung</label>
+          <div style="display:grid;gap:8px;margin-top:8px">
+            <label class="langSetting" style="align-items:flex-start"><input type="radio" name="storageMode" value="local"><span><b>Nur Laptop – vollständig offline</b><span class="hint" style="display:block;margin-top:3px">Originale, fertige Druckbilder, Layout und Einstellungen bleiben lokal auf dem Mac. Keine Foto-Cloud erforderlich.</span></span></label>
+            <label class="langSetting" style="align-items:flex-start"><input type="radio" name="storageMode" value="online" checked><span><b>Nur Online – Supabase</b><span class="hint" style="display:block;margin-top:3px">Bisheriger MySelfie-/Online-Betrieb. Lokale Kameraablage ist nicht der primäre Speicher.</span></span></label>
+            <label class="langSetting" style="align-items:flex-start"><input type="radio" name="storageMode" value="hybrid"><span><b>Laptop und Online</b><span class="hint" style="display:block;margin-top:3px">Lokal weiterarbeiten; vorgesehene Online-Daten werden zusätzlich synchronisiert.</span></span></label>
+          </div>
+          <div id="storageModeStatus" class="hint" style="margin-top:8px"></div>
+        </div>
         <div class="grid">
           <div><label>Eventname</label><input id="title" placeholder="Name des Events eintragen"></div>
           <div id="shortCodeWrap"><label id="shortCodeLabel">Kurzcode</label><input id="shortCode" placeholder="z. B. STREETFOOD26" maxlength="30"><div id="shortCodeHint" class="hint"></div></div>
@@ -1151,6 +1160,23 @@ function printDateIso(v){
   if(Number.isNaN(d.getTime()))throw new Error('Ungültige Druck-Zeit.');
   return d.toISOString();
 }
+function storageMode(){return document.querySelector('input[name="storageMode"]:checked')?.value||'online'}
+function storageModeLabel(v=storageMode()){return v==='local'?'Nur Laptop':v==='hybrid'?'Laptop und Online':'Nur Online'}
+function syncStorageModeUi(){
+  const box=$('#storageModeStatus');if(!box)return;
+  const mode=storageMode();
+  box.textContent=mode==='local'
+    ? 'Nur Laptop: Der native FTS Printer übernimmt den dauerhaften lokalen Eventordner und kann ohne Supabase weiterarbeiten.'
+    : mode==='hybrid'
+      ? 'Laptop und Online: lokal zuerst; Online-Synchronisierung nur bei neuen/geänderten Daten.'
+      : 'Nur Online: bestehende MySelfie-/Supabase-Funktionen bleiben aktiv.';
+}
+async function persistStorageMode(eventToken){
+  const saved=await rpc('fts_admin_set_event_storage_mode_v150',{
+    p_admin_code:authCredential(),p_event_token:eventToken,p_storage_mode:storageMode()
+  });
+  if(saved&&saved.ok===false)throw new Error('Speichermodus konnte nicht gespeichert werden.');
+}
 function operationMode(){return $('#operationMode')?.value||'selfie_print'}
 function syncOperationModeUi(){
   const printOnly=operationMode()==='print_only';
@@ -1275,6 +1301,7 @@ $('#createEvent').onclick=async()=>{
       await persistPrintSetting(eventToken);
       await persistPrintStock(eventToken);
       await persistOperationMode(eventToken);
+      await persistStorageMode(eventToken);
     }else{
       const args=eventArgs(true);const d=await rpc('fts_admin_create_event_v9',args),r=d[0];eventToken=r.event_token;storageSlug=r.storage_slug;alias=r.short_code;expires=r.expires_at;
       await persistEventAssets(eventToken,storageSlug,args.p_customer_token);
@@ -1285,6 +1312,7 @@ $('#createEvent').onclick=async()=>{
       await persistPrintSetting(eventToken);
       await persistPrintStock(eventToken);
       await persistOperationMode(eventToken);
+      await persistStorageMode(eventToken);
     }
 
     const guest=cfg.baseUrl+'?e='+encodeURIComponent(alias);const poster=cfg.baseUrl+'poster.html?e='+encodeURIComponent(alias);const customer=cfg.baseUrl+'customer.html?c='+encodeURIComponent($('#customerToken').value.trim());
@@ -1308,6 +1336,7 @@ function parseArr(v){if(Array.isArray(v))return v;try{return JSON.parse(v||'[]')
 function boolish(v){return v===true||v===1||String(v).toLowerCase()==='true'}
 async function loadModeEvent(token,duplicate=false){
   let e=await rpc('fts_admin_get_event_v9',{p_admin_code:authCredential(),p_event_token:token});if(!e)throw new Error('Event nicht gefunden.');
+  try{e.storage_mode=await rpc('fts_admin_get_event_storage_mode_v150',{p_admin_code:authCredential(),p_event_token:token})||'online'}catch(err){console.warn('Speichermodus',err);e.storage_mode='online'}
   try{const ex=await rpc('fts_admin_get_event_extras_v10',{p_admin_code:authCredential(),p_event_token:token});if(ex?.[0])e={...e,...ex[0]}}catch(err){console.warn('Event-Zusatzdaten',err)}
   try{const lcRows=await rpc('fts_admin_get_event_lifecycle_v41',{p_admin_code:authCredential(),p_event_token:token});if(lcRows?.[0])e.lifecycle_v11=lcRows[0]}catch(err){console.warn('Event-Lifecycle',err)}
   try{const lr=await rpc('fts_admin_get_lumorex_status_v2',{p_admin_code:authCredential(),p_event_token:token});const ls=Array.isArray(lr)?lr[0]:lr;if(ls)e.lumorex_enabled=ls.enabled!==false}catch(err){console.warn('LUMOREX / VIMA Show',err)}
@@ -1316,6 +1345,10 @@ async function loadModeEvent(token,duplicate=false){
   saveCustomer(e.customer_name,e.customer_token);$('#title').value=e.title||'';$('#subtitle').value=e.subtitle||'';$('#location').value=e.location||'';$('#overlay').value=e.overlay_text||'';
   $('#operationMode').value=e.operation_mode||'selfie_print';
   $('#localCameraPhotos').checked=e.local_camera_photos===true;
+  const loadedStorageMode=duplicate?'online':(e.storage_mode||'online');
+  const storageInput=document.querySelector('input[name="storageMode"][value="'+loadedStorageMode+'"]');
+  if(storageInput)storageInput.checked=true;
+  syncStorageModeUi();
   syncOperationModeUi();
   $('#shortCode').value=duplicate?slug(((e.short_code||slug(e.title))+'-2')).slice(0,30):(e.short_code||'');$('#shortCode').disabled=!duplicate;$('#shortCode').dataset.manual='1';$('#days').value=e.retention_days||3;$('#testDays').value=e.test_days_before??2;$('#lumorexEnabled').checked=e.lumorex_enabled!==false;
   const ps=duplicate?null:(e.print_settings||null);$('#printEnabled').checked=!!ps?.enabled;$('#printStartsAt').value=ps?.print_starts_at?dateTimeLocalFromTimestamp(ps.print_starts_at):'';$('#printEndsAt').value=ps?.print_ends_at?dateTimeLocalFromTimestamp(ps.print_ends_at):'';
@@ -1359,7 +1392,9 @@ initWorkAccordion();
 galleryLinks=[{id:crypto.randomUUID(),label:'Selfies ansehen',url:''}];renderGalleryLinks();$('#addGalleryLink').onclick=()=>addGalleryLink('','');renderLogoManager();renderDecoPicker();renderDecoManager();renderAdManager();updatePreview();document.querySelectorAll('#posterLanguageChecks input').forEach(x=>x.onchange=updatePreview);
 $('#tabletAttention').onchange=updatePreview;
 $('#operationMode').onchange=syncOperationModeUi;
+document.querySelectorAll('input[name="storageMode"]').forEach(x=>x.onchange=syncStorageModeUi);
 syncOperationModeUi();
+syncStorageModeUi();
 syncAdsToggleUi();syncCategoryCustom();
 initAuth();
 </script>
