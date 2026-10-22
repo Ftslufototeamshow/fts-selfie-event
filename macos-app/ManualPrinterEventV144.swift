@@ -584,19 +584,64 @@ extension AppState {
         guard currentUser?.role=="printer_admin" else{return false}
         let isPureLocal=event.event_token.hasPrefix("local_")
         if isPureLocal {
-            guard storageMode == .local else {
-                errorMessage="Dieses Event wurde vollständig offline angelegt. Für Online/Hybrid bitte bei bestehender Internetverbindung ein servergestütztes Event anlegen; vorhandene lokale Fotos bleiben dabei unverändert."
+            if storageMode == .local {
+                do {
+                    let updated=localUpdatedManualEvent(event:event,draft:draft)
+                    try FTSLocalEventStore.upsert(updated)
+                    if let i=events.firstIndex(where:{$0.event_token==event.event_token}) { events[i]=updated }
+                    if mediaIngest.activation != nil { await mediaIngest.refreshDesign(event:updated) }
+                    status="Manuelles Event und Fotodesign lokal gespeichert."
+                    return true
+                } catch {
+                    errorMessage=error.localizedDescription;return false
+                }
+            }
+
+            guard let dev=deviceToken,let session=sessionToken else {
+                errorMessage="Für den Wechsel auf Nur Online oder Laptop und Online ist einmalig eine FTS-Serververbindung erforderlich."
                 return false
             }
+
+            busy=true
+            defer{busy=false}
             do {
-                let updated=localUpdatedManualEvent(event:event,draft:draft)
-                try FTSLocalEventStore.upsert(updated)
-                if let i=events.firstIndex(where:{$0.event_token==event.event_token}) { events[i]=updated }
-                if mediaIngest.activation != nil { await mediaIngest.refreshDesign(event:updated) }
-                status="Manuelles Event und Fotodesign lokal gespeichert."
+                let result:FTSManualEventRPCResult=try await FTSAPI.shared.rpc(
+                    "fts_printer_promote_local_event_v154",
+                    body:[
+                        "p_device_token":dev,
+                        "p_session_token":session,
+                        "p_event_token":event.event_token,
+                        "p_title":draft.eventTitle.trimmingCharacters(in:.whitespacesAndNewlines),
+                        "p_event_date":FTSManualEventDate.string(draft.eventDate),
+                        "p_location":draft.location.trimmingCharacters(in:.whitespacesAndNewlines),
+                        "p_short_code":event.short_code ?? "",
+                        "p_storage_mode":storageMode.rawValue,
+                        "p_studio_config":draft.studioConfigPayload(),
+                        "p_logo_items":draft.logoItemsPayload(),
+                        "p_photo_branding":draft.showFTSBranding ? "bottom":"none"
+                    ]
+                )
+                guard result.ok==true,result.event_token==event.event_token else {
+                    throw NSError(domain:"FTSPrinter",code:314,userInfo:[NSLocalizedDescriptionKey:"Lokales Event konnte nicht sicher online freigegeben werden."])
+                }
+
+                _=await loadEvents()
+                if storageMode == .online {
+                    try? FTSLocalEventStore.remove(event.event_token)
+                } else if let current=events.first(where:{$0.event_token==event.event_token}) {
+                    try? FTSLocalEventStore.upsert(current)
+                }
+                if let current=events.first(where:{$0.event_token==event.event_token}),
+                   mediaIngest.activation != nil {
+                    await mediaIngest.refreshDesign(event:current)
+                }
+                selectedEventToken=event.event_token
+                updatePrintSignalSubscription()
+                status="Lokales Event freigegeben · \(storageMode.label). Event-ID und lokaler Fotoordner bleiben unverändert."
                 return true
             } catch {
-                errorMessage=error.localizedDescription;return false
+                if !(await recoverAuthentication(from:error)) { errorMessage=error.localizedDescription }
+                return false
             }
         }
         if storageMode != .online {
@@ -875,9 +920,8 @@ struct FTSManualPrinterEventEditor:View {
                                 Text("Laptop und Online").tag(FTSStorageMode.hybrid)
                             }
                             .pickerStyle(.segmented)
-                            .disabled(event.event_token.hasPrefix("local_"))
                             if event.event_token.hasPrefix("local_") {
-                                Text("Dieses Event wurde vollständig offline erstellt und behält seine lokale Event-ID. Es wird nicht automatisch als zweites Online-Event dupliziert.")
+                                Text("Ein rein lokales Event kann später einmalig online oder hybrid freigegeben werden. Die bestehende Event-ID, der lokale Fotoordner, Karten A–Z und lokale Druckdaten bleiben dabei erhalten.")
                                     .font(.caption2).foregroundStyle(FTSTheme.muted)
                             }
                             if storageMode != .online {
