@@ -216,6 +216,7 @@ final class MediaIngestV80: ObservableObject {
             let wlan=folder.appendingPathComponent("WLAN Kamera Eingang",isDirectory:true)
             try fm.createDirectory(at:original,withIntermediateDirectories:true)
             try fm.createDirectory(at:folder.appendingPathComponent("Druckbereit",isDirectory:true),withIntermediateDirectories:true)
+            try fm.createDirectory(at:folder.appendingPathComponent("Druckfotos mit Design",isDirectory:true),withIntermediateDirectories:true)
             let archive=folder.appendingPathComponent("Archiv",isDirectory:true)
             try fm.createDirectory(at:archive.appendingPathComponent("Produziert",isDirectory:true),withIntermediateDirectories:true)
             try fm.createDirectory(at:archive.appendingPathComponent("Fehler",isDirectory:true),withIntermediateDirectories:true)
