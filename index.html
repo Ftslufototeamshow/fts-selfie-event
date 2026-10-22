@@ -1606,7 +1606,9 @@ if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=78',{
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js"></script>
 <script src="./print-pickup-guest-v57.js"></script>
-<script src="./camera-live.js">async function resumeSumUpHostedCheckout(){
+<script src="./camera-live.js"></script>
+<script>
+async function resumeSumUpHostedCheckout(){
   const q=new URLSearchParams(location.search);
   if(q.get('sumup_return')!=='1')return;
   const orderId=q.get('print_order_id')||'';
