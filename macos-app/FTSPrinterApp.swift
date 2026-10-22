@@ -1110,7 +1110,14 @@ final class AppState: ObservableObject {
         if liveDeviceToken == nil { liveDeviceToken = Keychain.get("deviceToken") }
         if liveSessionToken == nil { liveSessionToken = Keychain.get("staffSession") }
         guard let dev = deviceToken, !dev.isEmpty else {
-            await loadDeviceAdmins()
+            if let offline=FTSOfflineAdminAuth.choice() {
+                staffChoices=[offline]
+                status="Offline-Administrator verfügbar · keine Serververbindung erforderlich."
+                errorMessage=nil
+                phase = .staffLogin
+            } else {
+                await loadDeviceAdmins()
+            }
             return
         }
         if let session = sessionToken, !session.isEmpty {
@@ -1169,8 +1176,18 @@ final class AppState: ObservableObject {
     }
 
     func loadChoices() async {
-        guard let dev=deviceToken,!dev.isEmpty else { await loadDeviceAdmins(); return }
         let offline=FTSOfflineAdminAuth.choice()
+        guard let dev=deviceToken,!dev.isEmpty else {
+            if let offline {
+                staffChoices=[offline]
+                errorMessage=nil
+                status="Offline-Administrator verfügbar · keine Serververbindung erforderlich."
+                phase = .staffLogin
+            } else {
+                await loadDeviceAdmins()
+            }
+            return
+        }
         do {
             var rows:[StaffChoice] = try await api.rpc("fts_printer_login_choices_v72",body:["p_device_token":dev])
             if let offline { rows.append(offline) }
