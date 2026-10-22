@@ -6,6 +6,7 @@ import CryptoKit
 import ImageIO
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import Network
 
 // MARK: - Configuration
 
@@ -831,6 +832,200 @@ extension NSColor {
     }
 }
 
+// MARK: - Minimal Realtime signal
+// Only a revision counter is subscribed. Order/customer/photo data is still
+// fetched through the existing authenticated RPCs after a real change.
+
+@MainActor
+final class FTSPrintSignalRealtime {
+    private var socket:URLSessionWebSocketTask?
+    private var receiveTask:Task<Void,Never>?
+    private var heartbeatTask:Task<Void,Never>?
+    private var reconnectTask:Task<Void,Never>?
+    private var debounceTask:Task<Void,Never>?
+    private var wanted=false
+    private var reconnectAttempt=0
+    private var refCounter=1
+    private var joinedOnce=false
+    private var onChange:(() async -> Void)?
+    private let pathMonitor=NWPathMonitor()
+    private let pathQueue=DispatchQueue(label:"lu.fts.printer.realtime-network")
+    private var networkSatisfied=true
+
+    init() {
+        pathMonitor.pathUpdateHandler={ [weak self] path in
+            Task { @MainActor in
+                guard let self else{return}
+                let satisfied=path.status == .satisfied
+                let restored=satisfied && !self.networkSatisfied
+                self.networkSatisfied=satisfied
+                if !satisfied {
+                    self.closeSocket()
+                } else if restored && self.wanted {
+                    self.reconnectAttempt=0
+                    self.connectIfNeeded()
+                }
+            }
+        }
+        pathMonitor.start(queue:pathQueue)
+    }
+
+    deinit { pathMonitor.cancel() }
+
+    func start(onChange:@escaping () async -> Void) {
+        self.onChange=onChange
+        wanted=true
+        reconnectAttempt=0
+        connectIfNeeded()
+    }
+
+    func stop() {
+        wanted=false
+        reconnectTask?.cancel();reconnectTask=nil
+        debounceTask?.cancel();debounceTask=nil
+        closeSocket()
+    }
+
+    func restart() {
+        guard wanted else{return}
+        reconnectAttempt=0
+        closeSocket()
+        connectIfNeeded()
+    }
+
+    private func connectIfNeeded() {
+        guard wanted,networkSatisfied,socket == nil else{return}
+        var components=URLComponents(url:FTSConfig.supabaseURL,resolvingAgainstBaseURL:false)!
+        components.scheme="wss"
+        components.path="/realtime/v1/websocket"
+        components.queryItems=[
+            URLQueryItem(name:"apikey",value:FTSConfig.publishableKey),
+            URLQueryItem(name:"vsn",value:"1.0.0")
+        ]
+        guard let url=components.url else{return}
+
+        let ws=URLSession.shared.webSocketTask(with:url)
+        socket=ws
+        ws.resume()
+
+        receiveTask=Task { [weak self] in
+            guard let self else{return}
+            do {
+                try await self.sendJoin()
+                try await self.receiveLoop()
+            } catch {
+                self.connectionFailed()
+            }
+        }
+        heartbeatTask=Task { [weak self] in
+            guard let self else{return}
+            while !Task.isCancelled,self.wanted,self.socket != nil {
+                try? await Task.sleep(for:.seconds(20))
+                guard !Task.isCancelled,self.wanted,self.socket != nil else{return}
+                do { try await self.sendHeartbeat() }
+                catch { self.connectionFailed();return }
+            }
+        }
+    }
+
+    private func nextRef()->String {
+        defer{refCounter += 1}
+        return String(refCounter)
+    }
+
+    private func sendJoin() async throws {
+        let ref=nextRef()
+        let object:[String:Any]=[
+            "topic":"realtime:fts-print-signal-v150",
+            "event":"phx_join",
+            "payload":[
+                "config":[
+                    "broadcast":["ack":false,"self":false],
+                    "presence":["enabled":false],
+                    "postgres_changes":[[
+                        "event":"UPDATE","schema":"public",
+                        "table":"fts_selfie_print_signal_v150",
+                        "filter":"id=eq.1",
+                        "select":["id","revision","changed_at"]
+                    ]],
+                    "private":false
+                ]
+            ],
+            "ref":ref,"join_ref":ref
+        ]
+        try await sendJSON(object)
+    }
+
+    private func sendHeartbeat() async throws {
+        try await sendJSON(["topic":"phoenix","event":"heartbeat","payload":[:],"ref":nextRef()])
+    }
+
+    private func sendJSON(_ object:[String:Any]) async throws {
+        guard let socket else{throw URLError(.notConnectedToInternet)}
+        let data=try JSONSerialization.data(withJSONObject:object)
+        guard let text=String(data:data,encoding:.utf8) else{throw URLError(.cannotEncodeContentData)}
+        try await socket.send(.string(text))
+    }
+
+    private func receiveLoop() async throws {
+        while wanted,!Task.isCancelled,let socket {
+            let message=try await socket.receive()
+            let text:String
+            switch message {
+            case .string(let value): text=value
+            case .data(let data): text=String(data:data,encoding:.utf8) ?? ""
+            @unknown default: text=""
+            }
+            guard !text.isEmpty,
+                  let data=text.data(using:.utf8),
+                  let object=try? JSONSerialization.jsonObject(with:data) as? [String:Any],
+                  let event=object["event"] as? String else{continue}
+
+            if event=="phx_reply",
+               let payload=object["payload"] as? [String:Any],
+               (payload["status"] as? String)=="ok" {
+                reconnectAttempt=0
+                if joinedOnce { scheduleChangeRefresh() }
+                joinedOnce=true
+            } else if event=="postgres_changes" {
+                scheduleChangeRefresh()
+            } else if event=="phx_error" || event=="phx_close" {
+                throw URLError(.networkConnectionLost)
+            }
+        }
+    }
+
+    private func scheduleChangeRefresh() {
+        debounceTask?.cancel()
+        debounceTask=Task { [weak self] in
+            try? await Task.sleep(for:.milliseconds(650))
+            guard let self,!Task.isCancelled,self.wanted else{return}
+            await self.onChange?()
+        }
+    }
+
+    private func closeSocket() {
+        heartbeatTask?.cancel();heartbeatTask=nil
+        receiveTask?.cancel();receiveTask=nil
+        socket?.cancel(with:.goingAway,reason:nil);socket=nil
+    }
+
+    private func connectionFailed() {
+        guard wanted else{return}
+        heartbeatTask?.cancel();heartbeatTask=nil
+        socket?.cancel(with:.goingAway,reason:nil);socket=nil
+        guard networkSatisfied,reconnectAttempt < 6 else{return}
+        reconnectAttempt += 1
+        let delay=min(30.0,pow(2.0,Double(reconnectAttempt)))
+        reconnectTask?.cancel()
+        reconnectTask=Task { [weak self] in
+            try? await Task.sleep(for:.seconds(delay))
+            guard let self,!Task.isCancelled,self.wanted else{return}
+            self.connectIfNeeded()
+        }
+    }
+}
+
 // MARK: - App State
 
 @MainActor
@@ -854,6 +1049,7 @@ final class AppState: ObservableObject {
     let mediaIngest = MediaIngestV80()
     let production = ProductionCore()
     private let api = FTSAPI.shared
+    private let printSignalRealtime=FTSPrintSignalRealtime()
     private var liveDeviceToken: String?
     private var liveSessionToken: String?
     private var preLoginUpdateInFlight = false
@@ -1134,6 +1330,23 @@ final class AppState: ObservableObject {
         preLoginUpdateInFlight=false
     }
 
+    func updatePrintSignalSubscription() {
+        guard selectedEvent?.usesOnlineStorage == true,sessionToken != nil else {
+            printSignalRealtime.stop()
+            return
+        }
+        printSignalRealtime.start { [weak self] in
+            guard let self,self.selectedEvent?.usesOnlineStorage == true else{return}
+            await self.refreshSelected()
+            await self.production.refresh(state:self)
+        }
+    }
+
+    func restartPrintSignalSubscription() {
+        updatePrintSignalSubscription()
+        printSignalRealtime.restart()
+    }
+
     @discardableResult
     func loadEvents() async -> Bool {
         let localRows=FTSLocalEventStore.load()
@@ -1145,6 +1358,7 @@ final class AppState: ObservableObject {
                 production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
             }
             orders=[];stock=nil
+            printSignalRealtime.stop()
             status=events.isEmpty ? "Offline · noch kein lokales Event gespeichert." : "Offline · lokale Events geladen."
             return !events.isEmpty
         }
@@ -1163,7 +1377,9 @@ final class AppState: ObservableObject {
             }
             if selectedEventToken.isEmpty {
                 orders=[];stock=nil;status="Kein freigegebenes Printer-Event gefunden."
+                printSignalRealtime.stop()
             } else {
+                updatePrintSignalSubscription()
                 await refreshSelected()
             }
             return true
@@ -1176,7 +1392,7 @@ final class AppState: ObservableObject {
                     localImport.load(event:e);mediaIngest.load(event:e)
                     production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
                 }
-                orders=[];stock=nil;status="Offline · lokale Events geladen.";errorMessage=nil
+                orders=[];stock=nil;printSignalRealtime.stop();status="Offline · lokale Events geladen.";errorMessage=nil
                 return true
             }
             errorMessage="Events konnten nicht geladen werden: "+error.localizedDescription
@@ -1187,10 +1403,11 @@ final class AppState: ObservableObject {
     func selectEvent(_ token:String) async {
         selectedEventToken=token
         if let e=selectedEvent {
-                localImport.load(event:e)
-                mediaIngest.load(event:e)
-                production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
-            }
+            localImport.load(event:e)
+            mediaIngest.load(event:e)
+            production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
+        }
+        updatePrintSignalSubscription()
         await refreshSelected()
     }
 
@@ -2055,7 +2272,7 @@ struct FTSEventOverviewView:View {
                     }.ftsCard()
                 }
 
-                Button("Eventdaten aktualisieren"){Task{await state.refreshSelected();await state.production.refresh(state:state)}}
+                Button("Eventdaten aktualisieren"){Task{state.restartPrintSignalSubscription();await state.refreshSelected();await state.production.refresh(state:state)}}
                     .buttonStyle(.borderedProminent)
             }.padding(16)
         }
