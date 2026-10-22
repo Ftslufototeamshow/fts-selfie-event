@@ -108,7 +108,7 @@ button,input,select{font:inherit}.shell{width:min(1100px,calc(100% - 24px));marg
 const cfg=window.FTS_CONFIG;
 const DEVICE_KEY='fts_device_token_v1',LEGACY_CODE_KEY='fts_cockpit_admin_code';
 const params=new URLSearchParams(location.search),launchEvent=params.get('event')||'',launchOrder=params.get('order')||'';
-let events=[],orders=[],years=[],receipts=[],activeTab='live',onlyReady=false,timer=null,deferredInstallPrompt=null,selectedYear=null;
+let events=[],orders=[],years=[],receipts=[],activeTab='live',onlyReady=false,deferredInstallPrompt=null,selectedYear=null,lastCoreLoadAt=0;
 const $=s=>document.querySelector(s);
 function headers(){return {'apikey':cfg.publishableKey,'Authorization':'Bearer '+cfg.publishableKey,'Content-Type':'application/json'}}
 async function rpc(name,body){const r=await fetch(cfg.supabaseUrl+'/rest/v1/rpc/'+name,{method:'POST',headers:headers(),body:JSON.stringify(body)});if(!r.ok){const e=new Error((await r.text())||('HTTP '+r.status));e.status=r.status;throw e}const t=await r.text();return t?JSON.parse(t):null}
@@ -154,7 +154,29 @@ function photoItemHtml(item,i,o){const path=item.designed_path||'';return '<div 
 function orderHtml(o){const p=paymentLabel(o.payment_status),pr=printLabel(o.print_status),items=Array.isArray(o.items)?o.items:[];const ready=o.payment_status==='COMPLETED'&&o.print_status==='READY';return '<article class="order '+statusClass(o)+'" data-order-card="'+esc(o.order_id)+'"><div class="orderTop"><div><div class="orderTitle">'+esc(o.event_title)+'</div><div class="orderMeta">'+esc(o.organizer_name)+' · '+dt(o.created_at)+'<br>Auftrag '+esc(String(o.order_id).slice(0,8).toUpperCase())+(o.receipt_number?' · '+esc(o.receipt_number):'')+'</div></div><div class="amount"><strong>'+euro(o.total_cents)+'</strong><small>'+Number(o.quantity_total||0)+' Ausdruck'+(Number(o.quantity_total||0)===1?'':'e')+'</small></div></div><div class="badges"><span class="badge '+p[1]+'">'+esc(p[0])+'</span><span class="badge '+pr[1]+'">'+esc(pr[0])+'</span>'+(o.event_closed?'<span class="badge">Event abgeschlossen</span>':'')+'</div><div class="photos">'+(items.length?items.map((x,i)=>photoItemHtml(x,i,o)).join(''):'<div class="photoMissing" style="width:126px">Keine Fotodatei mehr vorhanden</div>')+'</div><div class="orderActions">'+(ready?'<button class="printNow" data-print-order="'+esc(o.order_id)+'">Jetzt drucken</button><button class="doneBtn" data-mark-printed="'+esc(o.order_id)+'">Gedruckt bestätigen</button>':'')+(o.receipt_number?'<button class="receiptBtn" data-order-receipt="'+esc(o.order_id)+'">Beleg anzeigen</button>':'')+'</div></article>'}
 function bindOrderActions(root){root.querySelectorAll('[data-print-order]').forEach(b=>b.onclick=()=>printOrder(b.dataset.printOrder));root.querySelectorAll('[data-print-item]').forEach(b=>b.onclick=()=>printOrder(b.dataset.printItem,Number(b.dataset.itemIndex)));root.querySelectorAll('[data-mark-printed]').forEach(b=>b.onclick=()=>markPrinted(b.dataset.markPrinted,b));root.querySelectorAll('[data-order-receipt]').forEach(b=>b.onclick=()=>openReceiptByOrder(b.dataset.orderReceipt))}
 function renderOrders(){const ev=$('#eventFilter').value;let live=orders.filter(o=>!o.event_closed&&(!ev||o.event_token===ev));if(onlyReady)live=live.filter(o=>o.payment_status==='COMPLETED'&&o.print_status==='READY');$('#liveOrders').innerHTML=live.length?live.map(orderHtml).join(''):'<div class="empty">Aktuell keine passenden Druckaufträge.</div>';bindOrderActions($('#liveOrders'));const aev=$('#archiveEventFilter').value;const archived=orders.filter(o=>o.event_closed&&(!aev||o.event_token===aev));$('#archiveOrders').innerHTML=archived.length?archived.map(orderHtml).join(''):'<div class="empty">Noch keine archivierten Druckaufträge.</div>';bindOrderActions($('#archiveOrders'));computeMetrics(orders);if(launchOrder){const el=document.querySelector('[data-order-card="'+CSS.escape(launchOrder)+'"]');if(el)setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'center'}),150)}}
-async function loadCore(showStatus=true){if(showStatus)$('#statusText').textContent='Aktualisiere …';try{const [e,o,y]=await Promise.all([rpc('fts_admin_print_station_events_v46',{p_admin_code:credential()}),rpc('fts_admin_print_station_orders_v46',{p_admin_code:credential(),p_event_token:null}),rpc('fts_admin_print_year_summary_v46',{p_admin_code:credential()})]);events=e||[];orders=o||[];years=y||[];eventOptions($('#eventFilter'),false);eventOptions($('#archiveEventFilter'),true);if(launchEvent){$('#eventFilter').value=launchEvent}renderOrders();renderYears();$('#statusText').textContent='Aktuell · '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});if(!timer)timer=setInterval(()=>{if(activeTab==='live')loadCore(false)},5000)}catch(e){console.error(e);$('#statusText').textContent='Verbindung wird erneut versucht';if(isCredentialError(e)){localStorage.removeItem(DEVICE_KEY);setLoggedIn(false)}}}
+async function loadCore(showStatus=true,includeYears=false){
+  if(showStatus)$('#statusText').textContent='Aktualisiere …';
+  try{
+    const [e,o]=await Promise.all([
+      rpc('fts_admin_print_station_events_v46',{p_admin_code:credential()}),
+      rpc('fts_admin_print_station_orders_v46',{p_admin_code:credential(),p_event_token:null})
+    ]);
+    events=e||[];orders=o||[];
+    if(includeYears||!years.length)years=await rpc('fts_admin_print_year_summary_v46',{p_admin_code:credential()})||[];
+    eventOptions($('#eventFilter'),false);eventOptions($('#archiveEventFilter'),true);
+    if(launchEvent)$('#eventFilter').value=launchEvent;
+    renderOrders();renderYears();lastCoreLoadAt=Date.now();
+    $('#statusText').textContent='Aktuell · '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){
+    console.error(e);
+    $('#statusText').textContent=navigator.onLine?'Online-Daten konnten nicht geladen werden':'Offline · lokale Funktionen bleiben unberührt';
+    if(isCredentialError(e)){localStorage.removeItem(DEVICE_KEY);setLoggedIn(false)}
+  }
+}
+function refreshAfterReconnect(){
+  if(!credential()||document.visibilityState==='hidden')return;
+  loadCore(false,false);
+}
 async function signedPath(path,name){try{const j=await adminFiles('signed-photo-url',{path,filename:name});if(j?.url)return j.url}catch(e){console.warn('Signed print URL',e)}return photoUrl(path)}
 function ensurePhotoPrintStyle(){
   let s=document.getElementById('ftsPhotoPrintStyle58');
@@ -318,7 +340,7 @@ async function downloadYearZip(year,btn){
   finally{if(btn){btn.disabled=false;btn.textContent=old||'Belege als ZIP sichern'}}
 }
 async function printYear(year){let rows=[];try{rows=await rpc('fts_admin_print_receipts_v46',{p_admin_code:credential(),p_year:year,p_event_token:null})||[]}catch(e){return alert(e.message)}const sum=years.find(y=>Number(y.year)===Number(year));const w=window.open('','_blank');if(!w)return alert('Bitte Pop-ups erlauben.');w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>FTS Selfie '+year+'</title><style>body{font-family:system-ui;margin:18mm;color:#17201f}h1{font-size:30px;margin:4px 0}.ey{letter-spacing:.15em;font-size:10px;color:#826a39;font-weight:800}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:22px 0}.s{border:1px solid #ddd;padding:10px}.s b{display:block;font-size:18px}.s span{font-size:10px;color:#666}table{width:100%;border-collapse:collapse;font-size:11px}th,td{padding:7px;border-bottom:1px solid #ddd;text-align:left}th:last-child,td:last-child{text-align:right}@media print{body{margin:12mm}}</style></head><body><div class="ey">FTS.LU · SELFIE UMSATZ</div><h1>Jahresübersicht '+year+'</h1><div class="stats"><div class="s"><b>'+Number(sum?.orders||0)+'</b><span>AUFTRÄGE</span></div><div class="s"><b>'+Number(sum?.prints||0)+'</b><span>PRINTS</span></div><div class="s"><b>'+euro(sum?.gross_cents||0)+'</b><span>BRUTTO</span></div><div class="s"><b>'+euro(sum?.net_cents||0)+'</b><span>NACH ERSTATTUNGEN</span></div></div><table><thead><tr><th>Beleg</th><th>Event</th><th>Datum</th><th>Prints</th><th>Betrag</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+esc(r.receipt_number)+'</td><td>'+esc(r.event_title)+'</td><td>'+dt(r.paid_at)+'</td><td>'+Number(r.quantity_total)+'</td><td>'+euro(r.net_cents)+'</td></tr>').join('')+'</tbody></table><script>window.onload=()=>setTimeout(()=>window.print(),250)<\/script></body></html>');w.document.close()}
-function setTab(tab){activeTab=tab;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));$('#liveView').classList.toggle('hidden',tab!=='live');$('#archiveView').classList.toggle('hidden',tab!=='archive');$('#revenueView').classList.toggle('hidden',tab!=='revenue');if(tab==='revenue'&&!selectedYear&&years[0])loadReceipts(Number(years[0].year))}
+function setTab(tab){activeTab=tab;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));$('#liveView').classList.toggle('hidden',tab!=='live');$('#archiveView').classList.toggle('hidden',tab!=='archive');$('#revenueView').classList.toggle('hidden',tab!=='revenue');if(tab==='revenue'){loadCore(false,true).then(()=>{if(!selectedYear&&years[0])loadReceipts(Number(years[0].year))})}}
 $('#loginBtn').onclick=async()=>{const code=$('#adminCode').value.trim();if(!code)return;try{$('#loginBtn').disabled=true;await registerDevice(code);setLoggedIn(true);await loadCore()}catch(e){alert('Freischaltung fehlgeschlagen: '+e.message)}finally{$('#loginBtn').disabled=false}};
 $('#logoutBtn').onclick=()=>{localStorage.removeItem(DEVICE_KEY);location.reload()};
 $('#refreshBtn').onclick=()=>loadCore();$('#archiveRefreshBtn').onclick=()=>loadCore();$('#eventFilter').onchange=renderOrders;$('#archiveEventFilter').onchange=renderOrders;$('#onlyReadyBtn').onclick=()=>{onlyReady=!onlyReady;$('#onlyReadyBtn').textContent=onlyReady?'Alle Aufträge anzeigen':'Nur druckbereit';renderOrders()};
@@ -332,6 +354,8 @@ $('#cockpitBtn').addEventListener('click',()=>{try{localStorage.setItem('fts_adm
 window.addEventListener('appinstalled',()=>{try{localStorage.setItem('fts_print_station_installed_v2','1')}catch{}deferredInstallPrompt=null;refreshInstallButton()});
 matchMedia('(display-mode: standalone)').addEventListener?.('change',refreshInstallButton);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshInstallButton()});
+window.addEventListener('online',refreshAfterReconnect);
+
 $('#installBtn').onclick=async()=>{
   if(await printStationInstalled()){refreshInstallButton();return}
   if(deferredInstallPrompt){
