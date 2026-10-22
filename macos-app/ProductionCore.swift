@@ -2557,7 +2557,7 @@ final class ProductionCore: ObservableObject {
               let rep=NSBitmapImageRep(data:tiff),
               let jpg=rep.representation(using:.jpeg,properties:[.compressionFactor:0.96]) else{return nil}
         let folder=URL(fileURLWithPath:loadedFolderPath,isDirectory:true)
-            .appendingPathComponent("Archiv/Rendered",isDirectory:true)
+            .appendingPathComponent("Druckfotos mit Design",isDirectory:true)
         do {
             try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
             let url=folder.appendingPathComponent("\(jobID.uuidString)-\(unitID.uuidString).jpg")
