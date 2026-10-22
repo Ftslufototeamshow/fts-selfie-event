@@ -2046,13 +2046,14 @@ final class ProductionCore: ObservableObject {
     }
 
     func confirmLocalUnitPrinted(jobID:UUID,unitID:UUID,state:AppState) async {
-        guard let dev=state.deviceToken,let session=state.sessionToken,
-              let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
+        guard let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
               let ui=localQueue.jobs[ji].units.firstIndex(where:{$0.id==unitID}),
               localQueue.jobs[ji].units[ui].status == .uncertain else{return}
 
         let printerName=localQueue.jobs[ji].units[ui].printerName
-        if let printerName {
+        if state.selectedEvent?.usesOnlineStorage == true,
+           localQueue.jobs[ji].serverRegistered != false,
+           let printerName,let dev=state.deviceToken,let session=state.sessionToken {
             do {
                 let result:JSONValue = try await api.rpc("fts_printer_consume_local_unit_component_v87",body:[
                     "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
@@ -2061,7 +2062,11 @@ final class ProductionCore: ObservableObject {
                 localQueue.jobs[ji].units[ui].componentSynced = result["ok"]?.bool == true
             } catch {
                 localQueue.jobs[ji].units[ui].componentSynced = false
+                localQueue.jobs[ji].syncPending = state.selectedEvent?.storageMode == .hybrid
             }
+        } else {
+            localQueue.jobs[ji].units[ui].componentSynced = state.selectedEvent?.storageMode == .local
+            if state.selectedEvent?.storageMode == .hybrid { localQueue.jobs[ji].syncPending=true }
         }
 
         localQueue.jobs[ji].units[ui].status = .printed
@@ -2069,12 +2074,8 @@ final class ProductionCore: ObservableObject {
         localQueue.jobs[ji].units[ui].lastError = nil
 
         let allDone=localQueue.jobs[ji].units.allSatisfy{$0.status == .printed || $0.status == .cancelled}
-        if allDone {
-            await finalizeLocalJob(jobID:jobID,state:state)
-        } else {
-            localQueue.jobs[ji].status = .printing
-            saveLocalQueue()
-        }
+        if allDone { await finalizeLocalJob(jobID:jobID,state:state) }
+        else { localQueue.jobs[ji].status = .printing;saveLocalQueue() }
 
         if let printerName { clearPrinterError(printerName) }
     }
@@ -2083,16 +2084,45 @@ final class ProductionCore: ObservableObject {
         await finalizeLocalJob(jobID:jobID,state:state)
     }
 
-    private func finalizeLocalJob(jobID:UUID,state:AppState) async {
-        guard let dev=state.deviceToken,let session=state.sessionToken,
-              let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}) else{return}
+    private func completeLocalWorkflow(jobID:UUID,syncPending:Bool) {
+        guard let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}) else{return}
+        localQueue.jobs[ji].status = .readyForPickup
+        localQueue.jobs[ji].syncPending = syncPending
+        saveLocalQueue()
+        let stillNeeded=mediaIDsNeededByOtherActiveJobs(excluding:jobID)
+        let finishedIDs=mediaIDs(in:localQueue.jobs[ji]).subtracting(stillNeeded)
+        do {
+            try MediaIngestV80.setWorkflowSync(
+                folderPath:loadedFolderPath,mediaIDs:finishedIDs,status:.produced,moveDesignedFile:true
+            )
+        } catch {
+            lastError="Druck fertig, aber die lokale Datei konnte nicht nach Archiv/Produziert verschoben werden: \(error.localizedDescription)"
+        }
+    }
 
+    private func finalizeLocalJob(jobID:UUID,state:AppState) async {
+        guard let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
+              let event=state.selectedEvent else{return}
         guard localQueue.jobs[ji].units.allSatisfy({$0.status == .printed || $0.status == .cancelled}) else{return}
 
-        // First reconcile every physical print with the per-printer RP-108 counters.
+        if event.storageMode == .local {
+            completeLocalWorkflow(jobID:jobID,syncPending:false)
+            lastError=nil
+            return
+        }
+
+        guard let dev=state.deviceToken,let session=state.sessionToken,
+              localQueue.jobs[ji].serverRegistered != false else {
+            if event.storageMode == .hybrid {
+                completeLocalWorkflow(jobID:jobID,syncPending:true)
+                lastError="Druck lokal fertig · Online-Synchronisierung ausstehend."
+            }
+            return
+        }
+
         for ui in localQueue.jobs[ji].units.indices {
             let unit=localQueue.jobs[ji].units[ui]
-            guard unit.status == .printed, unit.componentSynced != true, let printerName=unit.printerName else{continue}
+            guard unit.status == .printed,unit.componentSynced != true,let printerName=unit.printerName else{continue}
             do {
                 let result:JSONValue = try await api.rpc("fts_printer_consume_local_unit_component_v87",body:[
                     "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
@@ -2100,9 +2130,13 @@ final class ProductionCore: ObservableObject {
                 ])
                 localQueue.jobs[ji].units[ui].componentSynced = result["ok"]?.bool == true
             } catch {
-                localQueue.jobs[ji].status = .uncertain
-                saveLocalQueue()
-                lastError="Drucke sind fertig. Material-/Auftragssynchronisierung wartet auf Verbindung."
+                if event.storageMode == .hybrid {
+                    completeLocalWorkflow(jobID:jobID,syncPending:true)
+                    lastError="Druck lokal fertig · Material-/Auftragssynchronisierung ausstehend."
+                } else {
+                    localQueue.jobs[ji].status = .uncertain;saveLocalQueue()
+                    lastError="Drucke sind fertig. Material-/Auftragssynchronisierung wartet auf Verbindung."
+                }
                 return
             }
         }
@@ -2116,53 +2150,104 @@ final class ProductionCore: ObservableObject {
             guard result["ok"]?.bool == true else {
                 throw NSError(domain:"FTSPrinter",code:188,userInfo:[NSLocalizedDescriptionKey:"Lokaler Auftrag konnte nicht abgeschlossen werden."])
             }
-            localQueue.jobs[ji].status = .readyForPickup
-            saveLocalQueue()
-            let stillNeeded=mediaIDsNeededByOtherActiveJobs(excluding:jobID)
-            let finishedIDs=mediaIDs(in:localQueue.jobs[ji]).subtracting(stillNeeded)
-            do {
-                try MediaIngestV80.setWorkflowSync(folderPath:loadedFolderPath,mediaIDs:finishedIDs,status:.produced,moveDesignedFile:true)
-            } catch {
-                lastError="Druck fertig, aber die lokale Datei konnte nicht nach Archiv/Produziert verschoben werden: \(error.localizedDescription)"
-            }
-            await refresh(state:state)
+            completeLocalWorkflow(jobID:jobID,syncPending:false)
         } catch {
-            localQueue.jobs[ji].status = .uncertain
-            saveLocalQueue()
-            lastError="Alle Ausdrucke sind fertig, aber der Abschluss konnte noch nicht synchronisiert werden. Keine Fotos erneut drucken."
+            if event.storageMode == .hybrid {
+                completeLocalWorkflow(jobID:jobID,syncPending:true)
+                lastError="Druck lokal fertig · Online-Synchronisierung ausstehend."
+            } else {
+                localQueue.jobs[ji].status = .uncertain;saveLocalQueue()
+                lastError="Alle Ausdrucke sind fertig, aber der Abschluss konnte noch nicht synchronisiert werden. Keine Fotos erneut drucken."
+            }
+        }
+    }
+
+    private func syncPendingLocalJobs(state:AppState) async {
+        guard state.selectedEvent?.storageMode == .hybrid,
+              let dev=state.deviceToken,let session=state.sessionToken else{return}
+
+        let ids=localQueue.jobs.filter{$0.syncPending == true}.map{$0.id}
+        for jobID in ids {
+            guard let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}) else{continue}
+            let qty=localQueue.jobs[ji].units.filter{$0.status != .cancelled}.count
+            if localQueue.jobs[ji].serverRegistered != true {
+                do {
+                    let result:V80LocalJobCreate = try await api.rpc("fts_printer_create_local_job_v92",body:[
+                        "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
+                        "p_event_day":localQueue.jobs[ji].eventDay ?? state.mediaIngest.selectedDay,
+                        "p_local_job_id":jobID.uuidString,"p_source_type":localQueue.jobs[ji].sourceType,
+                        "p_source_label":localQueue.jobs[ji].sourceLabel,"p_quantity":qty
+                    ])
+                    guard result.ok==true else{continue}
+                    if let code=result.customer_code { localQueue.jobs[ji].customerCode=code }
+                    localQueue.jobs[ji].serverRegistered=true
+                    saveLocalQueue()
+                } catch { continue }
+            }
+
+            var componentFailure=false
+            for ui in localQueue.jobs[ji].units.indices {
+                let unit=localQueue.jobs[ji].units[ui]
+                guard unit.status == .printed,unit.componentSynced != true,let printerName=unit.printerName else{continue}
+                do {
+                    let result:JSONValue=try await api.rpc("fts_printer_consume_local_unit_component_v87",body:[
+                        "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
+                        "p_printer_key":backendPrinterKey(printerName),"p_local_unit_id":unit.id.uuidString
+                    ])
+                    localQueue.jobs[ji].units[ui].componentSynced=result["ok"]?.bool == true
+                } catch { componentFailure=true;break }
+            }
+            if componentFailure { saveLocalQueue();continue }
+
+            guard localQueue.jobs[ji].status == .readyForPickup else {
+                localQueue.jobs[ji].syncPending=false;saveLocalQueue();continue
+            }
+            let summary=localQueue.jobs[ji].units.map{$0.originalName}.joined(separator:", ")
+            do {
+                let result:JSONValue=try await api.rpc("fts_printer_complete_local_job_v80",body:[
+                    "p_device_token":dev,"p_session_token":session,"p_local_job_id":jobID.uuidString,
+                    "p_file_summary":summary
+                ])
+                if result["ok"]?.bool == true {
+                    localQueue.jobs[ji].syncPending=false
+                    saveLocalQueue()
+                }
+            } catch { continue }
         }
     }
 
     func requeueLocalUnit(jobID:UUID,unitID:UUID,confirmedNotPrinted:Bool,state:AppState) async {
         guard confirmedNotPrinted,
-              let dev=state.deviceToken,let session=state.sessionToken,
               let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
               let ui=localQueue.jobs[ji].units.firstIndex(where:{$0.id==unitID}),
               localQueue.jobs[ji].units[ui].status == .uncertain else{return}
 
         let oldPrinter=localQueue.jobs[ji].units[ui].printerName
-        do {
-            let ok:Bool = try await api.rpc("fts_printer_requeue_local_job_v95",body:[
-                "p_device_token":dev,"p_session_token":session,"p_local_job_id":jobID.uuidString
-            ])
-            guard ok else {
-                throw NSError(domain:"FTSPrinter",code:195,userInfo:[NSLocalizedDescriptionKey:"Auftrag konnte serverseitig nicht erneut freigegeben werden."])
+        if state.selectedEvent?.usesOnlineStorage == true,
+           localQueue.jobs[ji].serverRegistered != false,
+           let dev=state.deviceToken,let session=state.sessionToken {
+            do {
+                let ok:Bool = try await api.rpc("fts_printer_requeue_local_job_v95",body:[
+                    "p_device_token":dev,"p_session_token":session,"p_local_job_id":jobID.uuidString
+                ])
+                guard ok else {
+                    throw NSError(domain:"FTSPrinter",code:195,userInfo:[NSLocalizedDescriptionKey:"Auftrag konnte serverseitig nicht erneut freigegeben werden."])
+                }
+            } catch {
+                if state.selectedEvent?.storageMode == .online { lastError=error.localizedDescription;return }
+                localQueue.jobs[ji].syncPending=true
             }
-
-            localQueue.jobs[ji].units[ui].status = .waiting
-            localQueue.jobs[ji].units[ui].printerName = nil
-            localQueue.jobs[ji].units[ui].startedAt = nil
-            localQueue.jobs[ji].units[ui].lastError = nil
-            localQueue.jobs[ji].status = .waiting
-            saveLocalQueue()
-
-            if let oldPrinter { clearPrinterError(oldPrinter) }
-            lastError=nil
-            await refresh(state:state)
-            dispatchAvailable(state:state)
-        } catch {
-            lastError=error.localizedDescription
         }
+
+        localQueue.jobs[ji].units[ui].status = .waiting
+        localQueue.jobs[ji].units[ui].printerName = nil
+        localQueue.jobs[ji].units[ui].startedAt = nil
+        localQueue.jobs[ji].units[ui].lastError = nil
+        localQueue.jobs[ji].status = .waiting
+        saveLocalQueue()
+        if let oldPrinter { clearPrinterError(oldPrinter) }
+        lastError=nil
+        dispatchAvailable(state:state)
     }
 
     private func nextOfflineCustomerCode(eventToken:String,eventDay:String)->String {
