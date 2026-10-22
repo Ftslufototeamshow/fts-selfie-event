@@ -198,7 +198,7 @@ final class MediaIngestV80: ObservableObject {
         status="Tagesalbum \(selectedDay) aktiv · \(event.storageMode.label). SD-Karten können A–Z zugeordnet werden."
     }
 
-    private func createDailyAlbums(event:EventRow) throws {
+    private func persistEventDefinition(_ event:EventRow) throws {
         let fm=FileManager.default
         let eventRoot=FTSLocalStoragePaths.eventRoot(event)
         try fm.createDirectory(at:eventRoot,withIntermediateDirectories:true)
@@ -207,6 +207,12 @@ final class MediaIngestV80: ObservableObject {
         try fm.createDirectory(at:settingsDir,withIntermediateDirectories:true)
         let settingsURL=settingsDir.appendingPathComponent("event.json")
         try JSONEncoder().encode(event).write(to:settingsURL,options:.atomic)
+    }
+
+    private func createDailyAlbums(event:EventRow) throws {
+        let fm=FileManager.default
+        let eventRoot=FTSLocalStoragePaths.eventRoot(event)
+        try persistEventDefinition(event)
 
         var days=eventDays(event)
         if days.isEmpty { days=[selectedDay.isEmpty ? todayString() : selectedDay] }
@@ -389,6 +395,8 @@ final class MediaIngestV80: ObservableObject {
         scanning=true
         status="Aktuelles Veranstalter-Design wird geladen …"
         defer{scanning=false}
+        do { try persistEventDefinition(event) }
+        catch { status="Eventeinstellungen konnten lokal nicht gespeichert werden: \(error.localizedDescription)";return }
         let designed=await ensureDesignedCopies(event:event,activation:a,items:items)
         items=designed.items.sorted{$0.importedAt>$1.importedAt}
         if designed.failed>0 {
