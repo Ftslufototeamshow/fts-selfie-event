@@ -159,9 +159,11 @@ enum FTSLocalEventStore {
 }
 enum FTSLocalStoragePaths {
     private static func key(_ token:String)->String { "fts.local.root.v150."+token }
+    private static func eventRootKey(_ token:String)->String { "fts.local.event-root.v150."+token }
 
     static func setRoot(_ root:URL,eventToken:String) {
         UserDefaults.standard.set(root.path,forKey:key(eventToken))
+        UserDefaults.standard.removeObject(forKey:eventRootKey(eventToken))
     }
 
     static func configuredRoot(eventToken:String)->URL? {
@@ -178,13 +180,18 @@ enum FTSLocalStoragePaths {
     }
 
     static func eventRoot(_ event:EventRow)->URL {
+        if let saved=UserDefaults.standard.string(forKey:eventRootKey(event.event_token)),!saved.isEmpty {
+            return URL(fileURLWithPath:saved,isDirectory:true)
+        }
         let illegal=CharacterSet(charactersIn:"/:\\?%*|\"<>")
         func safe(_ value:String)->String {
             value.components(separatedBy:illegal).joined(separator:"-").replacingOccurrences(of:"  ",with:" ")
         }
         let code=safe(event.short_code ?? event.event_token)
         let name=safe(event.event_title)
-        return baseRoot(eventToken:event.event_token).appendingPathComponent("\(code) - \(name)",isDirectory:true)
+        let url=baseRoot(eventToken:event.event_token).appendingPathComponent("\(code) - \(name)",isDirectory:true)
+        UserDefaults.standard.set(url.path,forKey:eventRootKey(event.event_token))
+        return url
     }
 }
 
