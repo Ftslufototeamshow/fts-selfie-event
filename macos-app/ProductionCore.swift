@@ -410,6 +410,8 @@ struct V80LocalPrintJob: Codable, Identifiable, Hashable {
     let createdAt: Date
     var status: Status
     var units: [V80LocalPrintUnit]
+    var serverRegistered: Bool? = nil
+    var syncPending: Bool? = nil
     var idString: String { id.uuidString }
 }
 
@@ -1375,9 +1377,23 @@ final class ProductionCore: ObservableObject {
             || m.contains("503") || m.contains("502") || m.contains("504") || m.contains("429")
     }
 
+    func refreshLocalRuntime(state:AppState) async {
+        await refreshHostPower()
+        await refreshPrinterConnectivity()
+        queueStatus="\(localWaitingCount) lokale Einheiten warten"
+        if autoDispatch && localWaitingCount>0 { dispatchAvailable(state:state) }
+    }
+
     func refresh(state: AppState) async {
-        guard let dev = state.deviceToken, let session = state.sessionToken,
-              !state.selectedEventToken.isEmpty else { return }
+        guard let event=state.selectedEvent,!state.selectedEventToken.isEmpty else{return}
+        if event.storageMode == .local {
+            await refreshLocalRuntime(state:state)
+            return
+        }
+        guard let dev = state.deviceToken, let session = state.sessionToken else {
+            await refreshLocalRuntime(state:state)
+            return
+        }
         do {
             async let q: [V80WorkUnit] = api.rpc("fts_printer_queue_v80", body: [
                 "p_device_token":dev, "p_session_token":session, "p_event_token":state.selectedEventToken
@@ -1408,6 +1424,7 @@ final class ProductionCore: ObservableObject {
             let materialBlocked = waitingCount > 0 && !enabled.isEmpty && enabled.allSatisfy{ !materialReady(for:$0.name) }
             queueStatus = "\(qq.filter{$0.unit_status == "READY"}.count) Selfie-Einheiten warten · \(localWaitingCount) lokale Einheiten warten" + (materialBlocked ? " · Material nachfüllen" : "")
             await heartbeatAll(state: state)
+            if event.storageMode == .hybrid { await syncPendingLocalJobs(state:state) }
             if autoDispatch && hasDispatchableWork { dispatchAvailable(state: state) }
         } catch {
             if !(await state.recoverAuthentication(from: error)) {
@@ -1585,7 +1602,11 @@ final class ProductionCore: ObservableObject {
                 // Refresh the authoritative queue before feeding the next job.
                 // This avoids stale local READY rows and keeps free printers continuously supplied.
                 if self.autoDispatch {
-                    await self.refresh(state: state)
+                    if state.selectedEvent?.storageMode == .local {
+                        await self.refreshLocalRuntime(state:state)
+                    } else {
+                        await self.refresh(state: state)
+                    }
                 }
             }
         }
@@ -1602,7 +1623,6 @@ final class ProductionCore: ObservableObject {
     }
 
     private func dispatchOne(printerName: String, state: AppState) async {
-        guard let dev=state.deviceToken, let session=state.sessionToken else { return }
         setSlot(printerName, state:"PREPARING", eta:0, current:nil, error:nil)
 
         // Do not use `lpstat -a` as a connectivity gate here. On SELPHY/AirPrint/USB
@@ -1622,6 +1642,7 @@ final class ProductionCore: ObservableObject {
             return
         }
 
+        guard let dev=state.deviceToken,let session=state.sessionToken else{return}
         do {
             let claim: V80Claim = try await api.rpc("fts_printer_claim_next_v80", body: [
                 "p_device_token":dev, "p_session_token":session,
@@ -1866,8 +1887,7 @@ final class ProductionCore: ObservableObject {
 
     private func dispatchLocal(localRef:LocalRef,printerName:String,state:AppState) async {
         guard localQueue.jobs.indices.contains(localRef.jobIndex),
-              localQueue.jobs[localRef.jobIndex].units.indices.contains(localRef.unitIndex),
-              let dev=state.deviceToken, let session=state.sessionToken else{return}
+              localQueue.jobs[localRef.jobIndex].units.indices.contains(localRef.unitIndex) else{return}
 
         let jobID=localQueue.jobs[localRef.jobIndex].id
         let customer=localQueue.jobs[localRef.jobIndex].customerCode
@@ -1880,9 +1900,13 @@ final class ProductionCore: ObservableObject {
         localQueue.jobs[localRef.jobIndex].units[localRef.unitIndex].startedAt = Date()
         localQueue.jobs[localRef.jobIndex].status = .printing
         saveLocalQueue()
-        let _:Bool? = try? await api.rpc("fts_printer_start_local_job_v80",body:[
-            "p_device_token":dev,"p_session_token":session,"p_local_job_id":jobID.uuidString
-        ],as:Bool.self)
+        if state.selectedEvent?.usesOnlineStorage == true,
+           localQueue.jobs[localRef.jobIndex].serverRegistered != false,
+           let dev=state.deviceToken,let session=state.sessionToken {
+            let _:Bool? = try? await api.rpc("fts_printer_start_local_job_v80",body:[
+                "p_device_token":dev,"p_session_token":session,"p_local_job_id":jobID.uuidString
+            ],as:Bool.self)
+        }
 
         do {
             guard let event=state.selectedEvent else{throw NSError(domain:"FTSPrinter",code:85,userInfo:[NSLocalizedDescriptionKey:"Event nicht mehr ausgewählt."])}
@@ -1956,14 +1980,21 @@ final class ProductionCore: ObservableObject {
             guard let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
                   let ui=localQueue.jobs[ji].units.firstIndex(where:{$0.imagePath==path && $0.status == .printing}) else{return}
             let localUnitID=localQueue.jobs[ji].units[ui].id
-            do {
-                let componentResult:JSONValue = try await api.rpc("fts_printer_consume_local_unit_component_v87",body:[
-                    "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
-                    "p_printer_key":backendPrinterKey(printerName),"p_local_unit_id":localUnitID.uuidString
-                ])
-                localQueue.jobs[ji].units[ui].componentSynced = componentResult["ok"]?.bool == true
-            } catch {
-                localQueue.jobs[ji].units[ui].componentSynced = false
+            if state.selectedEvent?.usesOnlineStorage == true,
+               localQueue.jobs[ji].serverRegistered != false,
+               let dev=state.deviceToken,let session=state.sessionToken {
+                do {
+                    let componentResult:JSONValue = try await api.rpc("fts_printer_consume_local_unit_component_v87",body:[
+                        "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
+                        "p_printer_key":backendPrinterKey(printerName),"p_local_unit_id":localUnitID.uuidString
+                    ])
+                    localQueue.jobs[ji].units[ui].componentSynced = componentResult["ok"]?.bool == true
+                } catch {
+                    localQueue.jobs[ji].units[ui].componentSynced = false
+                    localQueue.jobs[ji].syncPending = state.selectedEvent?.storageMode == .hybrid
+                }
+            } else {
+                localQueue.jobs[ji].units[ui].componentSynced = true
             }
 
             localQueue.jobs[ji].units[ui].status = .printed
@@ -1980,14 +2011,13 @@ final class ProductionCore: ObservableObject {
             let diagnostic = await Task.detached(priority:.utility) {
                 V80MacSpooler.diagnosticSnapshot(printerName:printerName)
             }.value
-            let _:Bool? = try? await api.rpc("fts_printer_mark_local_uncertain_v95",body:[
-                "p_device_token":dev,
-                "p_session_token":session,
-                "p_local_job_id":jobID.uuidString,
-                "p_printer_key":backendPrinterKey(printerName),
-                "p_error":error.localizedDescription,
-                "p_details":diagnostic
-            ],as:Bool.self)
+            if let dev=state.deviceToken,let session=state.sessionToken,state.selectedEvent?.usesOnlineStorage == true {
+                let _:Bool? = try? await api.rpc("fts_printer_mark_local_uncertain_v95",body:[
+                    "p_device_token":dev,"p_session_token":session,
+                    "p_local_job_id":jobID.uuidString,"p_printer_key":backendPrinterKey(printerName),
+                    "p_error":error.localizedDescription,"p_details":diagnostic
+                ],as:Bool.self)
+            }
             guard let ji=localQueue.jobs.firstIndex(where:{$0.id==jobID}),
                   let ui=localQueue.jobs[ji].units.firstIndex(where:{$0.imagePath==path && $0.status == .printing}) else{return}
             localQueue.jobs[ji].units[ui].status = .uncertain
@@ -2135,57 +2165,91 @@ final class ProductionCore: ObservableObject {
         }
     }
 
+    private func nextOfflineCustomerCode(eventToken:String,eventDay:String)->String {
+        let key="fts.local.customer.counter.v150."+eventToken+"."+eventDay
+        let next=max(1,UserDefaults.standard.integer(forKey:key)+1)
+        UserDefaults.standard.set(next,forKey:key)
+        return String(format:"L%03d",next)
+    }
+
     func createLocalJob(state:AppState, media:[V80MediaItem:Int], layouts:[String:V80PrintLayout] = [:], sourceType:String, sourceLabel:String, eventDay:String) async -> String? {
-        guard let dev=state.deviceToken,let session=state.sessionToken,!state.selectedEventToken.isEmpty,
-              !loadedFolderPath.isEmpty else{return nil}
+        guard let event=state.selectedEvent,!state.selectedEventToken.isEmpty,!loadedFolderPath.isEmpty else{return nil}
         let filtered=media.filter{$0.value>0}
         let qty=filtered.reduce(0){$0+$1.value}
         guard qty>0 else{return nil}
         let id=UUID()
-        do {
-            let result:V80LocalJobCreate = try await api.rpc("fts_printer_create_local_job_v92",body:[
-                "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
-                "p_event_day":eventDay,
-                "p_local_job_id":id.uuidString,"p_source_type":sourceType,"p_source_label":sourceLabel,"p_quantity":qty
-            ])
-            guard result.ok==true,let code=result.customer_code else {
-                throw NSError(domain:"FTSPrinter",code:86,userInfo:[NSLocalizedDescriptionKey:"Lokaler Auftrag konnte nicht angelegt werden."])
-            }
-            var units:[V80LocalPrintUnit]=[]
-            for (m,count) in filtered.sorted(by:{$0.key.importedAt < $1.key.importedAt}) {
-                for copy in 1...count {
-                    let readyPath = (m.designedPath?.isEmpty == false) ? m.designedPath! : m.importedPath
-                    var chosenLayout=layouts[m.id] ?? V80PrintLayout()
-                    if chosenLayout.greenScreenSnapshot == nil {
-                        chosenLayout.greenScreenSnapshot=FTSGreenScreenStore
-                            .settings(eventToken:state.selectedEventToken)
-                            .printSnapshot
-                    }
-                    units.append(V80LocalPrintUnit(
-                        id:UUID(),jobID:id,customerCode:code,mediaID:m.id,imagePath:readyPath,
-                        preRendered:(m.designedPath?.isEmpty == false),
-                        originalName:m.originalName,copyIndex:copy,status:.waiting,printerName:nil,
-                        startedAt:nil,printedAt:nil,lastError:nil,componentSynced:false,
-                        sourceImagePath:m.importedPath,printLayout:chosenLayout
-                    ))
+        var code=nextOfflineCustomerCode(eventToken:event.event_token,eventDay:eventDay)
+        var serverRegistered=false
+
+        if event.usesOnlineStorage {
+            guard let dev=state.deviceToken,let session=state.sessionToken else {
+                if event.storageMode == .online {
+                    lastError="Online-Event benötigt eine Serververbindung.";return nil
                 }
+                serverRegistered=false
+                return appendLocalJob(
+                    state:state,filtered:filtered,layouts:layouts,sourceType:sourceType,sourceLabel:sourceLabel,
+                    eventDay:eventDay,id:id,code:code,serverRegistered:false,syncPending:true
+                )
             }
-            localQueue.jobs.append(V80LocalPrintJob(
-                id:id,eventToken:state.selectedEventToken,eventDay:eventDay,customerCode:code,sourceType:sourceType,
-                sourceLabel:sourceLabel,createdAt:Date(),status:.waiting,units:units
-            ))
-            saveLocalQueue()
             do {
-                try MediaIngestV80.setWorkflowSync(folderPath:loadedFolderPath,mediaIDs:Set(filtered.map{$0.key.id}),status:.queued,moveDesignedFile:false)
+                let result:V80LocalJobCreate = try await api.rpc("fts_printer_create_local_job_v92",body:[
+                    "p_device_token":dev,"p_session_token":session,"p_event_token":state.selectedEventToken,
+                    "p_event_day":eventDay,"p_local_job_id":id.uuidString,"p_source_type":sourceType,
+                    "p_source_label":sourceLabel,"p_quantity":qty
+                ])
+                guard result.ok==true,let serverCode=result.customer_code else {
+                    throw NSError(domain:"FTSPrinter",code:86,userInfo:[NSLocalizedDescriptionKey:"Lokaler Auftrag konnte online nicht angelegt werden."])
+                }
+                code=serverCode;serverRegistered=true
             } catch {
-                lastError="Auftrag angelegt, aber die Fotos konnten nicht aus der aktiven Auswahl ausgeblendet werden: \(error.localizedDescription)"
+                if event.storageMode == .online { lastError=error.localizedDescription;return nil }
+                serverRegistered=false
             }
-            await state.refreshSelected()
-            return code
-        } catch {
-            lastError=error.localizedDescription
-            return nil
         }
+
+        return appendLocalJob(
+            state:state,filtered:filtered,layouts:layouts,sourceType:sourceType,sourceLabel:sourceLabel,
+            eventDay:eventDay,id:id,code:code,serverRegistered:serverRegistered,
+            syncPending:event.storageMode == .hybrid && !serverRegistered
+        )
+    }
+
+    private func appendLocalJob(
+        state:AppState,filtered:[V80MediaItem:Int],layouts:[String:V80PrintLayout],
+        sourceType:String,sourceLabel:String,eventDay:String,id:UUID,code:String,
+        serverRegistered:Bool,syncPending:Bool
+    )->String? {
+        var units:[V80LocalPrintUnit]=[]
+        for (m,count) in filtered.sorted(by:{$0.key.importedAt < $1.key.importedAt}) {
+            for copy in 1...count {
+                let readyPath=(m.designedPath?.isEmpty == false) ? m.designedPath! : m.importedPath
+                var chosenLayout=layouts[m.id] ?? V80PrintLayout()
+                if chosenLayout.greenScreenSnapshot == nil {
+                    chosenLayout.greenScreenSnapshot=FTSGreenScreenStore.settings(eventToken:state.selectedEventToken).printSnapshot
+                }
+                units.append(V80LocalPrintUnit(
+                    id:UUID(),jobID:id,customerCode:code,mediaID:m.id,imagePath:readyPath,
+                    preRendered:(m.designedPath?.isEmpty == false),originalName:m.originalName,copyIndex:copy,
+                    status:.waiting,printerName:nil,startedAt:nil,printedAt:nil,lastError:nil,
+                    componentSynced:state.selectedEvent?.storageMode == .local,
+                    sourceImagePath:m.importedPath,printLayout:chosenLayout
+                ))
+            }
+        }
+        localQueue.jobs.append(V80LocalPrintJob(
+            id:id,eventToken:state.selectedEventToken,eventDay:eventDay,customerCode:code,
+            sourceType:sourceType,sourceLabel:sourceLabel,createdAt:Date(),status:.waiting,units:units,
+            serverRegistered:serverRegistered,syncPending:syncPending
+        ))
+        saveLocalQueue()
+        do {
+            try MediaIngestV80.setWorkflowSync(folderPath:loadedFolderPath,mediaIDs:Set(filtered.map{$0.key.id}),status:.queued,moveDesignedFile:false)
+        } catch {
+            lastError="Auftrag angelegt, aber die Fotos konnten nicht aus der aktiven Auswahl ausgeblendet werden: \(error.localizedDescription)"
+        }
+        dispatchAvailable(state:state)
+        return code
     }
 
     func requeueServerUnit(_ unit: V80WorkUnit, state: AppState, confirmedNotPrinted: Bool) async {
