@@ -110,7 +110,69 @@ struct EventRow: Codable, Identifiable, Hashable {
     let decoration_items: JSONValue?
     let studio_config: JSONValue?
     let stock: JSONValue?
+    let storage_mode: String?
     var id: String { event_token }
+}
+
+enum FTSStorageMode: String, Codable, CaseIterable {
+    case local, online, hybrid
+    var label:String {
+        switch self {
+        case .local: return "Nur Laptop"
+        case .online: return "Nur Online"
+        case .hybrid: return "Laptop und Online"
+        }
+    }
+}
+extension EventRow {
+    var storageMode:FTSStorageMode { FTSStorageMode(rawValue:storage_mode ?? "online") ?? .online }
+    var usesLocalStorage:Bool { storageMode != .online }
+    var usesOnlineStorage:Bool { storageMode != .local }
+}
+enum FTSLocalEventStore {
+    private static var fileURL:URL {
+        let fm=FileManager.default
+        let base=fm.urls(for:.applicationSupportDirectory,in:.userDomainMask).first
+            ?? fm.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+        let dir=base.appendingPathComponent("FTS Printer",isDirectory:true)
+        try? fm.createDirectory(at:dir,withIntermediateDirectories:true)
+        return dir.appendingPathComponent("local-events-v150.json")
+    }
+    static func load()->[EventRow] {
+        guard let data=try? Data(contentsOf:fileURL),
+              let rows=try? JSONDecoder().decode([EventRow].self,from:data) else{return []}
+        return rows
+    }
+    static func save(_ rows:[EventRow]) throws {
+        try JSONEncoder().encode(rows).write(to:fileURL,options:.atomic)
+    }
+    static func upsert(_ event:EventRow) throws {
+        var rows=load()
+        if let i=rows.firstIndex(where:{$0.event_token==event.event_token}) { rows[i]=event }
+        else { rows.append(event) }
+        try save(rows)
+    }
+    static func remove(_ token:String) throws {
+        var rows=load();rows.removeAll{$0.event_token==token};try save(rows)
+    }
+}
+enum FTSOfflineAdminAuth {
+    static let choiceID="fts-offline-admin"
+    static var configured:Bool { Keychain.get("offlineAdminCode")?.isEmpty == false }
+    static func configure(user:SessionInfo,code:String) {
+        guard user.role=="printer_admin",!code.isEmpty else{return}
+        _=Keychain.set(code,key:"offlineAdminCode")
+        _=Keychain.set(user.display_name ?? "FTS Administrator",key:"offlineAdminName")
+        _=Keychain.set(user.user_id ?? "",key:"offlineAdminUserID")
+    }
+    static func choice()->StaffChoice? {
+        guard configured else{return nil}
+        return StaffChoice(user_id:choiceID,display_name:(Keychain.get("offlineAdminName") ?? "FTS Administrator")+" · Offline",role:"printer_admin")
+    }
+    static func verify(_ code:String)->Bool {
+        guard let saved=Keychain.get("offlineAdminCode"),!saved.isEmpty else{return false}
+        return saved==code
+    }
 }
 
 struct OrderItem: Codable, Hashable, Identifiable {
@@ -871,21 +933,40 @@ final class AppState: ObservableObject {
 
     func loadChoices() async {
         guard let dev=deviceToken,!dev.isEmpty else { await loadDeviceAdmins(); return }
+        let offline=FTSOfflineAdminAuth.choice()
         do {
-            let rows:[StaffChoice] = try await api.rpc("fts_printer_login_choices_v72",body:["p_device_token":dev])
+            var rows:[StaffChoice] = try await api.rpc("fts_printer_login_choices_v72",body:["p_device_token":dev])
+            if let offline { rows.append(offline) }
             staffChoices=rows
             errorMessage=nil
             phase = .staffLogin
         } catch {
             if !(await recoverAuthentication(from:error)) {
-                // A network error is not a lost device activation.
-                errorMessage="Mitarbeiterliste konnte nicht geladen werden: \(error.localizedDescription)"
+                if let offline {
+                    staffChoices=[offline]
+                    errorMessage="FTS-Server nicht erreichbar. Offline-Administrator kann lokale Events öffnen."
+                } else {
+                    errorMessage="Mitarbeiterliste konnte nicht geladen werden: \(error.localizedDescription)"
+                }
                 phase = .staffLogin
             }
         }
     }
 
     func login(user: StaffChoice, code: String) async {
+        if user.user_id == FTSOfflineAdminAuth.choiceID {
+            guard FTSOfflineAdminAuth.verify(code) else {
+                errorMessage="Offline-Administrator-Code ist nicht korrekt.";return
+            }
+            currentUser=SessionInfo(
+                session_token:nil,user_id:Keychain.get("offlineAdminUserID"),
+                display_name:Keychain.get("offlineAdminName") ?? "FTS Offline-Administrator",
+                role:"printer_admin",expires_at:nil,logged_in_at:nil,avatar_path:nil,valid:true
+            )
+            _=await loadEvents()
+            errorMessage=nil;status="Offline-Modus · lokale Events";phase = .main
+            return
+        }
         guard let dev=deviceToken else{return}
         busy=true;defer{busy=false}
         do {
@@ -898,6 +979,7 @@ final class AppState: ObservableObject {
             liveSessionToken=session
             _ = Keychain.set(session,key:"staffSession")
             currentUser=info
+            if info.role=="printer_admin" { FTSOfflineAdminAuth.configure(user:info,code:code) }
             if await loadEvents() {
                 phase = .main
             } else {
