@@ -2970,7 +2970,7 @@ struct ProductionSystemContent:View {
         }
         .task{
             await core.discoverPrinters()
-            await core.checkUpdate(platform:"macos")
+            if state.selectedEvent?.usesOnlineStorage == true { await core.checkUpdate(platform:"macos") }
             await core.refresh(state:state)
             while !Task.isCancelled {
                 try? await Task.sleep(for:.seconds(30))
