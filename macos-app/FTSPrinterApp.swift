@@ -1105,27 +1105,49 @@ final class AppState: ObservableObject {
 
     @discardableResult
     func loadEvents() async -> Bool {
-        guard let dev=deviceToken,let session=sessionToken else{return false}
+        let localRows=FTSLocalEventStore.load()
+        guard let dev=deviceToken,let session=sessionToken else {
+            events=localRows
+            if !events.contains(where:{$0.event_token==selectedEventToken}) { selectedEventToken=events.first?.event_token ?? "" }
+            if let e=selectedEvent {
+                localImport.load(event:e);mediaIngest.load(event:e)
+                production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
+            }
+            orders=[];stock=nil
+            status=events.isEmpty ? "Offline · noch kein lokales Event gespeichert." : "Offline · lokale Events geladen."
+            return !events.isEmpty
+        }
+
         busy=true;defer{busy=false}
         do {
-            let rows:[EventRow]=try await api.rpc("fts_printer_events_v74",body:["p_device_token":dev,"p_session_token":session])
-            events=rows
-            if !rows.contains(where:{$0.event_token==selectedEventToken}) { selectedEventToken=rows.first?.event_token ?? "" }
+            let onlineRows:[EventRow]=try await api.rpc("fts_printer_events_v150",body:["p_device_token":dev,"p_session_token":session])
+            for row in onlineRows where row.usesLocalStorage { try? FTSLocalEventStore.upsert(row) }
+            var merged=onlineRows
+            for local in FTSLocalEventStore.load() where !merged.contains(where:{$0.event_token==local.event_token}) { merged.append(local) }
+            events=merged
+            if !events.contains(where:{$0.event_token==selectedEventToken}) { selectedEventToken=events.first?.event_token ?? "" }
             if let e=selectedEvent {
-                localImport.load(event:e)
-                mediaIngest.load(event:e)
+                localImport.load(event:e);mediaIngest.load(event:e)
                 production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
             }
             if selectedEventToken.isEmpty {
-                orders=[]
-                stock=nil
-                status="Kein freigegebenes Printer-Event gefunden."
+                orders=[];stock=nil;status="Kein freigegebenes Printer-Event gefunden."
             } else {
                 await refreshSelected()
             }
             return true
         } catch {
             if await recoverAuthentication(from:error) { return false }
+            if !localRows.isEmpty {
+                events=localRows
+                if !events.contains(where:{$0.event_token==selectedEventToken}) { selectedEventToken=events.first?.event_token ?? "" }
+                if let e=selectedEvent {
+                    localImport.load(event:e);mediaIngest.load(event:e)
+                    production.loadLocalQueue(folderPath:mediaIngest.activation?.folderPath)
+                }
+                orders=[];stock=nil;status="Offline · lokale Events geladen.";errorMessage=nil
+                return true
+            }
             errorMessage="Events konnten nicht geladen werden: "+error.localizedDescription
             return false
         }
@@ -1143,10 +1165,12 @@ final class AppState: ObservableObject {
 
     @discardableResult
     func refreshSelectedEventDefinition() async -> Bool {
-        guard let dev=deviceToken,let session=sessionToken,!selectedEventToken.isEmpty else{return false}
+        guard let selected=selectedEvent,!selectedEventToken.isEmpty else{return false}
+        if selected.storageMode == .local { return false }
+        guard let dev=deviceToken,let session=sessionToken else{return false}
         do {
             let rows:[EventRow]=try await api.rpc(
-                "fts_printer_events_v74",
+                "fts_printer_events_v150",
                 body:["p_device_token":dev,"p_session_token":session]
             )
             guard let fresh=rows.first(where:{$0.event_token==selectedEventToken}) else{return false}
@@ -1182,7 +1206,13 @@ final class AppState: ObservableObject {
     }
 
     func refreshSelected() async {
-        guard let dev=deviceToken,let session=sessionToken,!selectedEventToken.isEmpty else{return}
+        guard let event=selectedEvent,!selectedEventToken.isEmpty else{return}
+        if event.storageMode == .local {
+            orders=[];stock=nil;status="Nur Laptop · lokal gespeichert";return
+        }
+        guard let dev=deviceToken,let session=sessionToken else {
+            status="Offline · lokale Daten bleiben verfügbar";return
+        }
         do {
             async let o:[PrintOrder]=api.rpc("fts_printer_orders_v73",body:["p_device_token":dev,"p_session_token":session,"p_event_token":selectedEventToken])
             async let s:StockSnapshot=api.rpc("fts_printer_stock_v73",body:["p_device_token":dev,"p_session_token":session,"p_event_token":selectedEventToken])
@@ -1256,18 +1286,22 @@ final class AppState: ObservableObject {
     }
 
     func printLocalPhoto(_ record:ImportRecord) async {
-        guard let event=selectedEvent,let dev=deviceToken,let session=sessionToken else{return}
+        guard let event=selectedEvent else{return}
         busy=true;defer{busy=false}
         do {
             let rendered=try LocalRenderer.renderedImage(sourceURL:URL(fileURLWithPath:record.importedPath),event:event)
             let ok=Printer.printImage(rendered,copies:1,title:"FTS Kamera · \(record.originalName)")
             if !ok{return}
-            let day=event.event_date ?? ISO8601DateFormatter().string(from:Date()).prefix(10).description
-            let s:StockSnapshot=try await api.rpc("fts_printer_log_camera_print_v73",body:[
-                "p_device_token":dev,"p_session_token":session,"p_event_token":event.event_token,
-                "p_event_day":day,"p_quantity":1,"p_file_name":record.originalName
-            ])
-            stock=s
+            if event.usesOnlineStorage,let dev=deviceToken,let session=sessionToken {
+                let day=event.event_date ?? ISO8601DateFormatter().string(from:Date()).prefix(10).description
+                let s:StockSnapshot=try await api.rpc("fts_printer_log_camera_print_v73",body:[
+                    "p_device_token":dev,"p_session_token":session,"p_event_token":event.event_token,
+                    "p_event_day":day,"p_quantity":1,"p_file_name":record.originalName
+                ])
+                stock=s
+            } else {
+                status="Gedruckt · lokal"
+            }
         } catch {
             if !(await recoverAuthentication(from:error)) { errorMessage=error.localizedDescription }
         }
