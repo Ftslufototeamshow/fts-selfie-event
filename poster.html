@@ -50,6 +50,7 @@
 <body>
 <div class="wrap" id="root"><div class="loading">QR-Event wird geladen …</div></div>
 <script src="./config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js"></script>
 <script src="https://unpkg.com/qr-code-styling@1.9.2/lib/qr-code-styling.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -166,7 +167,26 @@ async function loadPosterEvent(){
   }catch(e){console.warn('Poster-Zusatzdaten konnten nicht geladen werden',e)}
   return ev;
 }
-let selfieCountTimer=null;
+let posterSignalClient=null,posterSignalChannel=null,posterSignalTimer=null,attentionEvent=null,attentionLang='de';
+function installPosterSignal(ev,lang){
+  attentionEvent=ev;attentionLang=lang;
+  if(posterSignalChannel||!window.supabase?.createClient)return;
+  try{
+    posterSignalClient=window.supabase.createClient(cfg.supabaseUrl,cfg.publishableKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+    posterSignalChannel=posterSignalClient
+      .channel('fts-poster-ops-v152')
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'fts_selfie_ops_signal_v152',filter:'id=eq.1'},()=>{
+        clearTimeout(posterSignalTimer);
+        posterSignalTimer=setTimeout(()=>{if(document.visibilityState==='visible'&&attentionEvent)refreshSelfieCount(attentionEvent,attentionLang)},650);
+      })
+      .subscribe();
+  }catch(e){console.warn('Poster Realtime nicht verfügbar',e)}
+}
+function refreshPosterCount(){
+  if(document.visibilityState==='visible'&&attentionEvent)refreshSelfieCount(attentionEvent,attentionLang);
+}
+window.addEventListener('online',refreshPosterCount);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshPosterCount()});
 async function refreshSelfieCount(ev,lang){
   const el=document.getElementById('selfieCount');if(!el)return;
   try{
@@ -182,9 +202,7 @@ function setupAttention(ev){
   const lang=posterLanguages(ev)[0]||'de',txt=attentionText(lang)||attentionText('de');
   document.getElementById('attentionMain').textContent=txt.main;
   document.getElementById('attentionSub').textContent=txt.sub;
-  bar.classList.add('show');refreshSelfieCount(ev,lang);
-  if(selfieCountTimer)clearInterval(selfieCountTimer);
-  selfieCountTimer=setInterval(()=>refreshSelfieCount(ev,lang),10000);
+  bar.classList.add('show');refreshSelfieCount(ev,lang);installPosterSignal(ev,lang);
 }
 async function boot(){
  try{
